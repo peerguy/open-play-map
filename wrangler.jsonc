@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "open-play-map",
+  "compatibility_date": "2026-06-13",
+  "assets": {
+    "directory": "./dist"
+  },
+  "pages_build_output_dir": "./dist"
+}
