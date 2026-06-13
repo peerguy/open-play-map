@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin | Open Play Pickleball Map</title>
+    <link rel="stylesheet" href="src/styles.css?v=header-store-link-20260613" />
+  </head>
+  <body class="admin-page">
+    <header class="site-header account-header">
+      <div class="brand-lockup">
+        <a class="header-home-link" href="index.html" aria-label="Open Play Map home">
+          <div class="logo-mark" aria-hidden="true">OP</div>
+        </a>
+        <div class="brand-copy">
+          <div class="brand-title-row">
+            <a class="brand-name-link" href="index.html"><h1>Open Play Map</h1></a>
+            <a class="brand-about-link" href="about.html">About <span class="about-question" aria-hidden="true">?</span></a>
+            <span class="brand-link-divider" aria-hidden="true">|</span>
+            <a class="brand-store-link" href="https://scooppickleball.com/">Scoop Store</a>
+          </div>
+          <p class="subtitle">Admin tools for users and open-play locations.</p>
+        </div>
+      </div>
+      <div class="mobile-page-title" aria-hidden="true">Admin</div>
+    </header>
+
+    <main class="admin-shell">
+      <aside class="admin-sidebar" aria-label="Admin sections">
+        <p class="eyebrow">Admin</p>
+        <button class="admin-nav-button is-active" type="button" data-admin-view="moderation">Moderation</button>
+        <div id="moderationSubnav" class="admin-subnav" aria-label="Moderation queues">
+          <button class="admin-subnav-button is-active" type="button" data-moderation-view="pending">Pending locations</button>
+          <button class="admin-subnav-button" type="button" data-moderation-view="reports">Open reports</button>
+          <button class="admin-subnav-button" type="button" data-moderation-view="edits">Recent edits</button>
+          <button class="admin-subnav-button" type="button" data-moderation-view="volume">High-volume users today</button>
+        </div>
+        <button class="admin-nav-button" type="button" data-admin-view="users">Users</button>
+        <button class="admin-nav-button" type="button" data-admin-view="locations">Locations</button>
+        <a class="secondary-button admin-map-link" href="index.html">Back to map</a>
+      </aside>
+
+      <section class="admin-content">
+        <div id="adminGuard" class="admin-guard" hidden>
+          <h2>Admin access required</h2>
+          <p>Log in as the user named scoop to manage site information.</p>
+          <a class="primary-button" href="account.html">Go to account</a>
+        </div>
+
+        <section id="moderationAdminView" class="admin-view">
+          <div class="admin-view-header">
+            <div>
+              <p class="eyebrow">Moderation</p>
+              <h2 id="moderationAdminTitle">Pending locations</h2>
+            </div>
+            <p id="moderationAdminCount" class="admin-count"></p>
+          </div>
+          <div id="adminModerationList" class="moderation-grid"></div>
+        </section>
+
+        <section id="usersAdminView" class="admin-view" hidden>
+          <div class="admin-view-header">
+            <div>
+              <p class="eyebrow">Users</p>
+              <h2>App users</h2>
+            </div>
+            <p id="userAdminCount" class="admin-count"></p>
+          </div>
+          <div id="adminUsersList" class="admin-list"></div>
+        </section>
+
+        <section id="locationsAdminView" class="admin-view" hidden>
+          <div class="admin-view-header">
+            <div>
+              <p class="eyebrow">Locations</p>
+              <h2>Open-play locations</h2>
+            </div>
+            <p id="locationAdminCount" class="admin-count"></p>
+          </div>
+          <div id="adminLocationsList" class="admin-list"></div>
+        </section>
+      </section>
+    </main>
+
+    <script src="src/mobile-header.js?v=scoop-store-link-20260613"></script>
+    <script src="src/admin.js?v=suggested-edits-20260612"></script>
+  </body>
+</html>

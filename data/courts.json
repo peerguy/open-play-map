@@ -1,0 +1,32 @@
+[
+  {
+    "id": "example-leonardtown-wharf",
+    "name": "Example Park — Leonardtown Wharf Area",
+    "address": "Leonardtown, MD",
+    "city": "Leonardtown",
+    "state": "MD",
+    "country": "USA",
+    "latitude": 38.2912,
+    "longitude": -76.6358,
+    "icon": "OP",
+    "access": "public",
+    "isFree": true,
+    "openPlay": [
+      {
+        "days": "Example only — verify locally",
+        "hours": "TBD",
+        "notes": "Replace this sample with real open-play info."
+      }
+    ],
+    "estimatedSkillLevel": "unknown",
+    "courts": {
+      "count": null,
+      "surface": "unknown",
+      "indoorOutdoor": "outdoor"
+    },
+    "photos": [],
+    "notes": "Sample record used to prove the map/search flow.",
+    "sourceUrl": "",
+    "lastVerified": "2026-05-03"
+  }
+]
