@@ -4,6 +4,7 @@
   "private": true,
   "description": "Static Open Play Map prototype for pickleball open play locations.",
   "scripts": {
+    "build": "node scripts/build-static.js",
     "dev": "python3 -m http.server 8080 --bind 127.0.0.1",
     "check": "python3 -m html.parser index.html && python3 -m html.parser about.html && python3 -m html.parser account.html && python3 -m html.parser leaderboard.html && python3 -m html.parser admin.html && node --check src/app.js && node --check src/admin.js && node --check src/account.js && node --check src/leaderboard.js && node --check src/mobile-header.js"
   }

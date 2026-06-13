@@ -13,8 +13,8 @@
 2. In Cloudflare, go to Workers & Pages, create a Pages app, and import the GitHub repo.
 3. Use:
    - Framework preset: None/static
-   - Build command: blank
-   - Build output directory: `/`
+   - Build command: `npm run build`
+   - Build output directory: `dist`
 4. Deploy the default Pages URL first.
 5. Add `play.scooppickleball.com` as a custom domain.
 6. Add the CNAME record Cloudflare asks for wherever DNS is managed.
