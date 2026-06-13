@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Leaderboard | Open Play Pickleball Map</title>
+    <link rel="stylesheet" href="src/styles.css?v=header-store-link-20260613" />
+  </head>
+  <body class="leaderboard-page">
+    <header class="site-header account-header">
+      <div class="brand-lockup">
+        <a class="header-home-link" href="index.html" aria-label="Open Play Map home">
+          <div class="logo-mark" aria-hidden="true">OP</div>
+        </a>
+        <div class="brand-copy">
+          <div class="brand-title-row">
+            <a class="brand-name-link" href="index.html"><h1>Open Play Map</h1></a>
+            <a class="brand-about-link" href="about.html">About <span class="about-question" aria-hidden="true">?</span></a>
+            <span class="brand-link-divider" aria-hidden="true">|</span>
+            <a class="brand-store-link" href="https://scooppickleball.com/">Scoop Store</a>
+          </div>
+          <p class="subtitle">Top contributors by lifetime credits.</p>
+        </div>
+      </div>
+      <nav id="leaderboardUserPanel" class="about-header-nav" aria-label="Leaderboard page navigation">
+        <a class="header-link" href="account.html">Sign in</a>
+      </nav>
+      <div class="mobile-page-title" aria-hidden="true">Leaderboard</div>
+    </header>
+
+    <main class="leaderboard-shell">
+      <section class="leaderboard-panel" aria-label="Lifetime credits leaderboard">
+        <div class="leaderboard-hero">
+          <div>
+            <p class="eyebrow">Leaderboard</p>
+            <h2>Credits, drawings, and top contributors</h2>
+            <p>Earn credits by helping players find better open play pickleball locations. Active credits are live entries for monthly paddle drawings, while lifetime credits track your all-time impact.</p>
+          </div>
+          <a class="primary-button account-back-link" href="index.html">Back to map</a>
+        </div>
+
+        <div class="leaderboard-explainer" aria-label="Credit system and drawing rewards">
+          <article>
+            <span class="leaderboard-explainer-label">Active credits</span>
+            <strong>Monthly drawing entries</strong>
+            <p>Active credits keep stacking as you contribute and carry forward unless you win a monthly drawing. If you win, your active credits reset after that drawing.</p>
+          </article>
+          <article>
+            <span class="leaderboard-explainer-label">Lifetime credits</span>
+            <strong>All-time contribution score</strong>
+            <p>Lifetime credits never reset. They show your long-term impact and may unlock extra rewards for high earners in the future.</p>
+          </article>
+          <article>
+            <span class="leaderboard-explainer-label">Monthly prize</span>
+            <strong>Free Scoop paddle</strong>
+            <p>Each monthly drawing selects one active-credit entry at random. The winning player gets a free Scoop Pickleball paddle.</p>
+          </article>
+        </div>
+
+        <div class="leaderboard-tabs" role="tablist" aria-label="Leaderboard views">
+          <button class="leaderboard-tab is-active" id="leadersTab" type="button" role="tab" aria-selected="true" aria-controls="leadersPanel" data-leaderboard-tab="leaders">Credit leaders</button>
+          <button class="leaderboard-tab" id="winnersTab" type="button" role="tab" aria-selected="false" aria-controls="winnersPanel" data-leaderboard-tab="winners">Monthly winners</button>
+        </div>
+
+        <section id="leadersPanel" class="leaderboard-tab-panel" role="tabpanel" aria-labelledby="leadersTab">
+          <div class="leaderboard-table" role="table" aria-label="Users ranked by lifetime credits">
+            <div class="leaderboard-row leaderboard-head" role="row">
+              <span role="columnheader">Rank</span>
+              <span role="columnheader">Player</span>
+              <span role="columnheader">Lifetime</span>
+              <span role="columnheader">Active</span>
+            </div>
+            <div id="leaderboardList" class="leaderboard-list"></div>
+          </div>
+        </section>
+
+        <section id="winnersPanel" class="leaderboard-tab-panel" role="tabpanel" aria-labelledby="winnersTab" hidden>
+          <div id="monthlyWinnersList" class="monthly-winners-list"></div>
+        </section>
+      </section>
+    </main>
+
+    <script src="src/mobile-header.js?v=scoop-store-link-20260613"></script>
+    <script src="src/leaderboard.js?v=scoop-store-link-20260613"></script>
+  </body>
+</html>

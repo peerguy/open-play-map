@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Account | Open Play Pickleball Map</title>
+    <link rel="stylesheet" href="src/styles.css?v=header-store-link-20260613" />
+  </head>
+  <body class="account-page">
+    <header class="site-header account-header">
+      <div class="brand-lockup">
+        <a class="header-home-link" href="index.html" aria-label="Open Play Map home">
+          <div class="logo-mark" aria-hidden="true">OP</div>
+        </a>
+        <div class="brand-copy">
+          <div class="brand-title-row">
+            <a class="brand-name-link" href="index.html"><h1>Open Play Map</h1></a>
+            <a class="brand-about-link" href="about.html">About <span class="about-question" aria-hidden="true">?</span></a>
+            <span class="brand-link-divider" aria-hidden="true">|</span>
+            <a class="brand-store-link" href="https://scooppickleball.com/">Scoop Store</a>
+          </div>
+          <p class="subtitle">Create a player profile to add locations and post court updates.</p>
+        </div>
+      </div>
+      <nav class="about-header-nav" aria-label="Account page navigation">
+        <a class="header-link" href="leaderboard.html">Leaderboard</a>
+      </nav>
+      <div class="mobile-page-title" aria-hidden="true">Account</div>
+    </header>
+
+    <main class="account-shell">
+      <section class="account-panel" aria-label="Account">
+        <div class="account-summary">
+          <div class="account-summary-top">
+            <p class="eyebrow">Player account</p>
+            <a class="primary-button account-back-link" href="index.html">Back to map</a>
+          </div>
+          <h2>Contribute trusted open-play info.</h2>
+          <p>Use a lightweight profile to add locations, leave court updates, and make the directory more useful for players.</p>
+          <ul>
+            <li>Add new open-play locations</li>
+            <li>Post recent court reviews and schedule notes</li>
+            <li>Show your username and skill level on updates</li>
+          </ul>
+          <div id="currentUserCard" class="current-user-card" hidden></div>
+        </div>
+
+        <div class="account-forms">
+          <p id="accountNotice" class="account-notice"></p>
+          <div class="account-tabs" role="tablist" aria-label="Account action">
+            <button class="account-tab is-active" type="button" data-auth-tab="create">Create account</button>
+            <button class="account-tab" type="button" data-auth-tab="login">Log in</button>
+          </div>
+
+          <form id="signupForm" class="auth-form account-form" data-auth-panel="create">
+            <h3>Create profile</h3>
+            <div class="form-section">
+              <label><span class="field-label">Email <span class="field-help is-required">Required</span></span>
+                <input id="signupEmail" type="email" required autocomplete="email" placeholder="you@example.com" />
+              </label>
+              <label><span class="field-label">Password <span class="field-help is-required">Required</span></span>
+                <span class="password-field">
+                  <input id="signupPassword" type="password" required minlength="8" autocomplete="new-password" placeholder="Create a password" />
+                  <button class="password-toggle" type="button" data-toggle-password data-password-target="signupPassword">Show</button>
+                </span>
+                <span class="field-help">Minimum 8 characters.</span>
+              </label>
+              <label><span class="field-label">Confirm password <span class="field-help is-required">Required</span></span>
+                <span class="password-field">
+                  <input id="signupPasswordConfirm" type="password" required minlength="8" autocomplete="new-password" placeholder="Re-enter password" />
+                  <button class="password-toggle" type="button" data-toggle-password data-password-target="signupPasswordConfirm">Show</button>
+                </span>
+              </label>
+              <label><span class="field-label">Username <span class="field-help is-required">Required</span></span>
+                <input id="signupUsername" required maxlength="28" autocomplete="username" placeholder="PickleballAce" />
+              </label>
+            </div>
+
+            <div class="form-section profile-section">
+              <label><span class="field-label">Profile picture <span class="field-help is-optional">Optional</span></span>
+                <span class="upload-control">
+                  <span class="upload-avatar" aria-hidden="true">OP</span>
+                  <span>
+                    <span class="upload-button-text">Choose photo</span>
+                    <span id="photoFileName" class="field-help">PNG or JPG under 1.5 MB.</span>
+                  </span>
+                  <input id="signupPhoto" type="file" accept="image/*" />
+                </span>
+              </label>
+              <label><span class="field-label">Skill level <span class="field-help is-optional">Optional</span></span>
+                <select id="signupSkillLevel">
+                  <option value="">Select a skill level</option>
+                  <option value="beginner">Beginner: Under 3.0</option>
+                  <option value="intermediate">Intermediate: 3.0-4.0</option>
+                  <option value="advanced">Advanced: 4.0+</option>
+                </select>
+              </label>
+              <label><span class="field-label">Bio <span class="field-help is-optional">Optional</span></span>
+                <textarea id="signupBio" maxlength="140" rows="3" placeholder="What kind of games do you like?"></textarea>
+                <span class="field-help">140 characters max.</span>
+              </label>
+            </div>
+            <p id="signupHint" class="form-hint"></p>
+            <button class="primary-button" type="submit">Create account</button>
+          </form>
+
+          <form id="loginForm" class="auth-form account-form" data-auth-panel="login" hidden>
+            <h3>Log in</h3>
+            <label>Email
+              <input id="loginEmail" type="email" required autocomplete="email" />
+            </label>
+            <label>Password
+              <span class="password-field">
+                <input id="loginPassword" type="password" required autocomplete="current-password" />
+                <button class="password-toggle" type="button" data-toggle-password data-password-target="loginPassword">Show</button>
+              </span>
+            </label>
+            <p id="loginHint" class="form-hint"></p>
+            <button class="primary-button" type="submit">Log in</button>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <script src="src/mobile-header.js?v=scoop-store-link-20260613"></script>
+    <script src="src/account.js?v=mobile-one-row-header-20260612"></script>
+  </body>
+</html>

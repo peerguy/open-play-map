@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Open Play Pickleball Map | Scoop Pickleball</title>
+    <link rel="stylesheet" href="src/leaflet-fix.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ6C/DNF8D6qS3hC9cc1N02p2o6sX7k=" crossorigin="" />
+    <link rel="stylesheet" href="src/styles.css?v=header-store-link-20260613" />
+  </head>
+  <body class="map-page">
+    <header class="site-header">
+      <div class="brand-lockup">
+        <a class="header-home-link" href="index.html" aria-label="Open Play Map home">
+          <div class="logo-mark" aria-hidden="true">OP</div>
+        </a>
+        <div class="brand-copy">
+          <div class="brand-title-row">
+            <h1>Open Play Map</h1>
+            <a class="brand-about-link" href="about.html">About <span class="about-question" aria-hidden="true">?</span></a>
+            <span class="brand-link-divider" aria-hidden="true">|</span>
+            <a class="brand-store-link" href="https://scooppickleball.com/">Scoop Store</a>
+          </div>
+          <p class="subtitle">Get the Scoop on open play pickleball courts, hours, skill levels, and photos across the US.</p>
+        </div>
+      </div>
+      <div class="header-search" role="search">
+        <div class="header-location-search">
+          <label class="visually-hidden" for="search">Search pickleball courts, cities, states, notes</label>
+          <input id="search" type="search" placeholder="Search pickleball courts or cities…" autocomplete="off" />
+          <div id="headerPlaceResults" class="header-place-results" aria-live="polite"></div>
+        </div>
+
+        <div class="header-filter">
+          <button id="filterToggle" class="filter-toggle" type="button" aria-expanded="false" aria-controls="filterPanel">
+            <span aria-hidden="true">Filter</span>
+            <span id="filterCount" class="filter-count" hidden>0</span>
+          </button>
+          <div id="filterPanel" class="filter-panel" hidden>
+            <div class="filter-panel-header">
+              <strong>Filters</strong>
+              <button id="resetFilters" class="filter-reset" type="button">Reset</button>
+            </div>
+            <div class="filter-grid">
+              <label>Access
+                <select id="accessFilter" aria-label="Access filter">
+                  <option value="all">All access</option>
+                  <option value="free">Free/public</option>
+                  <option value="paid">Paid/private</option>
+                </select>
+              </label>
+              <label>Skill level
+                <select id="skillFilter" aria-label="Skill level filter">
+                  <option value="all">All levels</option>
+                  <option value="beginner">Beginner</option>
+                  <option value="intermediate">Intermediate</option>
+                  <option value="advanced">Advanced</option>
+                  <option value="unknown">Unknown</option>
+                </select>
+              </label>
+              <label>Open play day
+                <select id="dayFilter" aria-label="Open play day filter">
+                  <option value="all">Any day</option>
+                  <option value="monday">Monday</option>
+                  <option value="tuesday">Tuesday</option>
+                  <option value="wednesday">Wednesday</option>
+                  <option value="thursday">Thursday</option>
+                  <option value="friday">Friday</option>
+                  <option value="saturday">Saturday</option>
+                  <option value="sunday">Sunday</option>
+                </select>
+              </label>
+              <label>Time of day
+                <select id="timeFilter" aria-label="Time of day filter">
+                  <option value="all">Any time</option>
+                  <option value="morning">Morning</option>
+                  <option value="afternoon">Afternoon</option>
+                  <option value="evening">Evening</option>
+                </select>
+              </label>
+              <label>Setting
+                <select id="settingFilter" aria-label="Indoor outdoor filter">
+                  <option value="all">Indoor or outdoor</option>
+                  <option value="indoor">Indoor</option>
+                  <option value="outdoor">Outdoor</option>
+                  <option value="both">Both</option>
+                </select>
+              </label>
+              <label>Reliability
+                <select id="reliabilityFilter" aria-label="Open play reliability filter">
+                  <option value="all">Any reliability</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="sometimes">Sometimes active</option>
+                  <option value="uncertain">Uncertain</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button class="header-action" type="button" data-open-submit>+ Add location</button>
+      <a class="header-link" href="leaderboard.html">Leaderboard</a>
+      <div id="userPanel" class="user-panel">
+        <a class="secondary-button auth-open-button" href="account.html">Sign in / Join</a>
+      </div>
+    </header>
+    <button class="mobile-add-action" type="button" data-open-submit>
+      <span aria-hidden="true">+</span>
+      <span>Add</span>
+    </button>
+
+    <main class="app-shell">
+      <aside class="sidebar" aria-label="Court directory controls">
+        <div class="mobile-results-bar">
+          <span class="mobile-sheet-handle" aria-hidden="true"></span>
+          <strong>Open play spots</strong>
+          <div class="mobile-results-actions">
+            <button id="mobileListSizeToggle" type="button" aria-pressed="false">Full list</button>
+            <button id="mobilePanelToggle" type="button" aria-pressed="false">Map focus</button>
+          </div>
+        </div>
+        <p id="resultCount" class="result-count"></p>
+        <section id="courtList" class="court-list" aria-live="polite"></section>
+      </aside>
+
+      <section class="map-panel" aria-label="Open play map">
+        <div class="map-style-control">
+          <label for="mapStyle">Map style</label>
+          <select id="mapStyle">
+            <option value="positron">Light / clean</option>
+            <option value="osm">Colorful streets</option>
+            <option value="voyager" selected>Google-like</option>
+            <option value="satellite">Satellite</option>
+            <option value="dark">Dark map</option>
+          </select>
+        </div>
+        <div id="mapInfoBox" class="map-info-box" hidden></div>
+        <div id="map"></div>
+      </section>
+    </main>
+
+    <dialog id="submitDialog" class="submit-dialog">
+      <form id="locationForm" class="location-form" method="dialog">
+        <div class="form-header">
+          <div>
+            <p class="eyebrow">Community submission</p>
+            <h2>Add an open play location</h2>
+            <p>Drop the map pin by entering coordinates or clicking the map while this form is open.</p>
+          </div>
+          <button class="icon-button" type="button" data-close-submit aria-label="Close">×</button>
+        </div>
+
+        <section class="place-search-card">
+          <label>Search for the park or address
+            <div class="place-search-row">
+              <input id="placeSearch" type="search" placeholder="Ex: Dunkirk District Park, MD" autocomplete="off" />
+              <button class="secondary-button" id="placeSearchButton" type="button">Search</button>
+            </div>
+          </label>
+          <div id="placeResults" class="place-results" aria-live="polite"></div>
+        </section>
+
+        <div class="form-grid location-fields">
+          <label class="field-name">Park / facility name
+            <input id="newName" required placeholder="Ex: Dunkirk District Park" />
+          </label>
+          <label class="field-address">Address or area
+            <input id="newAddress" required placeholder="City, state, street, or landmark" />
+          </label>
+          <label class="field-city">City
+            <input id="newCity" required placeholder="City" />
+          </label>
+          <label class="field-state">State
+            <input id="newState" required maxlength="2" placeholder="MD" />
+          </label>
+          <label class="field-lat">Latitude
+            <input id="newLat" required type="number" step="any" placeholder="38.2912" />
+          </label>
+          <label class="field-lng">Longitude
+            <input id="newLng" required type="number" step="any" placeholder="-76.6358" />
+          </label>
+          <div class="access-stack">
+            <label class="field-access">Access
+              <select id="newAccess">
+                <option value="public">Free/public</option>
+                <option value="paid">Paid/private</option>
+              </select>
+            </label>
+            <label class="field-court-count">Number of courts
+              <input id="newCourtCount" type="number" min="0" step="1" inputmode="numeric" placeholder="Ex: 6" />
+            </label>
+          </div>
+          <fieldset id="newSkill" class="checkbox-fieldset">
+            <legend><span>Skill level</span><small class="form-subhint">select all that apply</small></legend>
+            <label><input name="skillLevel" type="checkbox" value="beginner" /> Beginner: Under 3.0</label>
+            <label><input name="skillLevel" type="checkbox" value="intermediate" /> Intermediate: 3.0-4.0</label>
+            <label><input name="skillLevel" type="checkbox" value="advanced" /> Advanced: 4.0+</label>
+          </fieldset>
+          <div class="checkbox-dropdown-field">
+            <span class="field-label">Open play days <small class="form-subhint">select all that apply</small></span>
+            <details id="newDays" class="checkbox-dropdown">
+              <summary><span id="newDaysSummary">Select days</span></summary>
+              <div class="checkbox-dropdown-menu">
+                <label class="select-all-option"><input id="openDayAll" type="checkbox" /> All days</label>
+                <label><input name="openDay" type="checkbox" value="Monday" /> Monday</label>
+                <label><input name="openDay" type="checkbox" value="Tuesday" /> Tuesday</label>
+                <label><input name="openDay" type="checkbox" value="Wednesday" /> Wednesday</label>
+                <label><input name="openDay" type="checkbox" value="Thursday" /> Thursday</label>
+                <label><input name="openDay" type="checkbox" value="Friday" /> Friday</label>
+                <label><input name="openDay" type="checkbox" value="Saturday" /> Saturday</label>
+                <label><input name="openDay" type="checkbox" value="Sunday" /> Sunday</label>
+              </div>
+            </details>
+          </div>
+          <label class="field-notes">Notes
+            <textarea id="newNotes" rows="3" placeholder="Parking, nets, crowd, source, beginner-friendly notes..."></textarea>
+          </label>
+          <div class="time-window-field">
+            <span class="field-label">Open play hours</span>
+            <div id="newTimeWindows" class="time-window-list"></div>
+            <button id="addTimeWindow" class="secondary-button compact-button" type="button">Add time window</button>
+          </div>
+          <label class="field-photos">Photo URLs, comma separated
+            <input id="newPhotos" placeholder="https://example.com/photo.jpg, assets/photos/park.jpg" />
+          </label>
+        </div>
+
+        <section id="suggestEditNote" class="suggest-edit-note" hidden>
+          <label>What should the admin know about this edit?
+            <textarea id="suggestEditReason" rows="3" maxlength="500" placeholder="Explain what changed, when you played there, or how you verified the information."></textarea>
+          </label>
+          <span class="field-help">Your suggestion will not change the public map until an admin approves it.</span>
+        </section>
+
+        <p id="formHint" class="form-hint">Tip: while this form is open, click the map to fill latitude and longitude.</p>
+
+        <div class="form-actions">
+          <button class="secondary-button" type="button" data-close-submit>Cancel</button>
+          <button class="primary-button" type="submit">Save location</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="reviewDialog" class="submit-dialog review-dialog">
+      <form id="reviewForm" class="location-form" method="dialog">
+        <div class="form-header">
+          <div>
+            <p class="eyebrow">Court update</p>
+            <h2 id="reviewTitle">Submit a review</h2>
+            <p>Share current open-play details, crowd notes, or anything players should know.</p>
+            <p id="reviewRequirement" class="review-requirement is-incomplete">Fill in at least 3 fields to submit.</p>
+          </div>
+          <button class="icon-button" type="button" data-close-review aria-label="Close">×</button>
+        </div>
+
+        <div class="form-grid review-fields">
+          <label>Visited
+            <input id="reviewVisited" type="date" />
+          </label>
+          <fieldset id="reviewSkill" class="checkbox-fieldset review-skill-field">
+            <legend><span>Skill level you saw</span><small class="form-subhint">select all that apply</small></legend>
+            <label><input name="reviewSkillLevel" type="checkbox" value="beginner" /> Beginner: Under 3.0</label>
+            <label><input name="reviewSkillLevel" type="checkbox" value="intermediate" /> Intermediate: 3.0-4.0</label>
+            <label><input name="reviewSkillLevel" type="checkbox" value="advanced" /> Advanced: 4.0+</label>
+          </fieldset>
+          <label>Crowd level
+            <select id="reviewCrowd">
+              <option value="">Not sure</option>
+              <option value="Light">Light</option>
+              <option value="Moderate">Moderate</option>
+              <option value="Packed">Packed</option>
+            </select>
+          </label>
+          <label>Best time to go
+            <input id="reviewBestTime" placeholder="Ex: Tuesday after 6 PM" />
+          </label>
+          <label>Open play reliability
+            <select id="reviewReliability">
+              <option value="">Not sure</option>
+              <option value="Confirmed">Confirmed</option>
+              <option value="Sometimes active">Sometimes active</option>
+              <option value="Uncertain">Uncertain</option>
+            </select>
+          </label>
+          <label>Net setup
+            <select id="reviewNetSetup">
+              <option value="">Not sure</option>
+              <option value="Permanent nets">Permanent nets</option>
+              <option value="Portable nets">Portable nets</option>
+              <option value="Bring your own net">Bring your own net</option>
+            </select>
+          </label>
+          <label>Play format
+            <select id="reviewPlayFormat">
+              <option value="">Not sure</option>
+              <option value="Paddle stack">Paddle stack</option>
+              <option value="Challenge court">Challenge court</option>
+              <option value="Round robin">Round robin</option>
+              <option value="Casual">Casual</option>
+            </select>
+          </label>
+          <label>Beginner friendliness
+            <select id="reviewBeginnerFriendly">
+              <option value="">Not sure</option>
+              <option value="Welcoming">Welcoming</option>
+              <option value="Neutral">Neutral</option>
+              <option value="Competitive">Competitive</option>
+            </select>
+          </label>
+          <label>Fees or passes
+            <select id="reviewFees">
+              <option value="">Not sure</option>
+              <option value="Free">Free</option>
+              <option value="Drop-in fee">Drop-in fee</option>
+              <option value="Membership required">Membership required</option>
+            </select>
+          </label>
+          <label>Bathroom / water
+            <select id="reviewAmenities">
+              <option value="">Not sure</option>
+              <option value="Bathroom and water">Bathroom and water</option>
+              <option value="Bathroom only">Bathroom only</option>
+              <option value="Water only">Water only</option>
+              <option value="Neither">Neither</option>
+            </select>
+          </label>
+          <label>Lighting
+            <select id="reviewLighting">
+              <option value="">Not sure</option>
+              <option value="Good for night play">Good for night play</option>
+              <option value="Limited">Limited</option>
+              <option value="None">None</option>
+            </select>
+          </label>
+          <label>Scheduling App
+            <input id="reviewSchedulingApp" placeholder="Ex: TeamReach, Playtime Scheduler, none" />
+          </label>
+        </div>
+        <label>Review / open play information
+          <textarea id="reviewBody" rows="4" maxlength="600" placeholder="Open play times, level, nets, fees, amenities, lighting, or recent changes."></textarea>
+        </label>
+        <label>Photo URLs, comma separated
+          <input id="reviewPhotos" placeholder="https://example.com/photo.jpg, assets/photos/park.jpg" />
+        </label>
+        <p id="reviewHint" class="form-hint"></p>
+
+        <div class="form-actions">
+          <button class="secondary-button" type="button" data-close-review>Cancel</button>
+          <button class="primary-button" type="submit">Post update</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="src/mobile-header.js?v=scoop-store-link-20260613"></script>
+    <script src="src/app.js?v=review-hours-inline-20260612"></script>
+  </body>
+</html>
