@@ -512,6 +512,7 @@ function adminListHeader(type) {
     : `
       <span>Location</span>
       <span>Access</span>
+      <span>Status</span>
       <span>Skill</span>
       <span>Open play</span>
       <span>Photos</span>
@@ -583,7 +584,7 @@ function allReviewsWithCourt() {
 }
 
 function pendingLocations() {
-  return getSavedSubmissions().filter(court => court.status === 'pending');
+  return allCourts.filter(court => court.status === 'pending');
 }
 
 function openReports() {
@@ -1053,6 +1054,7 @@ function locationCard(court) {
   const card = document.createElement('article');
   card.className = 'admin-card';
   const accessLabel = court.access === 'paid' || court.isFree === false ? 'Paid/private' : 'Free/public';
+  const statusLabel = court.status || 'approved';
   const skillLabel = court.estimatedSkillLevel || 'unknown';
   const photoCount = court.photos?.length || 0;
   const areaLabel = [court.city, court.state].filter(Boolean).join(', ');
@@ -1066,6 +1068,7 @@ function locationCard(court) {
         <p>${escapeHtml(locationLabel)}</p>
       </div>
       <span>${escapeHtml(accessLabel)}</span>
+      <span>${escapeHtml(statusLabel)}</span>
       <span>${escapeHtml(skillLabel)}</span>
       <span>${escapeHtml(court.openPlay?.[0]?.days || 'Days TBD')}</span>
       <span>${escapeHtml(photoCount)}</span>
@@ -1104,7 +1107,20 @@ function renderLocations() {
   elements.locationsList.replaceChildren(adminListHeader('location'), ...allCourts.map(locationCard));
 }
 
-function approveLocation(locationId) {
+async function approveLocation(locationId) {
+  const remoteCourt = allCourts.find(court => court.id === locationId && court.remoteId);
+  if (remoteCourt) {
+    try {
+      const approved = await window.OpenPlaySupabase.updateLocationStatus(remoteCourt.remoteId, 'approved', currentAdminUser?.id);
+      allCourts = allCourts.map(court => court.id === locationId ? approved : court);
+      renderModeration();
+      renderLocations();
+    } catch (error) {
+      elements.moderationList.querySelector(`[data-approve-location="${CSS.escape(locationId)}"]`)?.closest('.moderation-item')?.querySelector('.moderation-meta')?.insertAdjacentHTML('afterend', `<p class="form-hint">${escapeHtml(error.message)}</p>`);
+    }
+    return;
+  }
+
   const submissions = getSavedSubmissions();
   const nextSubmissions = submissions.map(court => (
     court.id === locationId
@@ -1127,10 +1143,24 @@ function approveLocation(locationId) {
   renderLocations();
 }
 
-function rejectLocation(locationId) {
-  const court = getSavedSubmissions().find(item => item.id === locationId);
+async function rejectLocation(locationId) {
+  const remoteCourt = allCourts.find(court => court.id === locationId && court.remoteId);
+  const court = remoteCourt || getSavedSubmissions().find(item => item.id === locationId);
   const confirmed = window.confirm(`Reject ${court?.name || 'this location'}? It will not appear on the map.`);
   if (!confirmed) return;
+
+  if (remoteCourt) {
+    try {
+      const rejected = await window.OpenPlaySupabase.updateLocationStatus(remoteCourt.remoteId, 'rejected', currentAdminUser?.id);
+      allCourts = allCourts.map(item => item.id === locationId ? rejected : item);
+      renderModeration();
+      renderLocations();
+    } catch (error) {
+      elements.moderationList.querySelector(`[data-reject-location="${CSS.escape(locationId)}"]`)?.closest('.moderation-item')?.querySelector('.moderation-meta')?.insertAdjacentHTML('afterend', `<p class="form-hint">${escapeHtml(error.message)}</p>`);
+    }
+    return;
+  }
+
   saveSubmissions(getSavedSubmissions().filter(item => item.id !== locationId));
   saveCredits(getSavedCredits().map(credit => (
     credit.targetType === 'location' && credit.targetId === locationId && credit.status === 'pending'
@@ -1236,6 +1266,19 @@ function deleteLocation(court) {
   const confirmed = window.confirm(`Delete ${court.name}? This removes it from the admin panel and map.`);
   if (!confirmed) return;
 
+  if (court.remoteId) {
+    window.OpenPlaySupabase.updateLocationStatus(court.remoteId, 'archived', currentAdminUser?.id)
+      .then(() => {
+        allCourts = allCourts.filter(item => item.id !== court.id);
+        renderModeration();
+        renderLocations();
+      })
+      .catch(error => {
+        window.alert(error.message);
+      });
+    return;
+  }
+
   const deletedIds = new Set(getDeletedLocationIds());
   deletedIds.add(court.id);
   saveDeletedLocationIds([...deletedIds]);
@@ -1251,7 +1294,7 @@ function deleteLocation(court) {
   renderLocations();
 }
 
-function saveLocationEdit(event) {
+async function saveLocationEdit(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const hint = form.querySelector('[data-admin-hint]');
@@ -1312,6 +1355,19 @@ function saveLocationEdit(event) {
     return;
   }
 
+  if (existing.remoteId) {
+    try {
+      const savedCourt = await window.OpenPlaySupabase.saveAdminLocation(nextCourt);
+      allCourts = allCourts.map(court => court.id === locationId ? savedCourt : court);
+      hint.textContent = 'Saved.';
+      renderModeration();
+      renderLocations();
+    } catch (error) {
+      hint.textContent = error.message;
+    }
+    return;
+  }
+
   upsertSavedLocation(nextCourt);
   allCourts = allCourts.map(court => court.id === locationId ? nextCourt : court);
   hint.textContent = 'Saved.';
@@ -1321,7 +1377,10 @@ function saveLocationEdit(event) {
 
 async function loadCourts() {
   try {
-    let seedCourts = await window.OpenPlaySupabase?.fetchApprovedLocations?.();
+    let seedCourts = await window.OpenPlaySupabase?.fetchAdminLocations?.();
+    if (!seedCourts) {
+      seedCourts = await window.OpenPlaySupabase?.fetchApprovedLocations?.();
+    }
     if (!seedCourts) {
       const response = await fetch('data/courts.json');
       seedCourts = response.ok ? await response.json() : [];

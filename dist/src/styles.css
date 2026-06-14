@@ -4352,7 +4352,7 @@ label:has(input:required:valid) > .field-label .is-required {
 }
 
 .admin-location-row {
-  grid-template-columns: minmax(180px, 1.55fr) 110px 96px minmax(120px, 1fr) 64px 150px;
+  grid-template-columns: minmax(180px, 1.45fr) 110px 78px 96px minmax(120px, 1fr) 64px 150px;
 }
 
 .admin-row-main {
