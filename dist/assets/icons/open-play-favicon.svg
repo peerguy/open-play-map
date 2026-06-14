@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Open Play Map">
+  <defs>
+    <linearGradient id="op-bg" x1="10" y1="8" x2="54" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2477f2" />
+      <stop offset="1" stop-color="#145bcc" />
+    </linearGradient>
+    <radialGradient id="op-highlight" cx="24" cy="20" r="22" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.34" />
+      <stop offset="0.62" stop-color="#ffffff" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="17" fill="url(#op-bg)" />
+  <rect width="64" height="64" rx="17" fill="url(#op-highlight)" />
+  <text x="32" y="39" text-anchor="middle" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="23" font-weight="900" letter-spacing="-2.4">OP</text>
+</svg>

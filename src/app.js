@@ -1021,12 +1021,14 @@ function renderPhotoStrip(court, limit = 3) {
   `;
 }
 
-function locationActionButtons(court, className = 'popup-edit') {
+function locationActionButtons(court, className = 'popup-edit', { includeEdit = true } = {}) {
   return `
-    ${canEditLocations() ? `<button class="${className}" type="button" data-edit-location="${court.id}">Edit location</button>` : ''}
-    <button class="${className}" type="button" data-review-location="${court.id}">Review / update</button>
-    ${canEditLocations() ? '' : `<button class="${className}" type="button" data-suggest-edit="${court.id}">Suggest edit</button>`}
-    <button class="${className} report-action" type="button" data-report-location="${court.id}">Report issue</button>
+    <div class="location-action-row">
+      ${includeEdit && canEditLocations() ? `<button class="${className}" type="button" data-edit-location="${court.id}">Edit location</button>` : ''}
+      <button class="${className} report-action" type="button" data-report-location="${court.id}">Report issue</button>
+      ${canEditLocations() ? '' : `<button class="${className}" type="button" data-suggest-edit="${court.id}">Suggest edit</button>`}
+      <button class="${className}" type="button" data-review-location="${court.id}">Review</button>
+    </div>
   `;
 }
 
@@ -1157,15 +1159,13 @@ function createCourtCard(court) {
       <h2><span class="court-icon" aria-hidden="true">${DEFAULT_ICON}</span>${court.name}</h2>
       <div class="card-actions">
         ${canEditLocations() ? `<button class="card-edit" type="button" data-edit-location="${court.id}" aria-label="Edit ${court.name}">Edit</button>` : ''}
-        <div class="card-menu">
-          <button class="card-menu-toggle" type="button" data-card-menu-toggle aria-expanded="false" aria-label="More options for ${escapeHtml(court.name)}">...</button>
-          <div class="card-menu-panel" data-card-menu hidden>
-            <button type="button" data-suggest-edit="${court.id}">Suggest edit</button>
-            <button type="button" data-share-location="${court.id}">Share link</button>
-            <button class="report-menu-item" type="button" data-report-location="${court.id}">Report</button>
+          <div class="card-menu">
+            <button class="card-menu-toggle" type="button" data-card-menu-toggle aria-expanded="false" aria-label="More options for ${escapeHtml(court.name)}">...</button>
+            <div class="card-menu-panel" data-card-menu hidden>
+              <button type="button" data-share-location="${court.id}">Share link</button>
+            </div>
           </div>
         </div>
-      </div>
     </div>
     <p class="meta">${court.address || `${court.city}, ${court.state}`}</p>
     <div class="badges">
@@ -1174,9 +1174,8 @@ function createCourtCard(court) {
       <span class="badge">${court.estimatedSkillLevel}</span>
       ${reviews.length ? `<span class="badge">${reviews.length} update${reviews.length === 1 ? '' : 's'}</span>` : ''}
     </div>
-    ${renderOpenPlaySummary(court, {
-      actionsHtml: `<button class="card-edit card-review-inline" type="button" data-review-location="${court.id}" aria-label="Review ${court.name}">Review</button>`
-    })}
+    ${renderOpenPlaySummary(court)}
+    ${locationActionButtons(court, 'card-edit card-action-button', { includeEdit: false })}
   `;
 
   card.addEventListener('click', () => focusCourt(court.id, 'list_card'));
@@ -1725,7 +1724,7 @@ function closeSubmitDialog() {
 }
 
 function openReviewDialog(id) {
-  if (!requireCurrentUser('Sign in or create a profile before posting a review or court update.')) return;
+  if (!requireCurrentUser('Sign in or create a profile before posting a review.')) return;
   const court = state.courts.find(item => item.id === id);
   if (!court) return;
 
@@ -1745,8 +1744,8 @@ function openReviewDialog(id) {
   elements.reviewLighting.value = existingReview?.lighting || '';
   elements.reviewSchedulingApp.value = existingReview?.schedulingApp || '';
   elements.reviewBody.value = existingReview?.body || '';
-  elements.reviewTitle.textContent = existingReview ? `Edit your update for ${court.name}` : `Update ${court.name}`;
-  setReviewHint(existingReview ? 'Saving will update your previous review for this location.' : '');
+  elements.reviewTitle.textContent = existingReview ? `Edit your review for ${court.name}` : `Review ${court.name}`;
+  setReviewHint(existingReview ? 'Saving will replace your previous review for this location.' : '');
   updateReviewRequirement();
   openDialog(elements.reviewDialog);
   elements.reviewBody.focus();
@@ -1815,7 +1814,7 @@ function setReviewHint(message, isError = false) {
 
 function submitReview(event) {
   event.preventDefault();
-  if (!requireCurrentUser('Sign in or create a profile before posting a review or court update.')) return;
+  if (!requireCurrentUser('Sign in or create a profile before posting a review.')) return;
 
   const court = state.courts.find(item => item.id === state.reviewCourtId);
   const { body, skillLevels, reviewDetails, photoUrls: reviewPhotoUrls } = reviewFormValues();

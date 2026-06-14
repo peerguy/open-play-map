@@ -2012,6 +2012,27 @@ textarea::placeholder {
   padding: 6px 10px;
 }
 
+.location-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.location-action-row .popup-edit {
+  margin-top: 0;
+}
+
+.court-card .location-action-row {
+  margin-top: 0;
+}
+
+.card-action-button {
+  min-height: 34px;
+  white-space: nowrap;
+}
+
 .card-edit:hover,
 .popup-edit:hover {
   border-color: var(--brand);
@@ -5294,6 +5315,18 @@ label:has(input:required:valid) > .field-label .is-required {
   .map-page .card-edit {
     padding: 5px 7px;
     font-size: 0.72rem;
+  }
+
+  .map-page .court-card .location-action-row {
+    justify-content: flex-start;
+    width: 100%;
+    max-width: 100%;
+    gap: 6px;
+  }
+
+  .map-page .court-card .card-action-button {
+    flex: 0 0 auto;
+    padding-inline: 8px;
   }
 
   .map-page .badges {

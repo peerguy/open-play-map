@@ -19,9 +19,10 @@
     <meta name="twitter:title" content="Open Play Pickleball Map" />
     <meta name="twitter:description" content="Find open play pickleball courts, pickup schedules, skill levels, fees, photos, and player updates near you." />
     <meta name="twitter:image" content="https://play.scooppickleball.com/assets/images/open-play-og.png" />
+    <link rel="icon" type="image/svg+xml" href="assets/icons/open-play-favicon.svg" />
     <link rel="stylesheet" href="src/leaflet-fix.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ6C/DNF8D6qS3hC9cc1N02p2o6sX7k=" crossorigin="" />
-    <link rel="stylesheet" href="src/styles.css?v=seo-analytics-20260614" />
+    <link rel="stylesheet" href="src/styles.css?v=actions-favicon-20260614" />
   </head>
   <body class="map-page">
     <header class="site-header">
@@ -260,7 +261,7 @@
       <form id="reviewForm" class="location-form" method="dialog">
         <div class="form-header">
           <div>
-            <p class="eyebrow">Court update</p>
+            <p class="eyebrow">Court review</p>
             <h2 id="reviewTitle">Submit a review</h2>
             <p>Share current open-play details, crowd notes, or anything players should know.</p>
             <p id="reviewRequirement" class="review-requirement is-incomplete">Fill in at least 3 fields to submit.</p>
@@ -361,7 +362,7 @@
 
         <div class="form-actions">
           <button class="secondary-button" type="button" data-close-review>Cancel</button>
-          <button class="primary-button" type="submit">Post update</button>
+          <button class="primary-button" type="submit">Post review</button>
         </div>
       </form>
     </dialog>
@@ -374,6 +375,6 @@
     <script src="src/supabase-data.js?v=supabase-read-20260614"></script>
     <script src="src/supabase-auth.js?v=supabase-auth-fix-20260614"></script>
     <script src="src/mobile-header.js?v=supabase-auth-fix-20260614"></script>
-    <script src="src/app.js?v=supabase-auth-fix-20260614"></script>
+    <script src="src/app.js?v=actions-favicon-20260614"></script>
   </body>
 </html>
