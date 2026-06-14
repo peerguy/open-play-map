@@ -46,7 +46,7 @@
       <section class="admin-content">
         <div id="adminGuard" class="admin-guard" hidden>
           <h2>Admin access required</h2>
-          <p>Log in as the user named scoop to manage site information.</p>
+          <p>Log in with an account that has the admin role to manage site information.</p>
           <a class="primary-button" href="account.html">Go to account</a>
         </div>
 
@@ -85,8 +85,12 @@
       </section>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="src/analytics.js?v=seo-analytics-20260614"></script>
-    <script src="src/mobile-header.js?v=scoop-store-link-20260613"></script>
-    <script src="src/admin.js?v=suggested-edits-20260612"></script>
+    <script src="src/supabase-config.js?v=supabase-read-20260614"></script>
+    <script src="src/supabase-client.js?v=supabase-auth-20260614"></script>
+    <script src="src/supabase-auth.js?v=supabase-auth-20260614"></script>
+    <script src="src/mobile-header.js?v=supabase-auth-20260614"></script>
+    <script src="src/admin.js?v=supabase-auth-20260614"></script>
   </body>
 </html>

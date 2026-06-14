@@ -1,7 +1,5 @@
 const STORAGE_KEY = 'open-play-map-submissions';
 const MAP_STYLE_KEY = 'open-play-map-style';
-const USERS_KEY = 'open-play-map-users';
-const SESSION_KEY = 'open-play-map-session';
 const REVIEWS_KEY = 'open-play-map-reviews';
 const CREDITS_KEY = 'open-play-map-credits';
 const DELETED_LOCATIONS_KEY = 'open-play-map-deleted-locations';
@@ -143,19 +141,6 @@ const elements = {
   placeResults: document.querySelector('#placeResults'),
   headerPlaceResults: document.querySelector('#headerPlaceResults'),
   userPanel: document.querySelector('#userPanel'),
-  authDialog: document.querySelector('#authDialog'),
-  signupForm: document.querySelector('#signupForm'),
-  signupEmail: document.querySelector('#signupEmail'),
-  signupPassword: document.querySelector('#signupPassword'),
-  signupUsername: document.querySelector('#signupUsername'),
-  signupPhoto: document.querySelector('#signupPhoto'),
-  signupSkillLevel: document.querySelector('#signupSkillLevel'),
-  signupBio: document.querySelector('#signupBio'),
-  signupHint: document.querySelector('#signupHint'),
-  loginForm: document.querySelector('#loginForm'),
-  loginEmail: document.querySelector('#loginEmail'),
-  loginPassword: document.querySelector('#loginPassword'),
-  loginHint: document.querySelector('#loginHint'),
   reviewDialog: document.querySelector('#reviewDialog'),
   reviewForm: document.querySelector('#reviewForm'),
   reviewTitle: document.querySelector('#reviewTitle'),
@@ -256,24 +241,6 @@ async function copyTextToClipboard(text) {
   const copied = document.execCommand('copy');
   textarea.remove();
   if (!copied) throw new Error('Clipboard copy failed');
-}
-
-function getSavedUsers() {
-  try {
-    const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-    const migratedUsers = migrateUserSkillLevels(users);
-    if (JSON.stringify(users) !== JSON.stringify(migratedUsers)) {
-      saveUsers(migratedUsers);
-      migratedUsers.forEach(syncUserAttribution);
-    }
-    return migratedUsers;
-  } catch {
-    return [];
-  }
-}
-
-function saveUsers(users) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
 }
 
 function getSavedReviews() {
@@ -385,14 +352,6 @@ function awardCredits({ action, targetType, targetId, status = 'approved' }) {
     status
   });
   saveCredits(credits);
-}
-
-function skillLevelFromDupr(dupr) {
-  const value = Number.parseFloat(dupr);
-  if (!Number.isFinite(value)) return 'beginner';
-  if (value < 3) return 'beginner';
-  if (value < 4) return 'intermediate';
-  return 'advanced';
 }
 
 function normalizeSkillLevel(value, fallback = '') {
@@ -601,33 +560,6 @@ function saveSuggestedLocationEdit(currentLocation, suggestedLocation, reason) {
   saveSuggestedEdits(edits);
 }
 
-function migrateUserSkillLevels(users) {
-  return users.map(user => {
-    const isScoop = normalize(user.username) === 'scoop';
-    const skillLevel = isScoop
-      ? 'advanced'
-      : normalizeSkillLevel(user.skillLevel, skillLevelFromDupr(user.dupr));
-    const { dupr, ...userWithoutDupr } = user;
-    return { ...userWithoutDupr, skillLevel };
-  });
-}
-
-function syncUserAttribution(user) {
-  const reviews = getSavedReviews();
-  Object.keys(reviews).forEach(courtId => {
-    reviews[courtId] = reviews[courtId].map(review => {
-      if (review.userId !== user.id) return review;
-      const { dupr, ...reviewWithoutDupr } = review;
-      return { ...reviewWithoutDupr, username: user.username, skillLevel: user.skillLevel || '' };
-    });
-  });
-  saveReviews(reviews);
-
-  saveSuggestedEdits(getSavedSuggestedEdits().map(edit => (
-    edit.userId === user.id ? { ...edit, username: user.username } : edit
-  )));
-}
-
 function publicUser(user) {
   if (!user) return null;
   return {
@@ -641,35 +573,22 @@ function publicUser(user) {
 }
 
 function isAdminUser(user) {
-  return normalize(user?.username) === 'scoop';
+  return user?.role === 'admin';
 }
 
 function canEditLocations() {
   return isAdminUser(state.currentUser);
 }
 
-function findUserById(id) {
-  return getSavedUsers().find(user => user.id === id) || null;
-}
-
-function findUserByEmail(email) {
-  return getSavedUsers().find(user => normalize(user.email) === normalize(email)) || null;
-}
-
-function loadCurrentUser() {
-  const userId = localStorage.getItem(SESSION_KEY);
-  state.currentUser = userId ? findUserById(userId) : null;
+async function loadCurrentUser() {
+  state.currentUser = await window.OpenPlayAuth?.currentUser?.() || null;
 }
 
 function setCurrentUser(user) {
   state.currentUser = user;
-  if (user) {
-    localStorage.setItem(SESSION_KEY, user.id);
-  } else {
-    localStorage.removeItem(SESSION_KEY);
-  }
   renderUserPanel();
   render();
+  window.openPlayRenderMobileHeader?.();
   window.dispatchEvent(new CustomEvent('open-play-session-changed'));
 }
 
@@ -686,13 +605,6 @@ function getCourtReviews(courtId) {
 function getCurrentUserReview(courtId) {
   if (!state.currentUser) return null;
   return (getSavedReviews()[courtId] || []).find(review => review.userId === state.currentUser.id) || null;
-}
-
-async function digestPassword(password) {
-  if (!globalThis.crypto?.subtle) return password;
-  const data = new TextEncoder().encode(password);
-  const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', data);
-  return [...new Uint8Array(hashBuffer)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function userAvatar(user) {
@@ -717,8 +629,14 @@ function renderUserPanel() {
     `;
   }
 
-  elements.userPanel.querySelector('[data-open-auth]')?.addEventListener('click', openAuthDialog);
-  elements.userPanel.querySelector('[data-logout]')?.addEventListener('click', () => setCurrentUser(null));
+  elements.userPanel.querySelector('[data-logout]')?.addEventListener('click', async () => {
+    try {
+      await window.OpenPlayAuth?.signOut?.();
+      setCurrentUser(null);
+    } catch (error) {
+      console.error(error);
+    }
+  });
   window.openPlayRenderMobileHeader?.();
 }
 
@@ -1806,123 +1724,6 @@ function closeSubmitDialog() {
   clearDraftMarker();
 }
 
-function openAuthDialog() {
-  elements.signupHint.textContent = '';
-  elements.loginHint.textContent = elements.loginHint.textContent || '';
-  openDialog(elements.authDialog);
-  if (location.hash !== '#authDialog') {
-    location.hash = 'authDialog';
-  }
-  elements.loginEmail.focus();
-}
-
-function closeAuthDialog() {
-  closeDialog(elements.authDialog);
-  elements.signupHint.textContent = '';
-  elements.loginHint.textContent = '';
-  if (location.hash === '#authDialog') {
-    history.replaceState(null, '', `${location.pathname}${location.search}`);
-  }
-}
-
-function readProfilePhoto(file) {
-  return new Promise((resolve, reject) => {
-    if (!file) {
-      resolve('');
-      return;
-    }
-
-    if (!file.type.startsWith('image/')) {
-      reject(new Error('Please choose an image file.'));
-      return;
-    }
-
-    if (file.size > 1_500_000) {
-      reject(new Error('Profile picture must be under 1.5 MB for this local prototype.'));
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('Could not read that image.'));
-    reader.readAsDataURL(file);
-  });
-}
-
-async function createAccount(event) {
-  event.preventDefault();
-
-  const email = elements.signupEmail.value.trim().toLowerCase();
-  const password = elements.signupPassword.value;
-  const username = elements.signupUsername.value.trim();
-  const skillLevel = normalizeSkillLevel(elements.signupSkillLevel.value, '');
-  const bio = elements.signupBio.value.trim();
-
-  if (!email || !password || !username) {
-    elements.signupHint.textContent = 'Email, password, and username are required.';
-    return;
-  }
-
-  if (password.length < 8) {
-    elements.signupHint.textContent = 'Password must be at least 8 characters.';
-    return;
-  }
-
-  if (bio.length > 140) {
-    elements.signupHint.textContent = 'Bio must be 140 characters or less.';
-    return;
-  }
-
-  const users = getSavedUsers();
-  if (users.some(user => normalize(user.email) === normalize(email))) {
-    elements.signupHint.textContent = 'An account already exists for that email.';
-    return;
-  }
-
-  if (users.some(user => normalize(user.username) === normalize(username))) {
-    elements.signupHint.textContent = 'That username is already taken.';
-    return;
-  }
-
-  try {
-    const photo = await readProfilePhoto(elements.signupPhoto.files?.[0]);
-    const user = {
-      id: `user-${Date.now()}`,
-      email,
-      passwordHash: await digestPassword(password),
-      username,
-      photo,
-      skillLevel,
-      bio,
-      createdAt: todayIso()
-    };
-    users.push(user);
-    saveUsers(users);
-    elements.signupForm.reset();
-    closeAuthDialog();
-    setCurrentUser(user);
-  } catch (error) {
-    elements.signupHint.textContent = error.message;
-  }
-}
-
-async function login(event) {
-  event.preventDefault();
-
-  const user = findUserByEmail(elements.loginEmail.value.trim());
-  const passwordHash = await digestPassword(elements.loginPassword.value);
-  const matchesHash = user?.passwordHash === passwordHash;
-  const matchesLegacyPassword = user?.password === elements.loginPassword.value;
-  if (!user || (!matchesHash && !matchesLegacyPassword)) {
-    elements.loginHint.textContent = 'Email or password did not match.';
-    return;
-  }
-
-  elements.loginForm.reset();
-  closeAuthDialog();
-  setCurrentUser(user);
-}
-
 function openReviewDialog(id) {
   if (!requireCurrentUser('Sign in or create a profile before posting a review or court update.')) return;
   const court = state.courts.find(item => item.id === id);
@@ -2409,7 +2210,7 @@ function addSubmittedLocation(event) {
 }
 
 async function init() {
-  loadCurrentUser();
+  await loadCurrentUser();
   renderUserPanel();
   syncMobileHeaderHeight();
 
@@ -2536,10 +2337,14 @@ window.addEventListener('resize', () => {
   }
 });
 
-window.addEventListener('open-play-session-changed', () => {
-  loadCurrentUser();
+window.addEventListener('open-play-session-changed', async () => {
+  await loadCurrentUser();
   renderUserPanel();
   render();
+});
+
+window.OpenPlayAuth?.onAuthStateChange?.(() => {
+  window.dispatchEvent(new CustomEvent('open-play-session-changed'));
 });
 
 document.addEventListener('click', event => {

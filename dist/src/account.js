@@ -1,11 +1,8 @@
-const USERS_KEY = 'open-play-map-users';
-const SESSION_KEY = 'open-play-map-session';
 const STORAGE_KEY = 'open-play-map-submissions';
 const REVIEWS_KEY = 'open-play-map-reviews';
 const CREDITS_KEY = 'open-play-map-credits';
 
 const params = new URLSearchParams(location.search);
-const returnTo = params.get('return') || 'index.html';
 let allCourts = [];
 
 const SKILL_LEVELS = {
@@ -22,8 +19,6 @@ const elements = {
   signupPassword: document.querySelector('#signupPassword'),
   signupPasswordConfirm: document.querySelector('#signupPasswordConfirm'),
   signupUsername: document.querySelector('#signupUsername'),
-  signupPhoto: document.querySelector('#signupPhoto'),
-  photoFileName: document.querySelector('#photoFileName'),
   signupSkillLevel: document.querySelector('#signupSkillLevel'),
   signupBio: document.querySelector('#signupBio'),
   signupHint: document.querySelector('#signupHint'),
@@ -36,14 +31,6 @@ const elements = {
   passwordToggles: document.querySelectorAll('[data-toggle-password]')
 };
 
-function normalize(value) {
-  return String(value ?? '').toLowerCase();
-}
-
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -51,20 +38,6 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
-}
-
-function getSavedUsers() {
-  try {
-    const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-    const migratedUsers = migrateUserSkillLevels(users);
-    if (JSON.stringify(users) !== JSON.stringify(migratedUsers)) {
-      saveUsers(migratedUsers);
-      migratedUsers.forEach(syncUserAttribution);
-    }
-    return migratedUsers;
-  } catch {
-    return [];
-  }
 }
 
 function getSavedSubmissions() {
@@ -91,22 +64,6 @@ function getSavedCredits() {
   }
 }
 
-function saveSubmissions(submissions) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(submissions));
-}
-
-function saveReviews(reviews) {
-  localStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews));
-}
-
-function saveCredits(credits) {
-  localStorage.setItem(CREDITS_KEY, JSON.stringify(credits));
-}
-
-function saveUsers(users) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-}
-
 function getCreditBalances(userId) {
   return getSavedCredits()
     .filter(credit => credit.userId === userId && (credit.status === 'approved' || !credit.status))
@@ -114,14 +71,6 @@ function getCreditBalances(userId) {
       active: balances.active + Number(credit.activeCreditsDelta || 0),
       lifetime: balances.lifetime + Number(credit.lifetimeCreditsDelta || 0)
     }), { active: 0, lifetime: 0 });
-}
-
-function skillLevelFromDupr(dupr) {
-  const value = Number.parseFloat(dupr);
-  if (!Number.isFinite(value)) return 'beginner';
-  if (value < 3) return 'beginner';
-  if (value < 4) return 'intermediate';
-  return 'advanced';
 }
 
 function normalizeSkillLevel(value, fallback = '') {
@@ -142,79 +91,7 @@ function skillLevelOptions(selected) {
     .join('');
 }
 
-function migrateUserSkillLevels(users) {
-  return users.map(user => {
-    const isScoop = normalize(user.username) === 'scoop';
-    const skillLevel = isScoop
-      ? 'advanced'
-      : normalizeSkillLevel(user.skillLevel, skillLevelFromDupr(user.dupr));
-    const { dupr, ...userWithoutDupr } = user;
-    return { ...userWithoutDupr, skillLevel };
-  });
-}
-
-function syncUserAttribution(user) {
-  const submissions = getSavedSubmissions().map(court => (
-    court.submittedBy === user.id ? { ...court, submittedByUsername: user.username } : court
-  ));
-  saveSubmissions(submissions);
-
-  const reviews = getSavedReviews();
-  Object.keys(reviews).forEach(courtId => {
-    reviews[courtId] = reviews[courtId].map(review => {
-      if (review.userId !== user.id) return review;
-      const { dupr, ...reviewWithoutDupr } = review;
-      return { ...reviewWithoutDupr, username: user.username, skillLevel: user.skillLevel || '' };
-    });
-  });
-  saveReviews(reviews);
-
-  saveCredits(getSavedCredits().map(credit => (
-    credit.userId === user.id ? { ...credit, username: user.username } : credit
-  )));
-}
-
-function findUserByEmail(email) {
-  return getSavedUsers().find(user => normalize(user.email) === normalize(email)) || null;
-}
-
-function findUserById(id) {
-  return getSavedUsers().find(user => user.id === id) || null;
-}
-
-async function digestPassword(password) {
-  if (!globalThis.crypto?.subtle) return password;
-  const data = new TextEncoder().encode(password);
-  const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', data);
-  return [...new Uint8Array(hashBuffer)].map(byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
-function readProfilePhoto(file) {
-  return new Promise((resolve, reject) => {
-    if (!file) {
-      resolve('');
-      return;
-    }
-
-    if (!file.type.startsWith('image/')) {
-      reject(new Error('Please choose an image file.'));
-      return;
-    }
-
-    if (file.size > 1_500_000) {
-      reject(new Error('Profile picture must be under 1.5 MB for this local prototype.'));
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('Could not read that image.'));
-    reader.readAsDataURL(file);
-  });
-}
-
 function setCurrentUser(user) {
-  localStorage.setItem(SESSION_KEY, user.id);
   renderCurrentUser(user);
   window.dispatchEvent(new CustomEvent('open-play-session-changed'));
 }
@@ -246,7 +123,7 @@ function renderCurrentUser(user) {
   elements.currentUserCard.hidden = false;
   const addedPlaces = getAddedPlaces(user);
   const reviewedPlaces = getReviewedPlaces(user);
-  const isAdmin = normalize(user.username) === 'scoop';
+  const isAdmin = user.role === 'admin';
   const profileSkillLevel = skillLevelLabel(user.skillLevel);
   const creditBalances = getCreditBalances(user.id);
   elements.currentUserCard.innerHTML = `
@@ -293,16 +170,6 @@ function renderCurrentUser(user) {
       <label>Username
         <input id="editUsername" required maxlength="28" value="${escapeHtml(user.username)}" />
       </label>
-      <label>New profile picture
-        <span class="upload-control">
-          <span class="upload-avatar" aria-hidden="true">${escapeHtml(user.username.slice(0, 2).toUpperCase())}</span>
-          <span>
-            <span class="upload-button-text">Choose photo</span>
-            <span class="field-help">Leave blank to keep current photo.</span>
-          </span>
-          <input id="editPhoto" type="file" accept="image/*" />
-        </span>
-      </label>
       <label>Skill level
         <select id="editSkillLevel">
           ${skillLevelOptions(user.skillLevel)}
@@ -329,10 +196,14 @@ function renderCurrentUser(user) {
     editForm.hidden = true;
   });
   editForm.addEventListener('submit', event => updateProfile(event, user));
-  elements.currentUserCard.querySelector('[data-logout]').addEventListener('click', () => {
-    localStorage.removeItem(SESSION_KEY);
-    renderCurrentUser(null);
-    window.dispatchEvent(new CustomEvent('open-play-session-changed'));
+  elements.currentUserCard.querySelector('[data-logout]').addEventListener('click', async () => {
+    try {
+      await window.OpenPlayAuth.signOut();
+      renderCurrentUser(null);
+      window.dispatchEvent(new CustomEvent('open-play-session-changed'));
+    } catch (error) {
+      elements.notice.textContent = error.message;
+    }
   });
 }
 
@@ -430,34 +301,15 @@ async function createAccount(event) {
     return;
   }
 
-  const users = getSavedUsers();
-  if (users.some(user => normalize(user.email) === normalize(email))) {
-    elements.signupHint.textContent = 'An account already exists for that email.';
-    return;
-  }
-
-  if (users.some(user => normalize(user.username) === normalize(username))) {
-    elements.signupHint.textContent = 'That username is already taken.';
-    return;
-  }
-
   try {
-    const photo = await readProfilePhoto(elements.signupPhoto.files?.[0]);
-    const user = {
-      id: `user-${Date.now()}`,
-      email,
-      passwordHash: await digestPassword(password),
-      username,
-      photo,
-      skillLevel,
-      bio,
-      createdAt: todayIso()
-    };
-    users.push(user);
-    saveUsers(users);
+    const result = await window.OpenPlayAuth.signUp({ email, password, username, skillLevel, bio });
     elements.signupForm.reset();
+    if (result.needsEmailConfirmation) {
+      elements.signupHint.textContent = 'Check your email to confirm your account, then log in.';
+      return;
+    }
     elements.signupHint.textContent = 'Account created.';
-    setCurrentUser(user);
+    setCurrentUser(result.user);
   } catch (error) {
     elements.signupHint.textContent = error.message;
   }
@@ -472,7 +324,6 @@ async function updateProfile(event, originalUser) {
   const username = form.querySelector('#editUsername').value.trim();
   const skillLevel = normalizeSkillLevel(form.querySelector('#editSkillLevel').value, '');
   const bio = form.querySelector('#editBio').value.trim();
-  const photoFile = form.querySelector('#editPhoto').files?.[0];
 
   if (!email || !username) {
     hint.textContent = 'Email and username are required.';
@@ -484,30 +335,15 @@ async function updateProfile(event, originalUser) {
     return;
   }
 
-  const users = getSavedUsers();
-  if (users.some(user => user.id !== originalUser.id && normalize(user.email) === normalize(email))) {
-    hint.textContent = 'Another account already uses that email.';
-    return;
-  }
-
-  if (users.some(user => user.id !== originalUser.id && normalize(user.username) === normalize(username))) {
-    hint.textContent = 'That username is already taken.';
-    return;
-  }
-
   try {
-    const photo = photoFile ? await readProfilePhoto(photoFile) : originalUser.photo;
-    const updatedUser = {
-      ...originalUser,
+    const updatedUser = await window.OpenPlayAuth.updateProfile(originalUser, {
       email,
       username,
       skillLevel,
-      bio,
-      photo
-    };
-    saveUsers(users.map(user => user.id === originalUser.id ? updatedUser : user));
-    syncUserAttribution(updatedUser);
+      bio
+    });
     setCurrentUser(updatedUser);
+    elements.notice.textContent = 'Profile updated.';
   } catch (error) {
     hint.textContent = error.message;
   }
@@ -516,34 +352,34 @@ async function updateProfile(event, originalUser) {
 async function login(event) {
   event.preventDefault();
 
-  const user = findUserByEmail(elements.loginEmail.value.trim());
-  const passwordHash = await digestPassword(elements.loginPassword.value);
-  const matchesHash = user?.passwordHash === passwordHash;
-  const matchesLegacyPassword = user?.password === elements.loginPassword.value;
-
-  if (!user || (!matchesHash && !matchesLegacyPassword)) {
+  try {
+    const user = await window.OpenPlayAuth.signIn({
+      email: elements.loginEmail.value.trim(),
+      password: elements.loginPassword.value
+    });
+    elements.loginForm.reset();
+    elements.loginHint.textContent = 'Logged in.';
+    setCurrentUser(user);
+  } catch (error) {
     elements.loginHint.textContent = 'Email or password did not match.';
-    return;
   }
-
-  elements.loginForm.reset();
-  elements.loginHint.textContent = 'Logged in.';
-  setCurrentUser(user);
 }
 
 async function init() {
   const notice = params.get('notice');
   elements.notice.textContent = notice || '';
   try {
-    const response = await fetch('data/courts.json');
-    const seedCourts = response.ok ? await response.json() : [];
+    let seedCourts = await window.OpenPlaySupabase?.fetchApprovedLocations?.();
+    if (!seedCourts) {
+      const response = await fetch('data/courts.json');
+      seedCourts = response.ok ? await response.json() : [];
+    }
     allCourts = [...seedCourts, ...getSavedSubmissions()];
   } catch {
     allCourts = getSavedSubmissions();
   }
 
-  const userId = localStorage.getItem(SESSION_KEY);
-  renderCurrentUser(userId ? findUserById(userId) : null);
+  renderCurrentUser(await window.OpenPlayAuth?.currentUser?.() || null);
 }
 
 elements.authTabs.forEach(tab => {
@@ -554,16 +390,15 @@ elements.passwordToggles.forEach(button => {
   button.addEventListener('click', () => setPasswordVisibility(button));
 });
 
-elements.signupPhoto.addEventListener('change', () => {
-  const file = elements.signupPhoto.files?.[0];
-  elements.photoFileName.textContent = file ? file.name : 'PNG or JPG under 1.5 MB.';
-});
-
 elements.signupForm.addEventListener('submit', createAccount);
 elements.loginForm.addEventListener('submit', login);
-window.addEventListener('open-play-session-changed', () => {
-  const userId = localStorage.getItem(SESSION_KEY);
-  renderCurrentUser(userId ? findUserById(userId) : null);
+window.addEventListener('open-play-session-changed', async () => {
+  try {
+    renderCurrentUser(await window.OpenPlayAuth?.currentUser?.() || null);
+  } catch (error) {
+    console.error(error);
+    renderCurrentUser(null);
+  }
 });
 init().catch(error => {
   console.error(error);

@@ -1,7 +1,4 @@
 (() => {
-  const USERS_KEY = 'open-play-map-users';
-  const SESSION_KEY = 'open-play-map-session';
-
   const header = document.querySelector('.site-header');
   if (!header || header.querySelector('[data-mobile-header-menu]')) return;
 
@@ -9,6 +6,8 @@
   menu.className = 'mobile-header-menu';
   menu.dataset.mobileHeaderMenu = '';
   header.append(menu);
+
+  let currentUserCache = null;
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -19,22 +18,8 @@
       .replace(/'/g, '&#039;');
   }
 
-  function getSavedUsers() {
-    try {
-      return JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-    } catch {
-      return [];
-    }
-  }
-
-  function currentUser() {
-    const userId = localStorage.getItem(SESSION_KEY);
-    if (!userId) return null;
-    return getSavedUsers().find(user => user.id === userId) || null;
-  }
-
   function isAdmin(user) {
-    return String(user?.username || '').toLowerCase() === 'scoop';
+    return user?.role === 'admin';
   }
 
   function currentPage() {
@@ -142,12 +127,16 @@
     }
 
     if (action === 'logout') {
-      localStorage.removeItem(SESSION_KEY);
-      window.dispatchEvent(new CustomEvent('open-play-session-changed'));
-      render();
-      if (document.body.classList.contains('admin-page')) {
-        location.reload();
-      }
+      window.OpenPlayAuth?.signOut?.()
+        .catch(error => console.error(error))
+        .finally(() => {
+          currentUserCache = null;
+          window.dispatchEvent(new CustomEvent('open-play-session-changed'));
+          render();
+          if (document.body.classList.contains('admin-page')) {
+            location.reload();
+          }
+        });
     }
   }
 
@@ -168,7 +157,7 @@
   }
 
   function render() {
-    const user = currentUser();
+    const user = currentUserCache;
     menu.innerHTML = `
       ${menuToggleMarkup(user)}
       <div id="mobileHeaderMenuPanel" class="mobile-menu-panel" hidden>
@@ -189,6 +178,16 @@
     bindMenuControls();
   }
 
+  async function refreshCurrentUser() {
+    try {
+      currentUserCache = await window.OpenPlayAuth?.currentUser?.() || null;
+    } catch (error) {
+      console.error(error);
+      currentUserCache = null;
+    }
+    render();
+  }
+
   document.addEventListener('click', event => {
     if (!menu.contains(event.target)) setMenuOpen(false);
   });
@@ -197,11 +196,10 @@
     if (event.key === 'Escape') setMenuOpen(false);
   });
 
-  window.addEventListener('open-play-session-changed', render);
-  window.addEventListener('storage', event => {
-    if (event.key === SESSION_KEY || event.key === USERS_KEY) render();
-  });
+  window.addEventListener('open-play-session-changed', refreshCurrentUser);
+  window.OpenPlayAuth?.onAuthStateChange?.(refreshCurrentUser);
 
-  window.openPlayRenderMobileHeader = render;
+  window.openPlayRenderMobileHeader = refreshCurrentUser;
   render();
+  refreshCurrentUser();
 })();

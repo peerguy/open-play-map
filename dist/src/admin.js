@@ -1,5 +1,4 @@
 const USERS_KEY = 'open-play-map-users';
-const SESSION_KEY = 'open-play-map-session';
 const STORAGE_KEY = 'open-play-map-submissions';
 const REVIEWS_KEY = 'open-play-map-reviews';
 const CREDITS_KEY = 'open-play-map-credits';
@@ -39,6 +38,8 @@ const elements = {
 
 let allCourts = [];
 let activeModerationView = 'pending';
+let authUsers = null;
+let currentAdminUser = null;
 
 function normalize(value) {
   return String(value ?? '').toLowerCase();
@@ -58,6 +59,8 @@ function escapeHtml(value) {
 }
 
 function getUsers() {
+  if (Array.isArray(authUsers)) return authUsers;
+
   try {
     const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
     const migratedUsers = migrateUserSkillLevels(users);
@@ -407,13 +410,12 @@ function migrateUserSkillLevels(users) {
   });
 }
 
-function currentUser() {
-  const id = localStorage.getItem(SESSION_KEY);
-  return getUsers().find(user => user.id === id) || null;
+async function currentUser() {
+  return await window.OpenPlayAuth?.currentUser?.() || null;
 }
 
 function isAdmin(user) {
-  return normalize(user?.username) === 'scoop';
+  return user?.role === 'admin';
 }
 
 function syncUserAttribution(user) {
@@ -908,13 +910,14 @@ function userCard(user) {
   const creditBalances = getCreditBalances(user.id);
   const userLocations = getUserLocations(user.id);
   const userReviews = getUserReviews(user.id);
+  const roleLabel = user.role === 'admin' ? 'Admin' : 'User';
   card.innerHTML = `
     <div class="admin-row-summary admin-user-row">
       <div class="admin-row-main">
         <h3>${escapeHtml(user.username)}</h3>
         <p>${escapeHtml(user.email)}</p>
       </div>
-      <span>${normalize(user.username) === 'scoop' ? 'Admin' : 'User'}</span>
+      <span>${escapeHtml(roleLabel)}</span>
       <span>${escapeHtml(skillLevelLabel(user.skillLevel) || 'No skill level')}</span>
       <span>${escapeHtml(creditBalances.active)}</span>
       <span>${escapeHtml(creditBalances.lifetime)}</span>
@@ -927,7 +930,7 @@ function userCard(user) {
       <div class="admin-card-header">
         <div>
           <h3>Edit ${escapeHtml(user.username)}</h3>
-          <p>${normalize(user.username) === 'scoop' ? 'Admin' : 'User'} · Joined ${escapeHtml(user.createdAt || 'unknown')}</p>
+          <p>${escapeHtml(roleLabel)} · Joined ${escapeHtml(user.createdAt || 'unknown')}</p>
         </div>
         <div class="admin-edit-actions">
           <button class="secondary-button" type="button" data-cancel-edit>Cancel</button>
@@ -954,6 +957,12 @@ function userCard(user) {
         <label>Skill level
           <select name="skillLevel">
             ${skillLevelOptions(user.skillLevel)}
+          </select>
+        </label>
+        <label>Role
+          <select name="role">
+            <option value="player"${user.role === 'admin' ? '' : ' selected'}>User</option>
+            <option value="admin"${user.role === 'admin' ? ' selected' : ''}>Admin</option>
           </select>
         </label>
       </div>
@@ -984,7 +993,7 @@ function renderUsers() {
   elements.usersList.replaceChildren(adminListHeader('user'), ...users.map(userCard));
 }
 
-function saveUserEdit(event) {
+async function saveUserEdit(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const hint = form.querySelector('[data-admin-hint]');
@@ -998,7 +1007,8 @@ function saveUserEdit(event) {
     email: form.elements.email.value.trim().toLowerCase(),
     username: form.elements.username.value.trim(),
     skillLevel: normalizeSkillLevel(form.elements.skillLevel.value, ''),
-    bio: form.elements.bio.value.trim()
+    bio: form.elements.bio.value.trim(),
+    role: form.elements.role.value === 'admin' ? 'admin' : 'player'
   };
 
   if (!nextUser.email || !nextUser.username) {
@@ -1016,10 +1026,27 @@ function saveUserEdit(event) {
     return;
   }
 
-  saveUsers(users.map(user => user.id === userId ? nextUser : user));
-  syncUserAttribution(nextUser);
-  hint.textContent = 'Saved.';
-  renderUsers();
+  if (existing.id === currentAdminUser?.id && existing.role === 'admin' && nextUser.role !== 'admin') {
+    hint.textContent = 'You cannot remove your own admin role from this panel.';
+    return;
+  }
+
+  try {
+    if (Array.isArray(authUsers)) {
+      const updatedUser = await window.OpenPlayAuth.updateProfileById(userId, nextUser);
+      authUsers = authUsers.map(user => user.id === userId ? updatedUser : user);
+      hint.textContent = 'Saved.';
+      renderUsers();
+      return;
+    }
+
+    saveUsers(users.map(user => user.id === userId ? nextUser : user));
+    syncUserAttribution(nextUser);
+    hint.textContent = 'Saved.';
+    renderUsers();
+  } catch (error) {
+    hint.textContent = error.message;
+  }
 }
 
 function locationCard(court) {
@@ -1294,16 +1321,29 @@ function saveLocationEdit(event) {
 
 async function loadCourts() {
   try {
-    const response = await fetch('data/courts.json');
-    const seedCourts = response.ok ? await response.json() : [];
+    let seedCourts = await window.OpenPlaySupabase?.fetchApprovedLocations?.();
+    if (!seedCourts) {
+      const response = await fetch('data/courts.json');
+      seedCourts = response.ok ? await response.json() : [];
+    }
     allCourts = mergeSavedLocations(seedCourts, getSavedSubmissions());
   } catch {
     allCourts = getSavedSubmissions();
   }
 }
 
+async function loadUsers() {
+  try {
+    authUsers = await window.OpenPlayAuth?.listProfiles?.() || null;
+  } catch (error) {
+    console.warn('Supabase profile load failed. Falling back to local users.', error);
+    authUsers = null;
+  }
+}
+
 async function init() {
-  if (!isAdmin(currentUser())) {
+  currentAdminUser = await currentUser();
+  if (!isAdmin(currentAdminUser)) {
     elements.guard.hidden = false;
     elements.moderationSubnav.hidden = true;
     elements.moderationView.hidden = true;
@@ -1313,6 +1353,7 @@ async function init() {
   }
 
   await loadCourts();
+  await loadUsers();
   renderModeration();
   renderUsers();
   renderLocations();

@@ -80,16 +80,6 @@
             </div>
 
             <div class="form-section profile-section">
-              <label><span class="field-label">Profile picture <span class="field-help is-optional">Optional</span></span>
-                <span class="upload-control">
-                  <span class="upload-avatar" aria-hidden="true">OP</span>
-                  <span>
-                    <span class="upload-button-text">Choose photo</span>
-                    <span id="photoFileName" class="field-help">PNG or JPG under 1.5 MB.</span>
-                  </span>
-                  <input id="signupPhoto" type="file" accept="image/*" />
-                </span>
-              </label>
               <label><span class="field-label">Skill level <span class="field-help is-optional">Optional</span></span>
                 <select id="signupSkillLevel">
                   <option value="">Select a skill level</option>
@@ -125,8 +115,13 @@
       </section>
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="src/analytics.js?v=seo-analytics-20260614"></script>
-    <script src="src/mobile-header.js?v=scoop-store-link-20260613"></script>
-    <script src="src/account.js?v=rewards-disclaimer-20260614"></script>
+    <script src="src/supabase-config.js?v=supabase-read-20260614"></script>
+    <script src="src/supabase-client.js?v=supabase-auth-20260614"></script>
+    <script src="src/supabase-data.js?v=supabase-read-20260614"></script>
+    <script src="src/supabase-auth.js?v=supabase-auth-20260614"></script>
+    <script src="src/mobile-header.js?v=supabase-auth-20260614"></script>
+    <script src="src/account.js?v=supabase-auth-20260614"></script>
   </body>
 </html>

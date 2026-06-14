@@ -54,19 +54,22 @@
 - Initial schema migration applied: `20260613130000_initial_schema.sql`
 - Initial sample location seed applied: `20260614150500_seed_initial_locations.sql`
 - Local browser location import applied: `20260614152000_import_local_locations.sql`
+- Supabase Auth profile trigger applied: `20260614153500_auth_profile_trigger.sql`
 - Frontend map page now attempts to load approved locations from Supabase first and falls back to `data/courts.json` if Supabase is unavailable.
+- Account signup/login/logout now use Supabase Auth. New auth users get a `profiles` row automatically, and admin access is based on `profiles.role = 'admin'`.
 - Imported local data currently includes 4 approved public locations and 1 pending location from the original localhost app.
+- Submissions, reviews, reports, suggested edits, credits, and monthly winners are still browser-local prototype data until the next write-path migration.
 
 ## App Refactor Order
 
-1. Add a Supabase client module.
-2. Replace local profile signup/login with Supabase Auth.
-3. Replace `data/courts.json` reads with approved `locations` + `open_play_slots`.
-4. Replace localStorage submissions/reviews/reports/suggested edits with database writes.
-5. Move admin moderation to role-protected database reads/writes.
-6. Move credits and monthly drawing logic to server-owned database actions.
-7. Replace photo URL fields with Supabase Storage uploads.
-8. Add tests for public map, auth, contribution flow, admin approval, and leaderboard.
+1. Done: add a Supabase client module.
+2. Done: replace local profile signup/login with Supabase Auth.
+3. Done: replace public map reads with approved `locations` + `open_play_slots`.
+4. Next: replace localStorage submissions/reviews/reports/suggested edits with database writes.
+5. Next: move admin moderation to role-protected database reads/writes.
+6. Next: move credits and monthly drawing logic to server-owned database actions.
+7. Next: replace photo URL fields with Supabase Storage uploads.
+8. Next: add tests for public map, auth, contribution flow, admin approval, and leaderboard.
 
 ## What I Can Do Without Alex
 

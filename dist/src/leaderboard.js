@@ -1,5 +1,4 @@
 const USERS_KEY = 'open-play-map-users';
-const SESSION_KEY = 'open-play-map-session';
 const CREDITS_KEY = 'open-play-map-credits';
 const WINNERS_KEY = 'open-play-map-monthly-winners';
 
@@ -11,6 +10,8 @@ const elements = {
   leadersPanel: document.querySelector('#leadersPanel'),
   winnersPanel: document.querySelector('#winnersPanel')
 };
+
+let currentUserCache = null;
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -27,12 +28,6 @@ function getSavedUsers() {
   } catch {
     return [];
   }
-}
-
-function getCurrentUser() {
-  const userId = localStorage.getItem(SESSION_KEY);
-  if (!userId) return null;
-  return getSavedUsers().find(user => user.id === userId) || null;
 }
 
 function getSavedCredits() {
@@ -65,7 +60,7 @@ function userAvatar(user) {
 function renderHeaderUser() {
   if (!elements.userPanel) return;
 
-  const user = getCurrentUser();
+  const user = currentUserCache;
   if (!user) {
     elements.userPanel.innerHTML = '<a class="header-link" href="account.html">Sign in</a>';
     return;
@@ -81,11 +76,26 @@ function renderHeaderUser() {
     </div>
   `;
 
-  elements.userPanel.querySelector('[data-logout]')?.addEventListener('click', () => {
-    localStorage.removeItem(SESSION_KEY);
-    renderHeaderUser();
-    window.dispatchEvent(new CustomEvent('open-play-session-changed'));
+  elements.userPanel.querySelector('[data-logout]')?.addEventListener('click', async () => {
+    try {
+      await window.OpenPlayAuth?.signOut?.();
+      currentUserCache = null;
+      renderHeaderUser();
+      window.dispatchEvent(new CustomEvent('open-play-session-changed'));
+    } catch (error) {
+      console.error(error);
+    }
   });
+}
+
+async function refreshHeaderUser() {
+  try {
+    currentUserCache = await window.OpenPlayAuth?.currentUser?.() || null;
+  } catch (error) {
+    console.error(error);
+    currentUserCache = null;
+  }
+  renderHeaderUser();
 }
 
 function leaderboardRows() {
@@ -191,8 +201,10 @@ elements.tabs.forEach(tab => {
   tab.addEventListener('click', () => showLeaderboardTab(tab.dataset.leaderboardTab));
 });
 
-window.addEventListener('open-play-session-changed', renderHeaderUser);
+window.addEventListener('open-play-session-changed', refreshHeaderUser);
+window.OpenPlayAuth?.onAuthStateChange?.(refreshHeaderUser);
 
 renderHeaderUser();
+refreshHeaderUser();
 renderLeaderboard();
 renderMonthlyWinners();
