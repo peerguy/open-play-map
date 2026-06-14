@@ -37,10 +37,12 @@
           <p class="subtitle">Giving players the Scoop on where to find pickup pickleball.</p>
         </div>
       </div>
-      <nav class="about-header-nav" aria-label="About page navigation">
+      <nav class="about-header-nav" aria-label="About page navigation" data-auth-user-panel>
         <a class="header-link" href="index.html">Map</a>
         <a class="header-link" href="leaderboard.html">Leaderboard</a>
-        <a class="header-link" href="account.html">Sign in</a>
+        <div class="header-auth-slot" data-auth-user-slot>
+          <a class="header-link" href="account.html">Sign in</a>
+        </div>
       </nav>
       <div class="mobile-page-title" aria-hidden="true">About</div>
     </header>
@@ -211,5 +213,6 @@
     <script src="src/supabase-client.js?v=supabase-auth-fix-20260614"></script>
     <script src="src/supabase-auth.js?v=supabase-auth-fix-20260614"></script>
     <script src="src/mobile-header.js?v=supabase-auth-fix-20260614"></script>
+    <script src="src/header-auth.js?v=about-auth-20260614"></script>
   </body>
 </html>
