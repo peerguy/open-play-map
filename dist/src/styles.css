@@ -147,26 +147,34 @@ select {
 }
 
 .card-menu-toggle {
+  appearance: none;
+  -webkit-appearance: none;
   display: inline-grid;
   place-items: center;
   width: 34px;
   height: 34px;
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: 999px;
   padding: 0 0 4px;
-  background: rgba(36, 119, 242, 0.1);
+  background: transparent;
   color: var(--brand-dark);
   font: inherit;
   font-size: 1rem;
   font-weight: 900;
   line-height: 1;
   cursor: pointer;
+  box-shadow: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .card-menu-toggle:hover,
+.card-menu-toggle:active,
+.card-menu-toggle[aria-expanded="true"],
 .court-card.is-menu-open .card-menu-toggle {
-  border-color: var(--brand);
-  background: rgba(36, 119, 242, 0.16);
+  border-color: transparent;
+  background: transparent;
+  color: var(--brand);
+  box-shadow: none;
 }
 
 .card-menu-panel {
@@ -245,6 +253,25 @@ select {
   flex: 0 0 7px;
   border-radius: 50%;
   background: var(--brand);
+}
+
+.court-card .open-play-summary {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.court-card .open-play-hours-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+  max-width: 100%;
+  align-items: end;
+}
+
+.court-card .open-play-inline-actions {
+  justify-self: end;
+  min-width: max-content;
 }
 
 .open-play-summary {
@@ -2037,12 +2064,20 @@ textarea::placeholder {
 }
 
 .map-info-action-row {
-  justify-content: flex-start;
+  justify-content: space-between;
   margin-top: 0;
   padding: 10px 14px 14px;
   border-top: 1px solid var(--line);
   border-radius: 0 0 16px 16px;
   background: rgba(255, 255, 255, 0.98);
+}
+
+.map-info-action-row .location-overflow-menu {
+  margin-right: auto;
+}
+
+.map-info-action-row > .popup-edit {
+  margin-left: auto;
 }
 
 .map-info-action-row .location-menu-panel {
@@ -2058,10 +2093,6 @@ textarea::placeholder {
 
 .court-card .location-action-row {
   margin-top: 0;
-}
-
-.court-card-review-row {
-  justify-content: flex-end;
 }
 
 .card-action-button {
@@ -5358,6 +5389,18 @@ label:has(input:required:valid) > .field-label .is-required {
     width: 100%;
     max-width: 100%;
     gap: 6px;
+  }
+
+  .map-page .court-card .open-play-hours-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .map-page .court-card .open-play-hours-list {
+    overflow: hidden;
+  }
+
+  .map-page .court-card .open-play-inline-actions {
+    margin-left: 0;
   }
 
   .map-page .court-card .card-action-button {

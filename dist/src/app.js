@@ -1224,10 +1224,9 @@ function createCourtCard(court) {
       <span class="badge">${court.estimatedSkillLevel}</span>
       ${reviews.length ? `<span class="badge">${reviews.length} update${reviews.length === 1 ? '' : 's'}</span>` : ''}
     </div>
-    ${renderOpenPlaySummary(court)}
-    <div class="location-action-row court-card-review-row">
-      <button class="card-edit card-action-button" type="button" data-review-location="${court.id}" aria-label="Review ${escapeHtml(court.name)}">Review</button>
-    </div>
+    ${renderOpenPlaySummary(court, {
+      actionsHtml: `<button class="card-edit card-action-button card-review-inline" type="button" data-review-location="${court.id}" aria-label="Review ${escapeHtml(court.name)}">Review</button>`
+    })}
   `;
 
   card.addEventListener('click', () => focusCourt(court.id, 'list_card'));
