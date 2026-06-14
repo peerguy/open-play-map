@@ -1025,9 +1025,9 @@ function locationActionButtons(court, className = 'popup-edit', { includeEdit = 
   return `
     <div class="location-action-row">
       ${includeEdit && canEditLocations() ? `<button class="${className}" type="button" data-edit-location="${court.id}">Edit location</button>` : ''}
-      <button class="${className} report-action" type="button" data-report-location="${court.id}">Report issue</button>
-      ${canEditLocations() ? '' : `<button class="${className}" type="button" data-suggest-edit="${court.id}">Suggest edit</button>`}
       <button class="${className}" type="button" data-review-location="${court.id}">Review</button>
+      ${canEditLocations() ? '' : `<button class="${className}" type="button" data-suggest-edit="${court.id}">Suggest edit</button>`}
+      <button class="${className} report-action" type="button" data-report-location="${court.id}">Report</button>
     </div>
   `;
 }

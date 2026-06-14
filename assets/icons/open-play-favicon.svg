@@ -11,5 +11,5 @@
   </defs>
   <rect width="64" height="64" rx="17" fill="url(#op-bg)" />
   <rect width="64" height="64" rx="17" fill="url(#op-highlight)" />
-  <text x="32" y="39" text-anchor="middle" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="23" font-weight="900" letter-spacing="-2.4">OP</text>
+  <text x="32" y="41" text-anchor="middle" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="900" letter-spacing="-3">OP</text>
 </svg>
