@@ -10,6 +10,8 @@ const entries = [
   'account.html',
   'leaderboard.html',
   'admin.html',
+  'robots.txt',
+  'sitemap.xml',
   '_headers',
   'src',
   'assets',

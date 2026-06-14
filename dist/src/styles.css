@@ -3370,6 +3370,25 @@ label:has(input:required:valid) > .field-label .is-required {
   text-align: right;
 }
 
+.rewards-disclaimer,
+.credit-disclaimer {
+  margin: 0;
+  border: 1px solid #e4d7ac;
+  border-radius: 8px;
+  background: #fff8dc;
+  color: #725b1d;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.rewards-disclaimer {
+  padding: 12px 14px;
+}
+
+.credit-disclaimer {
+  padding: 10px 12px;
+}
+
 /* About page */
 .about-page {
   background:
@@ -5061,6 +5080,7 @@ label:has(input:required:valid) > .field-label .is-required {
     inset: 0;
     height: 100%;
     min-height: 0;
+    touch-action: none;
   }
 
   .map-page .map-style-control {
@@ -5104,12 +5124,13 @@ label:has(input:required:valid) > .field-label .is-required {
     background: rgba(255, 255, 255, 0.96);
     box-shadow: 0 22px 60px rgba(16, 32, 51, 0.22);
     backdrop-filter: blur(18px);
-    transform: translateY(0);
+    transform: translateY(var(--mobile-sheet-drag-offset, 0));
     transition: transform 0.22s ease;
+    touch-action: pan-y;
   }
 
   .map-page.mobile-map-focus .sidebar {
-    transform: translateY(calc(100% - 74px));
+    transform: translateY(calc(100% - 74px + var(--mobile-sheet-drag-offset, 0px)));
   }
 
   .map-page.mobile-list-full .sidebar {
@@ -5124,16 +5145,29 @@ label:has(input:required:valid) > .field-label .is-required {
     border-bottom: 0;
     border-left: 0;
     border-radius: 22px 22px 0 0;
-    transform: none;
+    transform: translateY(var(--mobile-sheet-drag-offset, 0));
+  }
+
+  .map-page .sidebar.is-dragging {
+    transition: none;
   }
 
   .mobile-results-bar {
+    position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 10px;
     padding: 12px 14px 8px;
     border-bottom: 1px solid var(--line);
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .map-page .sidebar.is-dragging .mobile-results-bar {
+    cursor: grabbing;
   }
 
   .mobile-sheet-handle {
@@ -5142,8 +5176,11 @@ label:has(input:required:valid) > .field-label .is-required {
     left: 50%;
     width: 42px;
     height: 4px;
+    border: 0;
     border-radius: 999px;
+    padding: 0;
     background: #c9d6e7;
+    cursor: grab;
     transform: translateX(-50%);
   }
 
@@ -5172,6 +5209,14 @@ label:has(input:required:valid) > .field-label .is-required {
     font: inherit;
     font-size: 0.8rem;
     font-weight: 900;
+  }
+
+  .mobile-results-bar .mobile-sheet-handle {
+    min-height: 4px;
+    border: 0;
+    padding: 0;
+    box-shadow: none;
+    font-size: 0;
   }
 
   .mobile-results-bar button[aria-pressed="true"] {

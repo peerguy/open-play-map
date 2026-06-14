@@ -2,11 +2,26 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <title>Open Play Pickleball Map | Scoop Pickleball</title>
+    <meta name="description" content="Find open play pickleball courts, pickup schedules, skill levels, fees, photos, and player updates across the United States." />
+    <meta name="theme-color" content="#266c3f" />
+    <link rel="canonical" href="https://play.scooppickleball.com/" />
+    <meta property="og:site_name" content="Open Play Map" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Open Play Pickleball Map" />
+    <meta property="og:description" content="Find open play pickleball courts, pickup schedules, skill levels, fees, photos, and player updates near you." />
+    <meta property="og:url" content="https://play.scooppickleball.com/" />
+    <meta property="og:image" content="https://play.scooppickleball.com/assets/images/open-play-og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Open Play Pickleball Map" />
+    <meta name="twitter:description" content="Find open play pickleball courts, pickup schedules, skill levels, fees, photos, and player updates near you." />
+    <meta name="twitter:image" content="https://play.scooppickleball.com/assets/images/open-play-og.png" />
     <link rel="stylesheet" href="src/leaflet-fix.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ6C/DNF8D6qS3hC9cc1N02p2o6sX7k=" crossorigin="" />
-    <link rel="stylesheet" href="src/styles.css?v=header-store-link-20260613" />
+    <link rel="stylesheet" href="src/styles.css?v=seo-analytics-20260614" />
   </head>
   <body class="map-page">
     <header class="site-header">
@@ -112,7 +127,7 @@
     <main class="app-shell">
       <aside class="sidebar" aria-label="Court directory controls">
         <div class="mobile-results-bar">
-          <span class="mobile-sheet-handle" aria-hidden="true"></span>
+          <button class="mobile-sheet-handle" type="button" aria-label="Drag list panel" tabindex="-1"></button>
           <strong>Open play spots</strong>
           <div class="mobile-results-actions">
             <button id="mobileListSizeToggle" type="button" aria-pressed="false">Full list</button>
@@ -352,7 +367,8 @@
     </dialog>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="src/analytics.js?v=seo-analytics-20260614"></script>
     <script src="src/mobile-header.js?v=scoop-store-link-20260613"></script>
-    <script src="src/app.js?v=review-hours-inline-20260612"></script>
+    <script src="src/app.js?v=seo-analytics-20260614"></script>
   </body>
 </html>

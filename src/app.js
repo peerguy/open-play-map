@@ -87,6 +87,8 @@ const state = {
   activeInfoCourtId: null,
   suggestingEditId: null,
   openCardMenuId: null,
+  lastTrackedHeaderSearch: '',
+  lastTrackedPlaceSearch: '',
   popupCloseTimer: null,
   hoveringPopup: false
 };
@@ -108,6 +110,8 @@ const elements = {
   mapInfoBox: document.querySelector('#mapInfoBox'),
   resultCount: document.querySelector('#resultCount'),
   courtList: document.querySelector('#courtList'),
+  mobileSheetHandle: document.querySelector('.mobile-sheet-handle'),
+  mobileResultsBar: document.querySelector('.mobile-results-bar'),
   mobilePanelToggle: document.querySelector('#mobilePanelToggle'),
   mobileListSizeToggle: document.querySelector('#mobileListSizeToggle'),
   submitDialog: document.querySelector('#submitDialog'),
@@ -172,6 +176,20 @@ const elements = {
   reviewPhotos: document.querySelector('#reviewPhotos'),
   reviewHint: document.querySelector('#reviewHint')
 };
+
+function trackAnalyticsEvent(name, properties = {}) {
+  window.OpenPlayAnalytics?.track(name, properties);
+}
+
+function trackLocationView(court, source) {
+  trackAnalyticsEvent('location_view', {
+    location_id: court.id,
+    location_name: court.name,
+    city: court.city,
+    state: court.state,
+    source
+  });
+}
 
 function normalize(value) {
   return String(value ?? '').toLowerCase();
@@ -1243,7 +1261,7 @@ function createCourtCard(court) {
     })}
   `;
 
-  card.addEventListener('click', () => focusCourt(court.id));
+  card.addEventListener('click', () => focusCourt(court.id, 'list_card'));
   card.querySelector('[data-card-menu-toggle]').addEventListener('click', event => {
     event.stopPropagation();
     const isOpen = card.classList.contains('is-menu-open');
@@ -1296,7 +1314,7 @@ function createCourtCard(court) {
     if (event.target.closest('button, a, input, select, textarea')) return;
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      focusCourt(court.id);
+      focusCourt(court.id, 'list_card_keyboard');
     }
   });
 
@@ -1351,6 +1369,109 @@ function setMobileListFull(isFullList) {
   setTimeout(() => map.invalidateSize(), 180);
 }
 
+function setMobileSheetMode(mode) {
+  if (mode === 'full') {
+    setMobileListFull(true);
+    return;
+  }
+  if (mode === 'map') {
+    setMobileMapFocus(true);
+    return;
+  }
+  document.body.classList.remove('mobile-map-focus');
+  document.body.classList.remove('mobile-list-full');
+  updateMobileSheetControls();
+  setTimeout(() => map.invalidateSize(), 180);
+}
+
+function setupMobileSheetDrag() {
+  const dragSurface = elements.mobileResultsBar;
+  const sheet = dragSurface?.closest('.sidebar');
+  if (!dragSurface || !sheet) return;
+
+  let dragState = null;
+
+  const currentMode = () => {
+    if (document.body.classList.contains('mobile-list-full')) return 'full';
+    if (document.body.classList.contains('mobile-map-focus')) return 'map';
+    return 'half';
+  };
+
+  const previewDrag = deltaY => {
+    const mode = dragState.mode;
+    let offset = 0;
+
+    if (mode === 'full') {
+      offset = Math.max(0, Math.min(deltaY, sheet.getBoundingClientRect().height * 0.45));
+    } else if (mode === 'half') {
+      offset = Math.max(-110, Math.min(deltaY, sheet.getBoundingClientRect().height * 0.55));
+    } else {
+      offset = Math.min(0, Math.max(deltaY, -140));
+    }
+
+    sheet.style.setProperty('--mobile-sheet-drag-offset', `${Math.round(offset)}px`);
+  };
+
+  const finishDrag = event => {
+    if (!dragState) return;
+    const deltaY = (event.clientY ?? dragState.startY) - dragState.startY;
+    const mode = dragState.mode;
+
+    sheet.classList.remove('is-dragging');
+    sheet.style.removeProperty('--mobile-sheet-drag-offset');
+
+    if (Math.abs(deltaY) > 46) {
+      if (deltaY < 0) {
+        setMobileSheetMode(mode === 'map' ? 'half' : 'full');
+      } else {
+        setMobileSheetMode(mode === 'full' ? 'half' : 'map');
+      }
+    } else {
+      setMobileSheetMode(mode);
+    }
+
+    dragState = null;
+  };
+
+  dragSurface.addEventListener('pointerdown', event => {
+    if (!isMobileLayout() || event.button !== 0) return;
+    if (event.target.closest('button') && event.target !== elements.mobileSheetHandle) return;
+
+    dragState = {
+      startY: event.clientY,
+      mode: currentMode()
+    };
+    sheet.classList.add('is-dragging');
+    dragSurface.setPointerCapture?.(event.pointerId);
+  });
+
+  dragSurface.addEventListener('pointermove', event => {
+    if (!dragState) return;
+    event.preventDefault();
+    previewDrag(event.clientY - dragState.startY);
+  }, { passive: false });
+
+  dragSurface.addEventListener('pointerup', finishDrag);
+  dragSurface.addEventListener('pointercancel', finishDrag);
+}
+
+function preventPageZoomOverMap() {
+  const mapContainer = map.getContainer();
+  const preventGesture = event => {
+    if (event.target.closest?.('#map')) {
+      event.preventDefault();
+    }
+  };
+
+  mapContainer.addEventListener('gesturestart', preventGesture, { passive: false });
+  mapContainer.addEventListener('gesturechange', preventGesture, { passive: false });
+  mapContainer.addEventListener('touchmove', event => {
+    if (event.touches?.length > 1) {
+      event.preventDefault();
+    }
+  }, { passive: false });
+}
+
 function mobileOverlayVisibleBottom() {
   const mapRect = map.getContainer().getBoundingClientRect();
   let visibleBottom = mapRect.height;
@@ -1393,10 +1514,12 @@ function centerCourtInVisibleMap(court, zoom = map.getZoom()) {
   map.setView(adjustedCenter, zoom, { animate: false });
 }
 
-function focusCourt(id) {
+function focusCourt(id, source = 'location_focus') {
   const court = state.courts.find(item => item.id === id);
   const marker = state.markers.get(id);
   if (!court || !marker) return;
+
+  trackLocationView(court, source);
 
   if (isMobileLayout()) {
     setMobileMapFocus(true);
@@ -1413,7 +1536,7 @@ function focusSharedLocationFromUrl() {
   const sharedLocationId = new URLSearchParams(window.location.search).get('location');
   if (!sharedLocationId) return;
   if (!state.courts.some(court => court.id === sharedLocationId)) return;
-  focusCourt(sharedLocationId);
+  focusCourt(sharedLocationId, 'shared_url');
 }
 
 function reportLocation(courtId) {
@@ -1473,6 +1596,7 @@ function attachHoverPopup(marker, court) {
     event?.stopPropagation?.();
     clearTimeout(state.popupCloseTimer);
     state.hoveringPopup = true;
+    trackLocationView(court, 'map_marker');
     showMapInfoBox(court, { centerInVisibleMap: isMobileLayout() });
     if (isMobileLayout()) {
       setTimeout(() => centerCourtInVisibleMap(court), 240);
@@ -1965,7 +2089,7 @@ function submitReview(event) {
 
   closeReviewDialog();
   render();
-  focusCourt(court.id);
+  focusCourt(court.id, 'review_saved');
 }
 
 function setDraftLocation(lat, lng) {
@@ -2049,6 +2173,15 @@ async function searchPlaces() {
     return;
   }
 
+  const trackedQuery = query.toLowerCase();
+  if (state.lastTrackedPlaceSearch !== trackedQuery) {
+    state.lastTrackedPlaceSearch = trackedQuery;
+    trackAnalyticsEvent('place_search', {
+      query,
+      source: 'submit_location_form'
+    });
+  }
+
   elements.placeSearchButton.disabled = true;
   elements.placeSearchButton.textContent = 'Searching…';
   elements.placeResults.innerHTML = '<p class="empty-results">Searching places…</p>';
@@ -2081,6 +2214,11 @@ function selectHeaderPlace(place) {
   elements.search.value = place.name || place.display_name?.split(',')[0] || elements.search.value;
   elements.headerPlaceResults.innerHTML = '';
   state.areaSearchActive = true;
+  trackAnalyticsEvent('search_suggestion_select', {
+    query: elements.search.value,
+    place_name: place.name || place.display_name?.split(',')[0] || '',
+    source: 'header_search'
+  });
 
   if (Number.isFinite(lat) && Number.isFinite(lng)) {
     map.setView([lat, lng], 12);
@@ -2115,6 +2253,15 @@ async function searchHeaderPlaces() {
   if (!query || query.length < 3) {
     elements.headerPlaceResults.innerHTML = '';
     return;
+  }
+
+  const trackedQuery = query.toLowerCase();
+  if (state.lastTrackedHeaderSearch !== trackedQuery) {
+    state.lastTrackedHeaderSearch = trackedQuery;
+    trackAnalyticsEvent('map_search', {
+      query,
+      source: 'header_search'
+    });
   }
 
   try {
@@ -2255,7 +2402,7 @@ function addSubmittedLocation(event) {
   closeSubmitDialog();
   render();
   if (court.status === 'approved') {
-    focusCourt(court.id);
+    focusCourt(court.id, 'location_saved');
   } else {
     window.alert('Thanks. Your location was submitted for admin approval before it appears on the map.');
   }
@@ -2327,6 +2474,9 @@ elements.mobilePanelToggle?.addEventListener('click', () => {
 elements.mobileListSizeToggle?.addEventListener('click', () => {
   setMobileListFull(!document.body.classList.contains('mobile-list-full'));
 });
+
+setupMobileSheetDrag();
+preventPageZoomOverMap();
 
 window.addEventListener('resize', () => {
   syncMobileHeaderHeight();

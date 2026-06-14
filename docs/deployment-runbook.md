@@ -20,6 +20,19 @@
 6. Add the CNAME record Cloudflare asks for wherever DNS is managed.
 7. Keep `_headers` in the repo so production security headers ship with each deploy.
 
+## Analytics
+
+- Enable Cloudflare Web Analytics from the Pages project Metrics tab for basic traffic and performance reporting. Cloudflare injects its pageview/performance beacon on the next deploy.
+- Cloudflare Web Analytics does not currently support custom events, so the app also includes `src/analytics.js` as a first-party event layer.
+- The local event layer tracks page views, store clicks, map searches, place searches, search suggestion selections, and location views.
+- During prototype testing, recent events are kept in each browser under `localStorage` key `open-play-map-analytics-events`.
+- For aggregated custom events, configure one later:
+  - add a lightweight endpoint as `window.OPEN_PLAY_ANALYTICS_ENDPOINT`,
+  - add Google Analytics `gtag`,
+  - add Plausible,
+  - add Fathom,
+  - or move event writes into the future Supabase backend.
+
 ## Supabase
 
 1. Create a Supabase project.
