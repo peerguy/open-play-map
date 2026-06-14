@@ -55,8 +55,11 @@
 - Initial sample location seed applied: `20260614150500_seed_initial_locations.sql`
 - Local browser location import applied: `20260614152000_import_local_locations.sql`
 - Supabase Auth profile trigger applied: `20260614153500_auth_profile_trigger.sql`
+- Auth signup availability migration applied: `20260614190000_auth_signup_availability.sql`
 - Frontend map page now attempts to load approved locations from Supabase first and falls back to `data/courts.json` if Supabase is unavailable.
 - Account signup/login/logout now use Supabase Auth. New auth users get a `profiles` row automatically, and admin access is based on `profiles.role = 'admin'`.
+- Supabase Auth email autoconfirm is enabled for the prototype so a newly created account immediately lands on the profile page. Revisit this before a bigger public launch once production email/SMPP settings are ready.
+- Duplicate signup checks now reject existing profile emails and usernames before calling Supabase Auth; duplicate usernames are also rejected by the profile trigger and case-insensitive unique index.
 - Imported local data currently includes 4 approved public locations and 1 pending location from the original localhost app.
 - Submissions, reviews, reports, suggested edits, credits, and monthly winners are still browser-local prototype data until the next write-path migration.
 

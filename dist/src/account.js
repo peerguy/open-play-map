@@ -274,6 +274,7 @@ function showAuthPanel(panelName) {
 async function createAccount(event) {
   event.preventDefault();
 
+  const submitButton = elements.signupForm.querySelector('button[type="submit"]');
   const email = elements.signupEmail.value.trim().toLowerCase();
   const password = elements.signupPassword.value;
   const passwordConfirm = elements.signupPasswordConfirm.value;
@@ -301,17 +302,23 @@ async function createAccount(event) {
     return;
   }
 
+  elements.signupHint.textContent = 'Creating account...';
+  if (submitButton) submitButton.disabled = true;
+
   try {
     const result = await window.OpenPlayAuth.signUp({ email, password, username, skillLevel, bio });
-    elements.signupForm.reset();
     if (result.needsEmailConfirmation) {
-      elements.signupHint.textContent = 'Check your email to confirm your account, then log in.';
+      elements.signupHint.textContent = 'Check your email to confirm your account, then log in. Your form was left filled in case you need to try again.';
       return;
     }
-    elements.signupHint.textContent = 'Account created.';
+    elements.signupForm.reset();
+    elements.notice.textContent = 'Account created.';
     setCurrentUser(result.user);
+    elements.currentUserCard.scrollIntoView({ block: 'start', behavior: 'smooth' });
   } catch (error) {
     elements.signupHint.textContent = error.message;
+  } finally {
+    if (submitButton) submitButton.disabled = false;
   }
 }
 

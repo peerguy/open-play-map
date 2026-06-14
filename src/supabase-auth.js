@@ -58,6 +58,41 @@
     return normalizeProfile(data, authUser);
   }
 
+  function authErrorMessage(error) {
+    const message = String(error?.message || '');
+    const details = String(error?.details || '');
+    const combined = `${message} ${details}`.toLowerCase();
+    const lowerMessage = message.toLowerCase();
+    if (combined.includes('email') && (combined.includes('already registered') || combined.includes('already exists') || combined.includes('duplicate'))) {
+      return 'An account already exists for that email.';
+    }
+    if (combined.includes('username') || combined.includes('profiles_username') || combined.includes('duplicate key')) {
+      return 'That username is already taken.';
+    }
+    if (lowerMessage.includes('password')) {
+      return message;
+    }
+    return message || 'Could not complete that request.';
+  }
+
+  async function checkSignupAvailability({ email, username }) {
+    const supabase = client();
+    if (!supabase) throw new Error('Supabase is not configured.');
+
+    const { data, error } = await supabase
+      .rpc('profile_signup_availability', {
+        check_email: email,
+        check_username: username
+      })
+      .single();
+
+    if (error) throw error;
+    return {
+      emailAvailable: data?.email_available !== false,
+      usernameAvailable: data?.username_available !== false
+    };
+  }
+
   async function currentUser() {
     const supabase = client();
     if (!supabase) return null;
@@ -75,6 +110,14 @@
     const supabase = client();
     if (!supabase) throw new Error('Supabase is not configured.');
 
+    const availability = await checkSignupAvailability({ email, username });
+    if (!availability.emailAvailable) {
+      throw new Error('An account already exists for that email.');
+    }
+    if (!availability.usernameAvailable) {
+      throw new Error('That username is already taken.');
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -88,8 +131,16 @@
       }
     });
 
-    if (error) throw error;
+    if (error) throw new Error(authErrorMessage(error));
     if (!data.session?.user) {
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (!signInError && signInData.user) {
+        return {
+          user: await ensureProfile(signInData.user, { username, skillLevel, bio }),
+          needsEmailConfirmation: false
+        };
+      }
+
       return {
         user: null,
         needsEmailConfirmation: true
@@ -107,7 +158,7 @@
     if (!supabase) throw new Error('Supabase is not configured.');
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    if (error) throw new Error(authErrorMessage(error));
 
     return normalizeProfile(await fetchProfile(data.user.id), data.user);
   }
@@ -134,7 +185,7 @@
       .select('id,email,username,role,skill_level,bio,avatar_url,created_at')
       .single();
 
-    if (error) throw error;
+    if (error) throw new Error(authErrorMessage(error));
     return normalizeProfile(data, { id: user.id, email: values.email });
   }
 
@@ -147,7 +198,7 @@
       .select('id,email,username,role,skill_level,bio,avatar_url,created_at')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) throw new Error(authErrorMessage(error));
     return (data || []).map(profile => normalizeProfile(profile, null));
   }
 
@@ -169,7 +220,7 @@
       .select('id,email,username,role,skill_level,bio,avatar_url,created_at')
       .single();
 
-    if (error) throw error;
+    if (error) throw new Error(authErrorMessage(error));
     return normalizeProfile(data, null);
   }
 
@@ -193,6 +244,7 @@
 
   window.OpenPlayAuth = {
     currentUser,
+    checkSignupAvailability,
     signUp,
     signIn,
     updateProfile,

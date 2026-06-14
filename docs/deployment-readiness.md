@@ -40,8 +40,8 @@ For a public launch, the browser should only render UI and call authenticated ba
    - `audit_events`
 
 2. Replace local auth with real auth.
-   - Status: first Supabase Auth migration is in place for signup, login, logout, session restore, profile rows, and admin role checks.
-   - Remaining: configure production redirect URLs, promote Alex's first real account to admin, and keep service-role/admin operations off the client.
+   - Status: first Supabase Auth migration is in place for signup, login, logout, session restore, profile rows, duplicate signup checks, and admin role checks.
+   - Remaining: configure production redirect URLs, decide when to re-enable email confirmation for production, promote Alex's first real account to admin, and keep service-role/admin operations off the client.
    - Admin status is now a server-side `profiles.role`, not `username === "scoop"`.
 
 3. Move permissions server-side.
