@@ -218,6 +218,36 @@ function closeCardMenus() {
   state.openCardMenuId = null;
 }
 
+function closeLocationMenus() {
+  document.querySelectorAll('[data-location-menu-wrapper].is-menu-open').forEach(wrapper => {
+    wrapper.classList.remove('is-menu-open');
+    wrapper.querySelector('[data-location-menu-toggle]')?.setAttribute('aria-expanded', 'false');
+    const menu = wrapper.querySelector('[data-location-menu]');
+    if (menu) menu.hidden = true;
+  });
+}
+
+function bindLocationMenu(container) {
+  const wrapper = container.querySelector('[data-location-menu-wrapper]');
+  const toggle = wrapper?.querySelector('[data-location-menu-toggle]');
+  const menu = wrapper?.querySelector('[data-location-menu]');
+  if (!wrapper || !toggle || !menu) return;
+
+  toggle.addEventListener('click', event => {
+    event.stopPropagation();
+    const isOpen = wrapper.classList.contains('is-menu-open');
+    closeLocationMenus();
+    if (isOpen) return;
+    wrapper.classList.add('is-menu-open');
+    toggle.setAttribute('aria-expanded', 'true');
+    menu.hidden = false;
+  });
+
+  wrapper.addEventListener('click', event => {
+    event.stopPropagation();
+  });
+}
+
 function locationShareUrl(court) {
   const url = new URL(window.location.href);
   url.hash = '';
@@ -1021,13 +1051,26 @@ function renderPhotoStrip(court, limit = 3) {
   `;
 }
 
-function locationActionButtons(court, className = 'popup-edit', { includeEdit = true } = {}) {
+function locationMenuItems(court, { includeEdit = false, includeShare = false } = {}) {
   return `
-    <div class="location-action-row">
-      ${includeEdit && canEditLocations() ? `<button class="${className}" type="button" data-edit-location="${court.id}">Edit location</button>` : ''}
+    ${includeEdit && canEditLocations() ? `<button type="button" data-edit-location="${court.id}">Edit location</button>` : ''}
+    ${canEditLocations() ? '' : `<button type="button" data-suggest-edit="${court.id}">Suggest edit</button>`}
+    <button class="report-menu-item" type="button" data-report-location="${court.id}">Report</button>
+    ${includeShare ? `<button type="button" data-share-location="${court.id}">Share link</button>` : ''}
+  `;
+}
+
+function locationActionButtons(court, className = 'popup-edit', { includeEdit = true, variant = 'popup' } = {}) {
+  const isMapInfo = variant === 'map-info';
+  return `
+    <div class="location-action-row location-menu-action-row${isMapInfo ? ' map-info-action-row' : ''}">
+      <div class="card-menu location-overflow-menu${isMapInfo ? ' map-info-menu' : ''}" data-location-menu-wrapper>
+        <button class="card-menu-toggle location-menu-toggle" type="button" data-location-menu-toggle aria-expanded="false" aria-label="More options for ${escapeHtml(court.name)}">...</button>
+        <div class="card-menu-panel location-menu-panel" data-location-menu hidden>
+          ${locationMenuItems(court, { includeEdit })}
+        </div>
+      </div>
       <button class="${className}" type="button" data-review-location="${court.id}">Review</button>
-      ${canEditLocations() ? '' : `<button class="${className}" type="button" data-suggest-edit="${court.id}">Suggest edit</button>`}
-      <button class="${className} report-action" type="button" data-report-location="${court.id}">Report</button>
     </div>
   `;
 }
@@ -1078,29 +1121,36 @@ function showMapInfoBox(court, options = {}) {
         <h3>Player updates</h3>
         ${renderReviewList(court, getCourtReviews(court.id).length)}
       </div>
-      ${locationActionButtons(court)}
     </div>
+    ${locationActionButtons(court, 'popup-edit', { includeEdit: true, variant: 'map-info' })}
   `;
 
   elements.mapInfoBox.querySelector('.map-info-close').addEventListener('click', () => {
     elements.mapInfoBox.hidden = true;
     state.activeInfoCourtId = null;
     document.body.classList.remove('has-map-info-open');
+    closeLocationMenus();
   });
 
+  bindLocationMenu(elements.mapInfoBox);
+
   elements.mapInfoBox.querySelector('[data-edit-location]')?.addEventListener('click', () => {
+    closeLocationMenus();
     openEditDialog(court.id);
   });
 
   elements.mapInfoBox.querySelector('[data-review-location]').addEventListener('click', () => {
+    closeLocationMenus();
     openReviewDialog(court.id);
   });
 
   elements.mapInfoBox.querySelector('[data-suggest-edit]')?.addEventListener('click', () => {
+    closeLocationMenus();
     openSuggestEditDialog(court.id);
   });
 
   elements.mapInfoBox.querySelector('[data-report-location]')?.addEventListener('click', () => {
+    closeLocationMenus();
     reportLocation(court.id);
   });
 
@@ -1162,7 +1212,7 @@ function createCourtCard(court) {
           <div class="card-menu">
             <button class="card-menu-toggle" type="button" data-card-menu-toggle aria-expanded="false" aria-label="More options for ${escapeHtml(court.name)}">...</button>
             <div class="card-menu-panel" data-card-menu hidden>
-              <button type="button" data-share-location="${court.id}">Share link</button>
+              ${locationMenuItems(court, { includeShare: true })}
             </div>
           </div>
         </div>
@@ -1175,7 +1225,9 @@ function createCourtCard(court) {
       ${reviews.length ? `<span class="badge">${reviews.length} update${reviews.length === 1 ? '' : 's'}</span>` : ''}
     </div>
     ${renderOpenPlaySummary(court)}
-    ${locationActionButtons(court, 'card-edit card-action-button', { includeEdit: false })}
+    <div class="location-action-row court-card-review-row">
+      <button class="card-edit card-action-button" type="button" data-review-location="${court.id}" aria-label="Review ${escapeHtml(court.name)}">Review</button>
+    </div>
   `;
 
   card.addEventListener('click', () => focusCourt(court.id, 'list_card'));
@@ -1537,18 +1589,31 @@ function attachHoverPopup(marker, court) {
 
   marker.on('popupopen', event => {
     const popupElement = event.popup.getElement();
+    if (popupElement) bindLocationMenu(popupElement);
     popupElement
       ?.querySelector('[data-edit-location]')
-      ?.addEventListener('click', () => openEditDialog(court.id));
+      ?.addEventListener('click', () => {
+        closeLocationMenus();
+        openEditDialog(court.id);
+      });
     popupElement
       ?.querySelector('[data-review-location]')
-      ?.addEventListener('click', () => openReviewDialog(court.id));
+      ?.addEventListener('click', () => {
+        closeLocationMenus();
+        openReviewDialog(court.id);
+      });
     popupElement
       ?.querySelector('[data-suggest-edit]')
-      ?.addEventListener('click', () => openSuggestEditDialog(court.id));
+      ?.addEventListener('click', () => {
+        closeLocationMenus();
+        openSuggestEditDialog(court.id);
+      });
     popupElement
       ?.querySelector('[data-report-location]')
-      ?.addEventListener('click', () => reportLocation(court.id));
+      ?.addEventListener('click', () => {
+        closeLocationMenus();
+        reportLocation(court.id);
+      });
 
     popupElement?.addEventListener('mouseenter', () => {
       state.hoveringPopup = true;
@@ -2348,6 +2413,7 @@ window.OpenPlayAuth?.onAuthStateChange?.(() => {
 
 document.addEventListener('click', event => {
   if (!event.target.closest('.card-menu')) closeCardMenus();
+  if (!event.target.closest('[data-location-menu-wrapper]')) closeLocationMenus();
 });
 
 document.querySelectorAll('[data-close-submit]').forEach(button => {
