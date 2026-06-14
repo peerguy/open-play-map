@@ -1,0 +1,4 @@
+window.OpenPlaySupabaseConfig = {
+  url: 'https://hamodnxffgdyrpwylqfs.supabase.co',
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhhbW9kbnhmZmdkeXJwd3lscWZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MjY0MTUsImV4cCI6MjA5NzAwMjQxNX0.jJo7xpASqKqmxvtwoJzsO2LUwJw7ypWYwJI5kbywbpE'
+};

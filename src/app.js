@@ -2417,11 +2417,36 @@ async function init() {
   elements.mapStyle.value = tileStyles[savedStyle] ? savedStyle : 'voyager';
   setMapStyle(elements.mapStyle.value);
 
-  const response = await fetch('data/courts.json');
-  const seedCourts = await response.json();
+  const seedCourts = await loadSeedCourts();
   state.courts = mergeSavedLocations(seedCourts, getSavedSubmissions());
   render();
   focusSharedLocationFromUrl();
+}
+
+async function loadSeedCourts() {
+  try {
+    const remoteCourts = await window.OpenPlaySupabase?.fetchApprovedLocations?.();
+    if (remoteCourts?.length) {
+      trackAnalyticsEvent('backend_locations_loaded', {
+        source: 'supabase',
+        count: remoteCourts.length
+      });
+      return remoteCourts;
+    }
+  } catch (error) {
+    console.warn('Supabase location load failed. Falling back to static JSON.', error);
+    trackAnalyticsEvent('backend_locations_failed', {
+      source: 'supabase'
+    });
+  }
+
+  const response = await fetch('data/courts.json');
+  const staticCourts = await response.json();
+  trackAnalyticsEvent('backend_locations_loaded', {
+    source: 'static_json',
+    count: staticCourts.length
+  });
+  return staticCourts;
 }
 
 [elements.accessFilter, elements.skillFilter, elements.dayFilter, elements.timeFilter, elements.settingFilter, elements.reliabilityFilter].forEach(element => {

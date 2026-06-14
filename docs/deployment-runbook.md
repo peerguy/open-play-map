@@ -46,6 +46,15 @@
 6. Create storage buckets for location photos and profile avatars.
 7. Assign Alex/admin role server-side in the `profiles` table after first signup.
 
+### Current Supabase Project
+
+- Project name: `peerguy's Project`
+- Project ref: `hamodnxffgdyrpwylqfs`
+- Project URL: `https://hamodnxffgdyrpwylqfs.supabase.co`
+- Initial schema migration applied: `20260613130000_initial_schema.sql`
+- Initial sample location seed applied: `20260614150500_seed_initial_locations.sql`
+- Frontend map page now attempts to load approved locations from Supabase first and falls back to `data/courts.json` if Supabase is unavailable.
+
 ## App Refactor Order
 
 1. Add a Supabase client module.
