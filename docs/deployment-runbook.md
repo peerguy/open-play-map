@@ -53,7 +53,9 @@
 - Project URL: `https://hamodnxffgdyrpwylqfs.supabase.co`
 - Initial schema migration applied: `20260613130000_initial_schema.sql`
 - Initial sample location seed applied: `20260614150500_seed_initial_locations.sql`
+- Local browser location import applied: `20260614152000_import_local_locations.sql`
 - Frontend map page now attempts to load approved locations from Supabase first and falls back to `data/courts.json` if Supabase is unavailable.
+- Imported local data currently includes 4 approved public locations and 1 pending location from the original localhost app.
 
 ## App Refactor Order
 

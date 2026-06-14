@@ -2419,8 +2419,14 @@ async function init() {
 
   const seedCourts = await loadSeedCourts();
   state.courts = mergeSavedLocations(seedCourts, getSavedSubmissions());
-  render();
-  focusSharedLocationFromUrl();
+  const sharedLocationId = new URLSearchParams(window.location.search).get('location');
+  if (sharedLocationId) {
+    render();
+    focusSharedLocationFromUrl();
+  } else {
+    fitMapToLoadedCourts();
+    render();
+  }
 }
 
 async function loadSeedCourts() {
@@ -2447,6 +2453,24 @@ async function loadSeedCourts() {
     count: staticCourts.length
   });
   return staticCourts;
+}
+
+function fitMapToLoadedCourts() {
+  const points = state.courts
+    .filter(court => typeof court.latitude === 'number' && typeof court.longitude === 'number')
+    .map(court => [court.latitude, court.longitude]);
+
+  if (!points.length) return;
+  if (points.length === 1) {
+    map.setView(points[0], isMobileLayout() ? 10 : 11);
+    return;
+  }
+
+  map.fitBounds(L.latLngBounds(points), {
+    padding: isMobileLayout() ? [44, 44] : [70, 70],
+    maxZoom: isMobileLayout() ? 9 : 10,
+    animate: false
+  });
 }
 
 [elements.accessFilter, elements.skillFilter, elements.dayFilter, elements.timeFilter, elements.settingFilter, elements.reliabilityFilter].forEach(element => {
