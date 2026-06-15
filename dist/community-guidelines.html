@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#266c3f" />
     <link rel="canonical" href="https://play.scooppickleball.com/community-guidelines.html" />
     <link rel="icon" type="image/svg+xml" href="assets/icons/open-play-favicon.svg" />
-    <link rel="stylesheet" href="src/styles.css?v=qa-fixes-20260615" />
+    <link rel="stylesheet" href="src/styles.css?v=credit-sync-20260615" />
   </head>
   <body class="legal-page">
     <header class="site-header account-header">
@@ -26,10 +26,12 @@
           <p class="subtitle">How to keep the map useful, honest, and player-first.</p>
         </div>
       </div>
-      <nav class="about-header-nav" aria-label="Guidelines page navigation">
+      <nav class="about-header-nav" aria-label="Guidelines page navigation" data-auth-user-panel>
         <a class="header-link" href="index.html">Map</a>
         <a class="header-link" href="leaderboard.html">Leaderboard</a>
-        <a class="header-link" href="account.html">Sign in</a>
+        <div class="header-auth-slot" data-auth-user-slot>
+          <a class="header-link" href="account.html">Sign in</a>
+        </div>
       </nav>
       <div class="mobile-page-title" aria-hidden="true">Guidelines</div>
     </header>
@@ -59,7 +61,7 @@
 
         <section class="legal-section">
           <h3>Write honest reviews</h3>
-          <p>Reviews should be based on your real court experience or a good-faith update from a recent visit. Keep reviews focused on details that help players decide where and when to play. Do not post fake reviews, paid reviews, retaliation, personal attacks, or secondhand rumors presented as fact.</p>
+          <p>Reviews should be based on your real court experience or a good-faith note from a recent visit. Keep reviews focused on details that help players decide where and when to play. Do not post fake reviews, paid reviews, retaliation, personal attacks, or secondhand rumors presented as fact.</p>
         </section>
 
         <section class="legal-section">
@@ -102,5 +104,12 @@
         </nav>
       </div>
     </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="src/supabase-config.js?v=supabase-read-20260614"></script>
+    <script src="src/supabase-client.js?v=supabase-auth-fix-20260614"></script>
+    <script src="src/supabase-auth.js?v=supabase-auth-fix-20260614"></script>
+    <script src="src/mobile-header.js?v=supabase-auth-fix-20260614"></script>
+    <script src="src/header-auth.js?v=credit-sync-20260615"></script>
   </body>
 </html>

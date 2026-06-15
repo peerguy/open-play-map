@@ -71,17 +71,12 @@ function getSavedCredits() {
 }
 
 function getCreditBalances(userId) {
-  const balances = getSavedCredits()
+  return getSavedCredits()
     .filter(credit => credit.userId === userId && (credit.status === 'approved' || !credit.status))
     .reduce((balances, credit) => ({
       active: balances.active + Number(credit.activeCreditsDelta || 0),
       lifetime: balances.lifetime + Number(credit.lifetimeCreditsDelta || 0)
     }), { active: 0, lifetime: 0 });
-  const missingReviewCredits = getUncreditedReviewCount(userId);
-  return {
-    active: balances.active + missingReviewCredits,
-    lifetime: balances.lifetime + missingReviewCredits
-  };
 }
 
 function normalizeSkillLevel(value, fallback = '') {
@@ -116,26 +111,6 @@ function flattenedReviews() {
       ...review,
       courtId: review.courtId || courtId
     })));
-}
-
-function getUncreditedReviewCount(userId) {
-  const creditedReviewTargets = new Set(getSavedCredits()
-    .filter(credit => (
-      credit.userId === userId
-      && credit.action === 'add-review'
-      && (credit.status === 'approved' || !credit.status)
-    ))
-    .flatMap(credit => [credit.targetId, credit.remoteId].filter(Boolean)));
-
-  return flattenedReviews()
-    .filter(review => (
-      review.userId === userId
-      && (review.status === 'published' || !review.status)
-      && !creditedReviewTargets.has(review.id)
-      && !creditedReviewTargets.has(review.remoteId)
-      && !creditedReviewTargets.has(review.courtId)
-    ))
-    .length;
 }
 
 function skillLevelOptions(selected) {

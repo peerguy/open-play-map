@@ -1212,7 +1212,7 @@ function reviewDetailItems(review) {
 
 function renderReviewList(court, limit = 2) {
   const reviews = getCourtReviews(court.id);
-  if (!reviews.length) return '<p class="review-empty">No player updates yet.</p>';
+  if (!reviews.length) return '<p class="review-empty">No player reviews yet.</p>';
 
   return reviews.slice(0, limit).map(review => `
     <article class="review-item" data-review-id="${escapeHtml(review.id || '')}">
@@ -1224,12 +1224,12 @@ function renderReviewList(court, limit = 2) {
         <span>${escapeHtml(review.visited || review.createdAt)}</span>
       </div>
       <div class="community-update-label">
-        <span>Community update</span>
-        ${review.updatedAt ? `<span>Last updated ${escapeHtml(review.updatedAt)}</span>` : ''}
+        <span>Community review</span>
+        ${review.updatedAt ? `<span>Review edited ${escapeHtml(review.updatedAt)}</span>` : ''}
       </div>
       ${review.body ? `<p>${escapeHtml(review.body)}</p>` : ''}
       ${reviewDetailItems(review)}
-      <button class="report-button" type="button" data-report-review="${escapeHtml(review.id || '')}" data-court-id="${escapeHtml(court.id)}">Report update</button>
+      <button class="report-button" type="button" data-report-review="${escapeHtml(review.id || '')}" data-court-id="${escapeHtml(court.id)}">Report review</button>
     </article>
   `).join('');
 }
@@ -1317,7 +1317,7 @@ function showMapInfoBox(court, options = {}) {
       ${renderPhotoStrip(court, court.photos?.length || 3)}
       ${submitterLabel(court) ? `<div class="map-info-row">${submitterLabel(court)}</div>` : ''}
       <div class="reviews-panel">
-        <h3>Player updates</h3>
+        <h3>Player reviews</h3>
         ${renderReviewList(court, getCourtReviews(court.id).length)}
       </div>
     </div>

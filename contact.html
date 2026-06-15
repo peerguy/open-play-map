@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#266c3f" />
     <link rel="canonical" href="https://play.scooppickleball.com/contact.html" />
     <link rel="icon" type="image/svg+xml" href="assets/icons/open-play-favicon.svg" />
-    <link rel="stylesheet" href="src/styles.css?v=qa-fixes-20260615" />
+    <link rel="stylesheet" href="src/styles.css?v=credit-sync-20260615" />
   </head>
   <body class="legal-page">
     <header class="site-header account-header">
@@ -26,10 +26,12 @@
           <p class="subtitle">Report issues or get help with Open Play Map.</p>
         </div>
       </div>
-      <nav class="about-header-nav" aria-label="Contact page navigation">
+      <nav class="about-header-nav" aria-label="Contact page navigation" data-auth-user-panel>
         <a class="header-link" href="index.html">Map</a>
         <a class="header-link" href="leaderboard.html">Leaderboard</a>
-        <a class="header-link" href="account.html">Sign in</a>
+        <div class="header-auth-slot" data-auth-user-slot>
+          <a class="header-link" href="account.html">Sign in</a>
+        </div>
       </nav>
       <div class="mobile-page-title" aria-hidden="true">Contact</div>
     </header>
@@ -93,5 +95,12 @@
         </nav>
       </div>
     </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="src/supabase-config.js?v=supabase-read-20260614"></script>
+    <script src="src/supabase-client.js?v=supabase-auth-fix-20260614"></script>
+    <script src="src/supabase-auth.js?v=supabase-auth-fix-20260614"></script>
+    <script src="src/mobile-header.js?v=supabase-auth-fix-20260614"></script>
+    <script src="src/header-auth.js?v=credit-sync-20260615"></script>
   </body>
 </html>

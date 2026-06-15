@@ -25,6 +25,13 @@
     'image/png': 'png',
     'image/webp': 'webp'
   };
+  const CONTRIBUTION_CREDITS = {
+    'add-location': 5,
+    'add-review': 1,
+    'add-photo': 2,
+    'suggested-edit': 3
+  };
+  const CREDIT_STATUSES = new Set(['pending', 'approved', 'rejected', 'void']);
 
   function isConfigured() {
     return Boolean(config.url && config.anonKey);
@@ -452,6 +459,293 @@
     };
   }
 
+  function contributionCreditValue(action) {
+    return CONTRIBUTION_CREDITS[action] || 0;
+  }
+
+  function normalizeCreditStatus(status, fallback = 'approved') {
+    return CREDIT_STATUSES.has(status) ? status : fallback;
+  }
+
+  function creditUpdateMatches(existing, payload) {
+    return Object.entries(payload).every(([key, value]) => {
+      if (key === 'active_delta' || key === 'lifetime_delta') {
+        return Number(existing[key] || 0) === Number(value || 0);
+      }
+      return existing[key] === value;
+    });
+  }
+
+  async function syncCreditForTarget(supabase, {
+    userId,
+    action,
+    targetType,
+    targetId,
+    status = 'approved',
+    awardedBy = null
+  }) {
+    if (!supabase || !action || !targetType || !targetId) return false;
+
+    const amount = contributionCreditValue(action);
+    const normalizedStatus = normalizeCreditStatus(status);
+    const { data: existingRows, error: selectError } = await supabase
+      .from('credits')
+      .select('id,user_id,status,active_delta,lifetime_delta,awarded_by')
+      .eq('action', action)
+      .eq('target_type', targetType)
+      .eq('target_id', targetId)
+      .limit(1);
+
+    if (selectError) throw selectError;
+
+    const existing = existingRows?.[0] || null;
+    if (existing) {
+      const payload = {
+        status: normalizedStatus,
+        active_delta: amount,
+        lifetime_delta: amount
+      };
+      if (awardedBy) payload.awarded_by = awardedBy;
+      if (creditUpdateMatches(existing, payload)) return false;
+
+      const { error: updateError } = await supabase
+        .from('credits')
+        .update(payload)
+        .eq('id', existing.id);
+      if (updateError) throw updateError;
+      return true;
+    }
+
+    if (!userId || amount <= 0 || normalizedStatus === 'rejected' || normalizedStatus === 'void') {
+      return false;
+    }
+
+    const insertPayload = {
+      user_id: userId,
+      action,
+      target_type: targetType,
+      target_id: targetId,
+      active_delta: amount,
+      lifetime_delta: amount,
+      status: normalizedStatus
+    };
+    if (awardedBy) insertPayload.awarded_by = awardedBy;
+
+    const { error: insertError } = await supabase
+      .from('credits')
+      .insert(insertPayload);
+
+    if (insertError) {
+      if (insertError.code === '23505') {
+        const { error: retryError } = await supabase
+          .from('credits')
+          .update({
+            status: normalizedStatus,
+            active_delta: amount,
+            lifetime_delta: amount,
+            ...(awardedBy ? { awarded_by: awardedBy } : {})
+          })
+          .eq('action', action)
+          .eq('target_type', targetType)
+          .eq('target_id', targetId);
+        if (retryError) throw retryError;
+        return true;
+      }
+      throw insertError;
+    }
+
+    return true;
+  }
+
+  async function voidCreditForTarget(supabase, action, targetType, targetId) {
+    if (!supabase || !action || !targetType || !targetId) return false;
+    const { data: existingRows, error: selectError } = await supabase
+      .from('credits')
+      .select('id,status')
+      .eq('action', action)
+      .eq('target_type', targetType)
+      .eq('target_id', targetId)
+      .limit(1);
+    if (selectError) throw selectError;
+    const existing = existingRows?.[0] || null;
+    if (!existing || existing.status === 'void') return false;
+
+    const { error } = await supabase
+      .from('credits')
+      .update({ status: 'void' })
+      .eq('id', existing.id);
+    if (error) throw error;
+    return true;
+  }
+
+  async function voidCreditsForTargets(supabase, action, targetType, targetIds = []) {
+    const ids = [...new Set((targetIds || []).filter(Boolean))];
+    if (!supabase || !action || !targetType || !ids.length) return false;
+    const { data: existingRows, error: selectError } = await supabase
+      .from('credits')
+      .select('id,status')
+      .eq('action', action)
+      .eq('target_type', targetType)
+      .in('target_id', ids);
+    if (selectError) throw selectError;
+
+    const creditIds = (existingRows || [])
+      .filter(credit => credit.status !== 'void')
+      .map(credit => credit.id);
+    if (!creditIds.length) return false;
+
+    const { error } = await supabase
+      .from('credits')
+      .update({ status: 'void' })
+      .in('id', creditIds);
+    if (error) throw error;
+    return true;
+  }
+
+  async function voidLocationChildCredits(supabase, locationId) {
+    if (!supabase || !locationId) return false;
+
+    const [reviewsResult, photosResult, editsResult] = await Promise.all([
+      supabase.from('reviews').select('id').eq('location_id', locationId),
+      supabase.from('photos').select('id').eq('location_id', locationId),
+      supabase.from('suggested_edits').select('id').eq('location_id', locationId)
+    ]);
+
+    [reviewsResult, photosResult, editsResult].forEach(result => {
+      if (result.error) throw result.error;
+    });
+
+    const reviewIds = (reviewsResult.data || []).map(review => review.id);
+    const photoIds = (photosResult.data || []).map(photo => photo.id);
+    const editIds = (editsResult.data || []).map(edit => edit.id);
+
+    const results = await Promise.all([
+      voidCreditsForTargets(supabase, 'add-review', 'review', reviewIds),
+      voidCreditsForTargets(supabase, 'add-photo', 'photo', photoIds),
+      voidCreditsForTargets(supabase, 'suggested-edit', 'suggested-edit', editIds)
+    ]);
+    return results.some(Boolean);
+  }
+
+  async function voidLocationCredits(supabase, locationId) {
+    const locationChanged = await voidCreditForTarget(supabase, 'add-location', 'location', locationId);
+    const childChanged = await voidLocationChildCredits(supabase, locationId);
+    return locationChanged || childChanged;
+  }
+
+  async function syncLocationCredit(supabase, record, actorId = null) {
+    if (!record?.id) return false;
+    if (record.status === 'archived') {
+      return voidLocationCredits(supabase, record.id);
+    }
+    if (record.status === 'rejected') {
+      const locationChanged = record.submitted_by
+        ? await syncCreditForTarget(supabase, {
+          userId: record.submitted_by,
+          action: 'add-location',
+          targetType: 'location',
+          targetId: record.id,
+          status: 'rejected',
+          awardedBy: actorId || record.approved_by || null
+        })
+        : await voidCreditForTarget(supabase, 'add-location', 'location', record.id);
+      const childChanged = await voidLocationChildCredits(supabase, record.id);
+      return locationChanged || childChanged;
+    }
+    if (!record.submitted_by) return false;
+    if (record.status === 'approved') {
+      return syncCreditForTarget(supabase, {
+        userId: record.submitted_by,
+        action: 'add-location',
+        targetType: 'location',
+        targetId: record.id,
+        status: 'approved',
+        awardedBy: actorId || record.approved_by || null
+      });
+    }
+    if (record.status === 'pending') {
+      return syncCreditForTarget(supabase, {
+        userId: record.submitted_by,
+        action: 'add-location',
+        targetType: 'location',
+        targetId: record.id,
+        status: 'pending'
+      });
+    }
+    return false;
+  }
+
+  async function syncReviewCredit(supabase, record, actorId = null) {
+    if (!record?.id) return false;
+    if (record.status === 'published' && record.user_id) {
+      return syncCreditForTarget(supabase, {
+        userId: record.user_id,
+        action: 'add-review',
+        targetType: 'review',
+        targetId: record.id,
+        status: 'approved',
+        awardedBy: actorId
+      });
+    }
+    return voidCreditForTarget(supabase, 'add-review', 'review', record.id);
+  }
+
+  async function syncPhotoCredit(supabase, record, actorId = null) {
+    if (!record?.id) return false;
+    if (record.status === 'approved' && record.uploaded_by) {
+      return syncCreditForTarget(supabase, {
+        userId: record.uploaded_by,
+        action: 'add-photo',
+        targetType: 'photo',
+        targetId: record.id,
+        status: 'approved',
+        awardedBy: actorId
+      });
+    }
+    if (record.status === 'rejected' || record.status === 'removed') {
+      return voidCreditForTarget(supabase, 'add-photo', 'photo', record.id);
+    }
+    return false;
+  }
+
+  async function syncSuggestedEditCredit(supabase, record, actorId = null) {
+    if (!record?.id) return false;
+    if (record.status === 'approved' && record.submitted_by) {
+      return syncCreditForTarget(supabase, {
+        userId: record.submitted_by,
+        action: 'suggested-edit',
+        targetType: 'suggested-edit',
+        targetId: record.id,
+        status: 'approved',
+        awardedBy: actorId || record.reviewed_by || null
+      });
+    }
+    if (record.status === 'rejected') {
+      return voidCreditForTarget(supabase, 'suggested-edit', 'suggested-edit', record.id);
+    }
+    return false;
+  }
+
+  async function reconcileAdminCredits(supabase, { locations = [], reviews = [], photos = [], suggestedEdits = [] } = {}) {
+    if (!supabase) return false;
+    let changed = false;
+
+    for (const location of locations) {
+      changed = await syncLocationCredit(supabase, location) || changed;
+    }
+    for (const review of reviews) {
+      changed = await syncReviewCredit(supabase, review) || changed;
+    }
+    for (const photo of photos) {
+      changed = await syncPhotoCredit(supabase, photo) || changed;
+    }
+    for (const edit of suggestedEdits) {
+      changed = await syncSuggestedEditCredit(supabase, edit) || changed;
+    }
+
+    return changed;
+  }
+
   async function request(path) {
     if (!isConfigured()) return null;
 
@@ -512,6 +806,7 @@
       .single();
 
     if (error) throw error;
+    await syncLocationCredit(supabase, data, actorId);
     return mapLocation(data);
   }
 
@@ -875,6 +1170,7 @@
       .single();
 
     if (error) throw error;
+    await syncSuggestedEditCredit(supabase, data, actorId);
     return mapSuggestedEdit(data);
   }
 
@@ -921,12 +1217,13 @@
       .eq('id', reviewId);
 
     if (reviewError) throw reviewError;
+    await voidCreditForTarget(supabase, 'add-review', 'review', reviewId);
     if (reportId) {
       await updateReportStatus(reportId, 'resolved', actorId);
     }
   }
 
-  async function updateAdminReview(reviewId, review = {}) {
+  async function updateAdminReview(reviewId, review = {}, actorId = null) {
     const supabase = client();
     if (!supabase || !reviewId) throw new Error('Supabase is not configured.');
 
@@ -959,6 +1256,7 @@
       .single();
 
     if (error) throw error;
+    await syncReviewCredit(supabase, data, actorId);
     return mapReview(data);
   }
 
@@ -973,6 +1271,8 @@
       if (storageError) throw storageError;
     }
 
+    await voidCreditForTarget(supabase, 'add-photo', 'photo', photoId);
+
     const { error } = await supabase
       .from('photos')
       .delete()
@@ -982,7 +1282,7 @@
     return { id: photoId, remoteId: photoId, storagePath, status: 'removed' };
   }
 
-  async function updatePhotoStatus(photoId, status) {
+  async function updatePhotoStatus(photoId, status, actorId = null) {
     const supabase = client();
     if (!supabase || !photoId) throw new Error('Supabase is not configured.');
 
@@ -994,6 +1294,7 @@
       .single();
 
     if (error) throw error;
+    await syncPhotoCredit(supabase, data, actorId);
     return mapPhoto(data);
   }
 
@@ -1076,9 +1377,9 @@
     const supabase = client();
     if (!supabase) return null;
 
-    const [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult, photosResult] = await Promise.all([
+    const [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, initialCreditsResult, photosResult] = await Promise.all([
       supabase.from('profiles').select('id,email,username,role,skill_level,bio,avatar_url,created_at'),
-      supabase.from('locations').select('id,slug,name'),
+      supabase.from('locations').select('id,slug,name,status,submitted_by,approved_by'),
       supabase.from('reviews').select('*').order('created_at', { ascending: false }),
       supabase.from('reports').select('*').order('created_at', { ascending: false }),
       supabase.from('suggested_edits').select('*').order('created_at', { ascending: false }),
@@ -1086,10 +1387,27 @@
       supabase.from('photos').select('*').order('created_at', { ascending: false })
     ]);
 
-    [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult, photosResult]
+    [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, initialCreditsResult, photosResult]
       .forEach(result => {
         if (result.error) throw result.error;
       });
+
+    let creditsData = initialCreditsResult.data || [];
+    const creditsChanged = await reconcileAdminCredits(supabase, {
+      locations: locationsResult.data || [],
+      reviews: reviewsResult.data || [],
+      photos: photosResult.data || [],
+      suggestedEdits: editsResult.data || []
+    });
+
+    if (creditsChanged) {
+      const refreshedCreditsResult = await supabase
+        .from('credits')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (refreshedCreditsResult.error) throw refreshedCreditsResult.error;
+      creditsData = refreshedCreditsResult.data || [];
+    }
 
     const profiles = new Map((profilesResult.data || []).map(profile => [profile.id, profile]));
     const locations = new Map((locationsResult.data || []).map(location => [location.id, location]));
@@ -1100,7 +1418,7 @@
       reviews: reviewsToMap(reviews),
       reports: (reportsResult.data || []).map(report => mapReport(report, { profiles, locations, reviewsById })),
       suggestedEdits: (editsResult.data || []).map(edit => mapSuggestedEdit(edit, { profiles, locations })),
-      credits: (creditsResult.data || []).map(credit => mapCredit(credit, profiles)),
+      credits: creditsData.map(credit => mapCredit(credit, profiles)),
       photos: (photosResult.data || []).map(photo => mapPhoto(photo, { profiles, locations }))
     };
   }

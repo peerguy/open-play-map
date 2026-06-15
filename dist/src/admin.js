@@ -1444,8 +1444,10 @@ async function approveLocation(locationId) {
     try {
       const approved = await window.OpenPlaySupabase.updateLocationStatus(remoteCourt.remoteId, 'approved', currentAdminUser?.id);
       allCourts = allCourts.map(court => court.id === locationId ? approved : court);
+      await loadBackendCollections();
       renderModeration();
       renderLocations();
+      renderUsers();
     } catch (error) {
       elements.moderationList.querySelector(`[data-approve-location="${CSS.escape(locationId)}"]`)?.closest('.moderation-item')?.querySelector('.moderation-meta')?.insertAdjacentHTML('afterend', `<p class="form-hint">${escapeHtml(error.message)}</p>`);
     }
@@ -1484,8 +1486,10 @@ async function rejectLocation(locationId) {
     try {
       const rejected = await window.OpenPlaySupabase.updateLocationStatus(remoteCourt.remoteId, 'rejected', currentAdminUser?.id);
       allCourts = allCourts.map(item => item.id === locationId ? rejected : item);
+      await loadBackendCollections();
       renderModeration();
       renderLocations();
+      renderUsers();
     } catch (error) {
       elements.moderationList.querySelector(`[data-reject-location="${CSS.escape(locationId)}"]`)?.closest('.moderation-item')?.querySelector('.moderation-meta')?.insertAdjacentHTML('afterend', `<p class="form-hint">${escapeHtml(error.message)}</p>`);
     }
@@ -1508,10 +1512,8 @@ async function updatePhotoModerationStatus(photoId, status) {
   if (!photo) return;
 
   try {
-    const updated = await window.OpenPlaySupabase.updatePhotoStatus(photo.remoteId || photo.id, status);
-    backendCollections.photos = (backendCollections.photos || []).map(item => (
-      item.id === photoId ? { ...item, ...updated, status } : item
-    ));
+    await window.OpenPlaySupabase.updatePhotoStatus(photo.remoteId || photo.id, status, currentAdminUser?.id);
+    await loadBackendCollections();
     renderModeration();
     renderUsers();
   } catch (error) {
@@ -1610,13 +1612,14 @@ async function saveAdminReviewEdit(event) {
 
   if (existing.remoteId && window.OpenPlaySupabase?.updateAdminReview) {
     try {
-      const savedReview = await window.OpenPlaySupabase.updateAdminReview(existing.remoteId, nextReview);
+      const savedReview = await window.OpenPlaySupabase.updateAdminReview(existing.remoteId, nextReview, currentAdminUser?.id);
       upsertSavedReview({
         ...nextReview,
         ...savedReview,
         courtId: existing.courtId,
         courtName: existing.courtName
       }, existing);
+      await loadBackendCollections();
       editor.querySelector('.moderation-badge').textContent = savedReview.status || nextReview.status;
       hint.textContent = 'Saved.';
       renderModeration();
@@ -1647,6 +1650,7 @@ async function removeReviewPhoto(event) {
   try {
     if (photo?.remoteId && window.OpenPlaySupabase?.removeAdminPhoto) {
       await window.OpenPlaySupabase.removeAdminPhoto(photo.remoteId, photo.storagePath || button.dataset.reviewPhotoStoragePath || '');
+      await loadBackendCollections();
     }
     backendCollections.photos = (backendCollections.photos || []).filter(item => item.id !== photoId && item.remoteId !== photoId);
     const item = button.closest('.admin-review-photo-item');
@@ -1740,6 +1744,7 @@ async function approveSuggestedEdit(editId) {
           ? { ...item, status: 'approved', approvedAt: todayIso(), approvedLocation: savedCourt }
           : item
       )));
+      await loadBackendCollections();
       renderModeration();
       renderLocations();
       renderUsers();
@@ -1777,6 +1782,7 @@ async function rejectSuggestedEdit(editId) {
       saveSuggestedEdits(edits.map(item => (
         item.id === editId ? { ...item, status: 'rejected', rejectedAt: todayIso() } : item
       )));
+      await loadBackendCollections();
       renderModeration();
     } catch (error) {
       window.alert(error.message || 'Could not reject that suggested edit.');
@@ -1819,6 +1825,7 @@ async function deleteReportedReview(courtId, reviewId, reportId) {
   if (report?.remoteId && reviewId && window.OpenPlaySupabase?.removeReviewForReport) {
     try {
       await window.OpenPlaySupabase.removeReviewForReport(reviewId, report.remoteId, currentAdminUser?.id);
+      await loadBackendCollections();
       const reviews = getSavedReviews();
       Object.keys(reviews).forEach(key => {
         reviews[key] = reviews[key].filter(review => review.id !== reviewId);
@@ -1845,20 +1852,21 @@ async function deleteReportedReview(courtId, reviewId, reportId) {
   renderUsers();
 }
 
-function deleteLocation(court) {
+async function deleteLocation(court) {
   const confirmed = window.confirm(`Delete ${court.name}? This removes it from the admin panel and map.`);
   if (!confirmed) return;
 
   if (court.remoteId) {
-    window.OpenPlaySupabase.updateLocationStatus(court.remoteId, 'archived', currentAdminUser?.id)
-      .then(() => {
-        allCourts = allCourts.filter(item => item.id !== court.id);
-        renderModeration();
-        renderLocations();
-      })
-      .catch(error => {
-        window.alert(error.message);
-      });
+    try {
+      await window.OpenPlaySupabase.updateLocationStatus(court.remoteId, 'archived', currentAdminUser?.id);
+      await loadBackendCollections();
+      allCourts = allCourts.filter(item => item.id !== court.id);
+      renderModeration();
+      renderLocations();
+      renderUsers();
+    } catch (error) {
+      window.alert(error.message);
+    }
     return;
   }
 
