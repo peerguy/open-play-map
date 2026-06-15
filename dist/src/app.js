@@ -90,7 +90,19 @@ const state = {
   lastTrackedHeaderSearch: '',
   lastTrackedPlaceSearch: '',
   popupCloseTimer: null,
-  hoveringPopup: false
+  hoveringPopup: false,
+  photoLightbox: {
+    element: null,
+    image: null,
+    caption: null,
+    previousButton: null,
+    nextButton: null,
+    closeButton: null,
+    photos: [],
+    courtName: '',
+    index: 0,
+    trigger: null
+  }
 };
 
 const elements = {
@@ -277,6 +289,115 @@ async function copyTextToClipboard(text) {
 
 function selectedPhotoFiles(input) {
   return Array.from(input?.files || []);
+}
+
+function courtPhotoList(court) {
+  return (court?.photos || []).filter(Boolean).map(photo => String(photo).trim()).filter(Boolean);
+}
+
+function ensurePhotoLightbox() {
+  if (state.photoLightbox.element) return state.photoLightbox.element;
+
+  const lightbox = document.createElement('div');
+  lightbox.className = 'photo-lightbox';
+  lightbox.hidden = true;
+  lightbox.setAttribute('role', 'dialog');
+  lightbox.setAttribute('aria-modal', 'true');
+  lightbox.setAttribute('aria-label', 'Photo viewer');
+  lightbox.innerHTML = `
+    <div class="photo-lightbox-panel">
+      <button class="photo-lightbox-close" type="button" aria-label="Close photo viewer">&times;</button>
+      <button class="photo-lightbox-nav photo-lightbox-prev" type="button" aria-label="Previous photo">&#8249;</button>
+      <figure class="photo-lightbox-frame">
+        <div class="photo-lightbox-image-wrap">
+          <img class="photo-lightbox-image" alt="" />
+        </div>
+        <figcaption class="photo-lightbox-caption" aria-live="polite"></figcaption>
+      </figure>
+      <button class="photo-lightbox-nav photo-lightbox-next" type="button" aria-label="Next photo">&#8250;</button>
+    </div>
+  `;
+
+  state.photoLightbox.element = lightbox;
+  state.photoLightbox.image = lightbox.querySelector('.photo-lightbox-image');
+  state.photoLightbox.caption = lightbox.querySelector('.photo-lightbox-caption');
+  state.photoLightbox.previousButton = lightbox.querySelector('.photo-lightbox-prev');
+  state.photoLightbox.nextButton = lightbox.querySelector('.photo-lightbox-next');
+  state.photoLightbox.closeButton = lightbox.querySelector('.photo-lightbox-close');
+
+  state.photoLightbox.closeButton.addEventListener('click', closePhotoLightbox);
+  state.photoLightbox.previousButton.addEventListener('click', () => stepPhotoLightbox(-1));
+  state.photoLightbox.nextButton.addEventListener('click', () => stepPhotoLightbox(1));
+  lightbox.addEventListener('click', event => {
+    if (event.target === lightbox) closePhotoLightbox();
+  });
+
+  document.body.append(lightbox);
+  return lightbox;
+}
+
+function updatePhotoLightbox() {
+  const { photos, index, courtName, image, caption, previousButton, nextButton } = state.photoLightbox;
+  if (!photos.length || !image || !caption) return;
+
+  const photo = photos[index];
+  const counter = `${index + 1} of ${photos.length}`;
+  image.src = photo;
+  image.alt = `${courtName} photo ${index + 1}`;
+  caption.textContent = `${courtName} · ${counter}`;
+
+  const hasMultiplePhotos = photos.length > 1;
+  previousButton.hidden = !hasMultiplePhotos;
+  nextButton.hidden = !hasMultiplePhotos;
+}
+
+function openPhotoLightbox(courtId, index = 0, trigger = null) {
+  const court = state.courts.find(item => item.id === courtId);
+  const photos = courtPhotoList(court);
+  if (!court || !photos.length) return;
+
+  const lightbox = ensurePhotoLightbox();
+  const nextIndex = Math.max(0, Math.min(Number(index) || 0, photos.length - 1));
+  state.photoLightbox.photos = photos;
+  state.photoLightbox.courtName = court.name || 'Location';
+  state.photoLightbox.index = nextIndex;
+  state.photoLightbox.trigger = trigger;
+  lightbox.hidden = false;
+  document.body.classList.add('has-photo-lightbox');
+  closeCardMenus();
+  closeLocationMenus();
+  updatePhotoLightbox();
+  requestAnimationFrame(() => state.photoLightbox.closeButton?.focus());
+}
+
+function closePhotoLightbox() {
+  const { element, image, trigger } = state.photoLightbox;
+  if (!element || element.hidden) return;
+  element.hidden = true;
+  document.body.classList.remove('has-photo-lightbox');
+  if (image) image.removeAttribute('src');
+  state.photoLightbox.photos = [];
+  state.photoLightbox.courtName = '';
+  state.photoLightbox.index = 0;
+  state.photoLightbox.trigger = null;
+  trigger?.focus?.();
+}
+
+function stepPhotoLightbox(delta) {
+  const { photos } = state.photoLightbox;
+  if (photos.length <= 1) return;
+  state.photoLightbox.index = (state.photoLightbox.index + delta + photos.length) % photos.length;
+  updatePhotoLightbox();
+}
+
+function bindPhotoLightboxButtons(container) {
+  container.querySelectorAll('[data-photo-lightbox-index]').forEach(button => {
+    button.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      openPhotoLightbox(button.dataset.photoCourtId, Number(button.dataset.photoLightboxIndex), button);
+    });
+  });
 }
 
 async function shareLocation(court) {
@@ -1089,13 +1210,16 @@ function renderReviewList(court, limit = 2) {
 }
 
 function renderPhotoStrip(court, limit = 3) {
-  const photos = (court.photos || []).filter(Boolean).slice(0, limit);
+  const allPhotos = courtPhotoList(court);
+  const photos = allPhotos.slice(0, limit);
   if (!photos.length) return '';
 
   return `
     <div class="location-photo-strip">
       ${photos.map((photo, index) => `
-        <img src="${escapeHtml(photo)}" alt="${escapeHtml(`${court.name} photo ${index + 1}`)}" loading="lazy" />
+        <button class="location-photo-button" type="button" data-photo-court-id="${escapeHtml(court.id)}" data-photo-lightbox-index="${index}" aria-label="Open ${escapeHtml(court.name)} photo ${index + 1} of ${allPhotos.length}">
+          <img src="${escapeHtml(photo)}" alt="${escapeHtml(`${court.name} photo ${index + 1}`)}" loading="lazy" />
+        </button>
       `).join('')}
     </div>
   `;
@@ -1183,6 +1307,7 @@ function showMapInfoBox(court, options = {}) {
   });
 
   bindLocationMenu(elements.mapInfoBox);
+  bindPhotoLightboxButtons(elements.mapInfoBox);
 
   elements.mapInfoBox.querySelector('[data-edit-location]')?.addEventListener('click', () => {
     closeLocationMenus();
@@ -1283,6 +1408,8 @@ function createCourtCard(court) {
       actionsHtml: `<button class="card-edit card-action-button card-review-inline" type="button" data-review-location="${court.id}" aria-label="Review ${escapeHtml(court.name)}">Review</button>`
     })}
   `;
+
+  bindPhotoLightboxButtons(card);
 
   card.addEventListener('click', () => focusCourt(court.id, 'list_card'));
   card.querySelector('[data-card-menu-toggle]').addEventListener('click', event => {
@@ -2554,6 +2681,20 @@ window.OpenPlayAuth?.onAuthStateChange?.(() => {
 document.addEventListener('click', event => {
   if (!event.target.closest('.card-menu')) closeCardMenus();
   if (!event.target.closest('[data-location-menu-wrapper]')) closeLocationMenus();
+});
+
+document.addEventListener('keydown', event => {
+  if (state.photoLightbox.element?.hidden !== false) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closePhotoLightbox();
+  } else if (event.key === 'ArrowLeft') {
+    event.preventDefault();
+    stepPhotoLightbox(-1);
+  } else if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    stepPhotoLightbox(1);
+  }
 });
 
 document.querySelectorAll('[data-close-submit]').forEach(button => {
