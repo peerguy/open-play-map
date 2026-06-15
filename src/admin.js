@@ -18,6 +18,19 @@ const SKILL_LEVELS = {
 
 const LOCATION_SKILL_LEVELS = ['beginner', 'intermediate', 'advanced'];
 const OPEN_PLAY_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const REVIEW_STATUS_OPTIONS = [
+  ['published', 'Published'],
+  ['hidden', 'Hidden'],
+  ['removed', 'Removed']
+];
+const REVIEW_CROWD_OPTIONS = ['', 'Light', 'Moderate', 'Packed'];
+const REVIEW_RELIABILITY_OPTIONS = ['', 'Confirmed', 'Sometimes active', 'Uncertain'];
+const REVIEW_NET_OPTIONS = ['', 'Permanent nets', 'Portable nets', 'Bring your own net'];
+const REVIEW_FORMAT_OPTIONS = ['', 'Paddle stack', 'Challenge court', 'Round robin', 'Casual'];
+const REVIEW_BEGINNER_OPTIONS = ['', 'Welcoming', 'Neutral', 'Competitive'];
+const REVIEW_FEES_OPTIONS = ['', 'Free', 'Drop-in fee', 'Membership required'];
+const REVIEW_AMENITIES_OPTIONS = ['', 'Bathroom and water', 'Bathroom only', 'Water only', 'Neither'];
+const REVIEW_LIGHTING_OPTIONS = ['', 'Good for night play', 'Limited', 'None'];
 
 const elements = {
   guard: document.querySelector('#adminGuard'),
@@ -63,6 +76,14 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function selectOptions(options, selected = '') {
+  return options.map(option => {
+    const value = Array.isArray(option) ? option[0] : option;
+    const label = Array.isArray(option) ? option[1] : (option || 'Not sure');
+    return `<option value="${escapeHtml(value)}"${String(selected || '') === String(value) ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+  }).join('');
 }
 
 function getUsers() {
@@ -352,6 +373,146 @@ function setupAdminLocationForm(form, court, { disabled = false } = {}) {
   form.querySelectorAll('input[name="openDay"]').forEach(input => {
     input.addEventListener('change', () => updateAdminDaysSummary(form));
   });
+}
+
+function reviewSortValue(review) {
+  return review.updatedAtTimestamp || review.createdAtTimestamp || review.updatedAt || review.createdAt || review.visited || '';
+}
+
+function getLocationReviews(court) {
+  const reviews = getSavedReviews();
+  const locationIds = new Set([court.id, court.remoteId].filter(Boolean));
+  const found = [];
+  const seen = new Set();
+
+  Object.entries(reviews).forEach(([courtId, reviewList]) => {
+    (reviewList || []).forEach(review => {
+      const isForLocation = locationIds.has(courtId)
+        || locationIds.has(review.courtId)
+        || locationIds.has(review.remoteLocationId);
+      if (!isForLocation || seen.has(review.id)) return;
+      found.push({ ...review, courtId: review.courtId || court.id, courtName: review.courtName || court.name });
+      seen.add(review.id);
+    });
+  });
+
+  return found
+    .map((review, index) => ({ review, index }))
+    .sort((a, b) => String(reviewSortValue(b.review)).localeCompare(String(reviewSortValue(a.review))) || a.index - b.index)
+    .map(item => item.review);
+}
+
+function getReviewPhotos(review) {
+  const reviewIds = new Set([review.id, review.remoteId].filter(Boolean));
+  return (backendCollections.photos || [])
+    .filter(photo => reviewIds.has(photo.reviewId) && photo.status !== 'removed')
+    .sort((a, b) => String(b.createdAtTimestamp || b.createdAt || '').localeCompare(String(a.createdAtTimestamp || a.createdAt || '')));
+}
+
+function renderAdminReviewSkills(review) {
+  const selected = new Set(Array.isArray(review.skillLevels) ? review.skillLevels : []);
+  return LOCATION_SKILL_LEVELS.map(skill => `
+    <label><input name="adminReviewSkillLevel" type="checkbox" value="${skill}"${selected.has(skill) ? ' checked' : ''} /> ${escapeHtml(SKILL_LEVELS[skill])}</label>
+  `).join('');
+}
+
+function renderAdminReviewPhotos(review) {
+  const photos = getReviewPhotos(review);
+  if (!photos.length) return '<p class="empty-profile-list">No review photos.</p>';
+
+  return `
+    <div class="admin-review-photo-list">
+      ${photos.map(photo => `
+        <figure class="admin-review-photo-item">
+          <img src="${escapeHtml(photo.url)}" alt="${escapeHtml(`${review.courtName || 'Review'} photo`)}" loading="lazy" />
+          <figcaption>
+            <span>${escapeHtml(photo.status || 'pending')}</span>
+            <button class="secondary-button admin-delete-button" type="button" data-remove-review-photo="${escapeHtml(photo.id)}" data-review-photo-storage-path="${escapeHtml(photo.storagePath || '')}">Delete picture</button>
+          </figcaption>
+        </figure>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderAdminReviewEditor(review) {
+  return `
+    <article class="admin-review-editor" data-admin-review-id="${escapeHtml(review.id || '')}">
+      <div class="admin-review-editor-header">
+        <div>
+          <strong>${escapeHtml(review.username || 'Player')}</strong>
+          <span>${escapeHtml(review.updatedAt || review.createdAt || review.visited || 'No date')}</span>
+        </div>
+        <span class="moderation-badge moderation-badge-neutral">${escapeHtml(review.status || 'published')}</span>
+      </div>
+      <div class="admin-review-fields">
+        <label>Status
+          <select data-review-field="status">${selectOptions(REVIEW_STATUS_OPTIONS, review.status || 'published')}</select>
+        </label>
+        <label>Visited
+          <input data-review-field="visited" type="date" value="${escapeHtml(review.visited || '')}" />
+        </label>
+        <fieldset class="checkbox-fieldset admin-review-skill-field" data-admin-review-skills>
+          <legend><span>Skill level seen</span></legend>
+          ${renderAdminReviewSkills(review)}
+        </fieldset>
+        <label>Crowd level
+          <select data-review-field="crowdLevel">${selectOptions(REVIEW_CROWD_OPTIONS, review.crowdLevel || '')}</select>
+        </label>
+        <label>Best time to go
+          <input data-review-field="bestTime" value="${escapeHtml(review.bestTime || '')}" />
+        </label>
+        <label>Open play reliability
+          <select data-review-field="openPlayReliability">${selectOptions(REVIEW_RELIABILITY_OPTIONS, review.openPlayReliability || '')}</select>
+        </label>
+        <label>Net setup
+          <select data-review-field="netSetup">${selectOptions(REVIEW_NET_OPTIONS, review.netSetup || '')}</select>
+        </label>
+        <label>Play format
+          <select data-review-field="playFormat">${selectOptions(REVIEW_FORMAT_OPTIONS, review.playFormat || '')}</select>
+        </label>
+        <label>Beginner friendliness
+          <select data-review-field="beginnerFriendliness">${selectOptions(REVIEW_BEGINNER_OPTIONS, review.beginnerFriendliness || '')}</select>
+        </label>
+        <label>Fees or passes
+          <select data-review-field="fees">${selectOptions(REVIEW_FEES_OPTIONS, review.fees || '')}</select>
+        </label>
+        <label>Bathroom / water
+          <select data-review-field="amenities">${selectOptions(REVIEW_AMENITIES_OPTIONS, review.amenities || '')}</select>
+        </label>
+        <label>Lighting
+          <select data-review-field="lighting">${selectOptions(REVIEW_LIGHTING_OPTIONS, review.lighting || '')}</select>
+        </label>
+        <label>Scheduling app
+          <input data-review-field="schedulingApp" value="${escapeHtml(review.schedulingApp || '')}" />
+        </label>
+        <label class="admin-review-body-field">Review / open play information
+          <textarea data-review-field="body" rows="4">${escapeHtml(review.body || '')}</textarea>
+        </label>
+      </div>
+      <div class="admin-review-photo-section">
+        <span class="field-label">Review pictures</span>
+        ${renderAdminReviewPhotos(review)}
+      </div>
+      <div class="admin-review-actions">
+        <button class="secondary-button admin-edit-button admin-approve-button" type="button" data-save-admin-review>Save review</button>
+        <p class="form-hint" data-admin-review-hint></p>
+      </div>
+    </article>
+  `;
+}
+
+function renderLocationReviewEditors(court) {
+  const reviews = getLocationReviews(court);
+  const reviewCountText = `${reviews.length} review${reviews.length === 1 ? '' : 's'} · newest first`;
+  return `
+    <details class="pending-location-details admin-location-reviews">
+      <summary><span>Reviews</span> <small>${reviewCountText}</small></summary>
+      <div class="admin-review-editor-list">
+        ${reviews.length ? reviews.map(renderAdminReviewEditor).join('') : '<p class="empty-profile-list">No reviews yet.</p>'}
+      </div>
+    </details>
+  `;
 }
 
 function renderLocationFields(court, { disabled = false } = {}) {
@@ -1148,6 +1309,7 @@ function locationCard(court) {
         </div>
       </div>
       ${renderLocationFields(court)}
+      ${renderLocationReviewEditors(court)}
       <p class="form-hint" data-admin-hint></p>
     </form>
   `;
@@ -1157,6 +1319,7 @@ function locationCard(court) {
   card.querySelector('[data-delete-location]').addEventListener('click', () => deleteLocation(court));
   const form = card.querySelector('form');
   setupAdminLocationForm(form, court);
+  setupAdminReviewEditors(form, court);
   form.addEventListener('submit', saveLocationEdit);
   return card;
 }
@@ -1255,6 +1418,156 @@ async function rejectPhoto(photoId) {
   const confirmed = window.confirm('Reject this photo? It will not appear publicly on the map.');
   if (!confirmed) return;
   await updatePhotoModerationStatus(photoId, 'rejected');
+}
+
+function findReviewById(reviewId) {
+  return allReviewsWithCourt().find(review => review.id === reviewId || review.remoteId === reviewId) || null;
+}
+
+function selectedAdminReviewSkills(editor) {
+  return [...editor.querySelectorAll('input[name="adminReviewSkillLevel"]:checked')]
+    .map(input => input.value);
+}
+
+function adminReviewField(editor, name) {
+  return editor.querySelector(`[data-review-field="${name}"]`)?.value.trim() || '';
+}
+
+function reviewFromEditor(editor, existing) {
+  return {
+    ...existing,
+    status: adminReviewField(editor, 'status') || 'published',
+    visited: adminReviewField(editor, 'visited'),
+    skillLevels: selectedAdminReviewSkills(editor),
+    crowdLevel: adminReviewField(editor, 'crowdLevel'),
+    bestTime: adminReviewField(editor, 'bestTime'),
+    openPlayReliability: adminReviewField(editor, 'openPlayReliability'),
+    netSetup: adminReviewField(editor, 'netSetup'),
+    playFormat: adminReviewField(editor, 'playFormat'),
+    beginnerFriendliness: adminReviewField(editor, 'beginnerFriendliness'),
+    fees: adminReviewField(editor, 'fees'),
+    amenities: adminReviewField(editor, 'amenities'),
+    lighting: adminReviewField(editor, 'lighting'),
+    schedulingApp: adminReviewField(editor, 'schedulingApp'),
+    body: adminReviewField(editor, 'body'),
+    updatedAt: todayIso()
+  };
+}
+
+function upsertSavedReview(nextReview, previousReview = {}) {
+  const reviews = getSavedReviews();
+  const reviewId = nextReview.id || previousReview.id;
+  const courtKey = previousReview.courtId || nextReview.courtId;
+  let targetKey = courtKey;
+
+  Object.entries(reviews).forEach(([key, reviewList]) => {
+    if ((reviewList || []).some(review => review.id === reviewId || review.remoteId === reviewId)) {
+      targetKey = key;
+    }
+  });
+
+  if (!targetKey) targetKey = nextReview.courtId || previousReview.courtId;
+  if (!targetKey) return;
+
+  reviews[targetKey] = reviews[targetKey] || [];
+  const index = reviews[targetKey].findIndex(review => review.id === reviewId || review.remoteId === reviewId);
+  const normalizedReview = {
+    ...previousReview,
+    ...nextReview,
+    id: reviewId,
+    courtId: previousReview.courtId || nextReview.courtId || targetKey,
+    courtName: previousReview.courtName || nextReview.courtName || ''
+  };
+
+  if (index >= 0) {
+    reviews[targetKey][index] = normalizedReview;
+  } else {
+    reviews[targetKey].unshift(normalizedReview);
+  }
+
+  saveReviews(reviews);
+}
+
+async function saveAdminReviewEdit(event) {
+  const button = event.currentTarget;
+  const editor = button.closest('[data-admin-review-id]');
+  const hint = editor.querySelector('[data-admin-review-hint]');
+  const reviewId = editor.dataset.adminReviewId;
+  const existing = findReviewById(reviewId);
+  if (!existing) return;
+
+  const nextReview = reviewFromEditor(editor, existing);
+  hint.textContent = 'Saving...';
+
+  if (existing.remoteId && window.OpenPlaySupabase?.updateAdminReview) {
+    try {
+      const savedReview = await window.OpenPlaySupabase.updateAdminReview(existing.remoteId, nextReview);
+      upsertSavedReview({
+        ...nextReview,
+        ...savedReview,
+        courtId: existing.courtId,
+        courtName: existing.courtName
+      }, existing);
+      editor.querySelector('.moderation-badge').textContent = savedReview.status || nextReview.status;
+      hint.textContent = 'Saved.';
+      renderModeration();
+      renderUsers();
+    } catch (error) {
+      hint.textContent = error.message || 'Could not save that review.';
+    }
+    return;
+  }
+
+  upsertSavedReview(nextReview, existing);
+  editor.querySelector('.moderation-badge').textContent = nextReview.status;
+  hint.textContent = 'Saved.';
+  renderModeration();
+  renderUsers();
+}
+
+async function removeReviewPhoto(event) {
+  const button = event.currentTarget;
+  const photoId = button.dataset.removeReviewPhoto;
+  const photo = (backendCollections.photos || []).find(item => item.id === photoId || item.remoteId === photoId);
+  const confirmed = window.confirm('Delete this review picture? It will be removed from the review.');
+  if (!confirmed) return;
+
+  button.disabled = true;
+  button.textContent = 'Deleting...';
+
+  try {
+    if (photo?.remoteId && window.OpenPlaySupabase?.removeAdminPhoto) {
+      await window.OpenPlaySupabase.removeAdminPhoto(photo.remoteId, photo.storagePath || button.dataset.reviewPhotoStoragePath || '');
+    }
+    backendCollections.photos = (backendCollections.photos || []).filter(item => item.id !== photoId && item.remoteId !== photoId);
+    const item = button.closest('.admin-review-photo-item');
+    const list = item?.closest('.admin-review-photo-list');
+    item?.remove();
+    if (list && !list.querySelector('.admin-review-photo-item')) {
+      list.outerHTML = '<p class="empty-profile-list">No review photos.</p>';
+    }
+    renderModeration();
+  } catch (error) {
+    button.disabled = false;
+    button.textContent = 'Delete picture';
+    window.alert(error.message || 'Could not delete that review picture.');
+  }
+}
+
+function setupAdminReviewEditors(container) {
+  container.querySelectorAll('[data-save-admin-review]').forEach(button => {
+    button.addEventListener('click', saveAdminReviewEdit);
+  });
+  container.querySelectorAll('[data-remove-review-photo]').forEach(button => {
+    button.addEventListener('click', removeReviewPhoto);
+  });
+  container.querySelectorAll('.admin-review-editor').forEach(editor => {
+    editor.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && !event.target.matches('textarea, button')) {
+        event.preventDefault();
+      }
+    });
+  });
 }
 
 function awardSuggestedEditCredits(edit) {

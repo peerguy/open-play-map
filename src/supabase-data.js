@@ -355,7 +355,9 @@
       schedulingApp: record.scheduling_app || '',
       visited: record.visited_on || '',
       createdAt: dateOnly(record.created_at),
+      createdAtTimestamp: record.created_at || '',
       updatedAt: dateOnly(record.updated_at),
+      updatedAtTimestamp: record.updated_at || '',
       status: record.status || 'published'
     };
   }
@@ -445,7 +447,8 @@
       caption: record.caption || '',
       status: record.status || 'pending',
       locationName: location.name || 'Location',
-      createdAt: dateOnly(record.created_at)
+      createdAt: dateOnly(record.created_at),
+      createdAtTimestamp: record.created_at || ''
     };
   }
 
@@ -923,6 +926,62 @@
     }
   }
 
+  async function updateAdminReview(reviewId, review = {}) {
+    const supabase = client();
+    if (!supabase || !reviewId) throw new Error('Supabase is not configured.');
+
+    const status = ['published', 'hidden', 'removed'].includes(review.status)
+      ? review.status
+      : 'published';
+    const payload = {
+      body: review.body || null,
+      visited_on: review.visited || null,
+      skill_levels: Array.isArray(review.skillLevels) ? review.skillLevels : [],
+      crowd: review.crowdLevel || null,
+      best_time: review.bestTime || null,
+      reliability: normalizeReliability(review.openPlayReliability),
+      net_setup: review.netSetup || null,
+      play_format: review.playFormat || null,
+      beginner_friendly: review.beginnerFriendliness || null,
+      fees: review.fees || null,
+      amenities: review.amenities || null,
+      lighting: review.lighting || null,
+      scheduling_app: review.schedulingApp || null,
+      status,
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('reviews')
+      .update(payload)
+      .eq('id', reviewId)
+      .select('*,locations(slug,name),profiles:user_id(username,skill_level)')
+      .single();
+
+    if (error) throw error;
+    return mapReview(data);
+  }
+
+  async function removeAdminPhoto(photoId, storagePath = '') {
+    const supabase = client();
+    if (!supabase || !photoId) throw new Error('Supabase is not configured.');
+
+    if (storagePath) {
+      const { error: storageError } = await supabase.storage
+        .from(PHOTO_BUCKET)
+        .remove([storagePath]);
+      if (storageError) throw storageError;
+    }
+
+    const { error } = await supabase
+      .from('photos')
+      .delete()
+      .eq('id', photoId);
+
+    if (error) throw error;
+    return { id: photoId, remoteId: photoId, storagePath, status: 'removed' };
+  }
+
   async function updatePhotoStatus(photoId, status) {
     const supabase = client();
     if (!supabase || !photoId) throw new Error('Supabase is not configured.');
@@ -1057,6 +1116,8 @@
     rejectSuggestedEdit,
     updateReportStatus,
     removeReviewForReport,
+    updateAdminReview,
+    removeAdminPhoto,
     updatePhotoStatus,
     fetchCurrentUserContributions,
     fetchPublicLeaderboard,

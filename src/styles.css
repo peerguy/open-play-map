@@ -4542,6 +4542,123 @@ label:has(input:required:valid) > .field-label .is-required {
   background: #f8fafc;
 }
 
+.admin-location-reviews {
+  margin-top: 12px;
+}
+
+.admin-location-reviews summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.admin-location-reviews summary small {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.admin-review-editor-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.admin-review-editor {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.admin-review-editor-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-review-editor-header div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.admin-review-editor-header strong {
+  color: var(--ink);
+  font-size: 0.96rem;
+}
+
+.admin-review-editor-header span:not(.moderation-badge) {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.admin-review-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-review-skill-field,
+.admin-review-body-field,
+.admin-review-photo-section {
+  grid-column: 1 / -1;
+}
+
+.admin-review-photo-section {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-review-photo-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.admin-review-photo-item {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+}
+
+.admin-review-photo-item img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--panel-soft);
+}
+
+.admin-review-photo-item figcaption {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-review-photo-item figcaption span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-transform: capitalize;
+}
+
+.admin-review-actions {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.admin-review-actions .form-hint {
+  margin: 0;
+}
+
 .suggested-edit-details {
   grid-column: 1 / -1;
 }
@@ -4985,7 +5102,8 @@ label:has(input:required:valid) > .field-label .is-required {
   }
 
   .admin-form-grid,
-  .admin-location-fields.location-fields {
+  .admin-location-fields.location-fields,
+  .admin-review-fields {
     grid-template-columns: 1fr;
   }
 
@@ -5016,6 +5134,18 @@ label:has(input:required:valid) > .field-label .is-required {
 
   .suggested-edit-columns,
   .suggested-edit-diff div {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-location-reviews summary,
+  .admin-review-editor-header,
+  .admin-review-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .admin-review-photo-list {
     grid-template-columns: 1fr;
   }
 
