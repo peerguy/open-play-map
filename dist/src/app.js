@@ -85,6 +85,8 @@ const state = {
   activeInfoCourtId: null,
   suggestingEditId: null,
   openCardMenuId: null,
+  reviewMap: null,
+  ownReports: null,
   lastTrackedHeaderSearch: '',
   lastTrackedPlaceSearch: '',
   popupCloseTimer: null,
@@ -284,6 +286,7 @@ async function shareLocation(court) {
 }
 
 function getSavedReviews() {
+  if (state.reviewMap) return state.reviewMap;
   try {
     return JSON.parse(localStorage.getItem(REVIEWS_KEY) || '{}');
   } catch {
@@ -292,10 +295,14 @@ function getSavedReviews() {
 }
 
 function saveReviews(reviews) {
+  if (state.reviewMap) {
+    state.reviewMap = reviews;
+  }
   localStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews));
 }
 
 function getSavedReports() {
+  if (Array.isArray(state.ownReports)) return state.ownReports;
   try {
     return JSON.parse(localStorage.getItem(REPORTS_KEY) || '[]');
   } catch {
@@ -304,6 +311,9 @@ function getSavedReports() {
 }
 
 function saveReports(reports) {
+  if (Array.isArray(state.ownReports)) {
+    state.ownReports = reports;
+  }
   localStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
 }
 
@@ -583,7 +593,11 @@ function plainClone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-function saveSuggestedLocationEdit(currentLocation, suggestedLocation, reason) {
+async function saveSuggestedLocationEdit(currentLocation, suggestedLocation, reason) {
+  if (currentLocation.remoteId && window.OpenPlaySupabase?.submitSuggestedEdit) {
+    return await window.OpenPlaySupabase.submitSuggestedEdit(currentLocation, suggestedLocation, reason, state.currentUser);
+  }
+
   const edits = getSavedSuggestedEdits();
   edits.push({
     id: `suggested-edit-${Date.now()}-${edits.length}`,
@@ -598,6 +612,7 @@ function saveSuggestedLocationEdit(currentLocation, suggestedLocation, reason) {
     status: 'pending'
   });
   saveSuggestedEdits(edits);
+  return null;
 }
 
 function publicUser(user) {
@@ -622,6 +637,27 @@ function canEditLocations() {
 
 async function loadCurrentUser() {
   state.currentUser = await window.OpenPlayAuth?.currentUser?.() || null;
+}
+
+async function loadBackendCollections() {
+  try {
+    state.reviewMap = await window.OpenPlaySupabase?.fetchReviewMap?.() || null;
+  } catch (error) {
+    console.warn('Supabase review load failed. Falling back to local reviews.', error);
+    state.reviewMap = null;
+  }
+
+  if (!state.currentUser) {
+    state.ownReports = [];
+    return;
+  }
+
+  try {
+    state.ownReports = await window.OpenPlaySupabase?.fetchOwnReports?.() || [];
+  } catch (error) {
+    console.warn('Supabase report load failed. Falling back to local reports.', error);
+    state.ownReports = null;
+  }
 }
 
 function setCurrentUser(user) {
@@ -1516,7 +1552,7 @@ function focusSharedLocationFromUrl() {
   focusCourt(sharedLocationId, 'shared_url');
 }
 
-function reportLocation(courtId) {
+async function reportLocation(courtId) {
   if (!requireCurrentUser('Sign in or create a profile before reporting an issue.')) return;
   const court = state.courts.find(item => item.id === courtId);
   if (!court) return;
@@ -1526,6 +1562,30 @@ function reportLocation(courtId) {
   }
   const reason = window.prompt('What is wrong with this location? Examples: wrong hours, closed facility, fake info, duplicate, inaccurate details.');
   if (!reason?.trim()) return;
+
+  if (court.remoteId && window.OpenPlaySupabase?.submitReport) {
+    try {
+      const report = await window.OpenPlaySupabase.submitReport({
+        targetType: 'location',
+        targetId: court.remoteId,
+        reason: reason.trim(),
+        metadata: {
+          target_name: court.name,
+          location_slug: court.id
+        }
+      });
+      state.ownReports = [...(state.ownReports || []), {
+        ...report,
+        targetId: court.id,
+        targetName: court.name
+      }];
+      window.alert('Report submitted. Thanks for helping keep the map accurate.');
+    } catch (error) {
+      window.alert(error.message.includes('duplicate') ? 'You already reported this location.' : error.message);
+    }
+    return;
+  }
+
   saveReport({
     targetType: 'location',
     targetId: court.id,
@@ -1535,7 +1595,7 @@ function reportLocation(courtId) {
   window.alert('Report submitted. Thanks for helping keep the map accurate.');
 }
 
-function reportReview(courtId, reviewId) {
+async function reportReview(courtId, reviewId) {
   if (!requireCurrentUser('Sign in or create a profile before reporting an issue.')) return;
   const court = state.courts.find(item => item.id === courtId);
   const review = getCourtReviews(courtId).find(item => item.id === reviewId);
@@ -1550,6 +1610,32 @@ function reportReview(courtId, reviewId) {
   }
   const reason = window.prompt('What is wrong with this update? Examples: fake review, inaccurate details, spam, wrong hours.');
   if (!reason?.trim()) return;
+
+  if (court.remoteId && review.remoteId && window.OpenPlaySupabase?.submitReport) {
+    try {
+      const report = await window.OpenPlaySupabase.submitReport({
+        targetType: 'review',
+        targetId: review.remoteId,
+        reason: reason.trim(),
+        metadata: {
+          target_name: court.name,
+          location_slug: court.id,
+          review_id: review.remoteId
+        }
+      });
+      state.ownReports = [...(state.ownReports || []), {
+        ...report,
+        targetId: court.id,
+        targetName: court.name,
+        reviewId: review.remoteId
+      }];
+      window.alert('Report submitted. Thanks for helping keep reviews accurate.');
+    } catch (error) {
+      window.alert(error.message.includes('duplicate') ? 'You already reported this update.' : error.message);
+    }
+    return;
+  }
+
   saveReport({
     targetType: 'review',
     targetId: court.id,
@@ -1885,7 +1971,7 @@ function setReviewHint(message, isError = false) {
   elements.reviewHint.classList.toggle('is-error', isError);
 }
 
-function submitReview(event) {
+async function submitReview(event) {
   event.preventDefault();
   if (!requireCurrentUser('Sign in or create a profile before posting a review.')) return;
 
@@ -1915,22 +2001,43 @@ function submitReview(event) {
     return;
   }
 
+  const nextReview = {
+    ...(existingReview || {}),
+    id: existingReview?.id || `review-${Date.now()}`,
+    userId: state.currentUser.id,
+    username: state.currentUser.username,
+    skillLevel: normalizeSkillLevel(state.currentUser.skillLevel, ''),
+    courtName: court.name,
+    body,
+    skill: formatLocationSkillLevel(skillLevels),
+    skillLevels,
+    ...reviewDetails,
+    visited: elements.reviewVisited.value || todayIso(),
+    createdAt: existingReview?.createdAt || todayIso(),
+    updatedAt: existingReview ? todayIso() : ''
+  };
+
+  if (court.remoteId && window.OpenPlaySupabase?.submitReview) {
+    try {
+      const savedReview = await window.OpenPlaySupabase.submitReview(court, nextReview, state.currentUser, addedReviewPhotos);
+      const allReviews = getSavedReviews();
+      const courtReviews = allReviews[court.id] || [];
+      allReviews[court.id] = [
+        savedReview,
+        ...courtReviews.filter(review => review.userId !== state.currentUser.id)
+      ];
+      saveReviews(allReviews);
+      closeReviewDialog();
+      render();
+      focusCourt(court.id, 'review_saved');
+    } catch (error) {
+      console.error(error);
+      setReviewHint(error.message || 'Could not save that review.', true);
+    }
+    return;
+  }
+
   if (body || hasReviewDetails) {
-    const nextReview = {
-      ...(existingReview || {}),
-      id: existingReview?.id || `review-${Date.now()}`,
-      userId: state.currentUser.id,
-      username: state.currentUser.username,
-      skillLevel: normalizeSkillLevel(state.currentUser.skillLevel, ''),
-      courtName: court.name,
-      body,
-      skill: formatLocationSkillLevel(skillLevels),
-      skillLevels,
-      ...reviewDetails,
-      visited: elements.reviewVisited.value || todayIso(),
-      createdAt: existingReview?.createdAt || todayIso(),
-      updatedAt: existingReview ? todayIso() : ''
-    };
     allReviews[court.id] = [
       nextReview,
       ...courtReviews.filter(review => review.userId !== state.currentUser.id)
@@ -2156,7 +2263,7 @@ async function searchHeaderPlaces() {
   }
 }
 
-function addSubmittedLocation(event) {
+async function addSubmittedLocation(event) {
   event.preventDefault();
   if (!requireCurrentUser('Sign in or create a profile before saving a location.')) return;
 
@@ -2241,10 +2348,43 @@ function addSubmittedLocation(event) {
       elements.formHint.textContent = 'Change at least one location field before submitting a suggested edit.';
       return;
     }
-    saveSuggestedLocationEdit(existing, court, reason);
-    elements.locationForm.reset();
-    closeSubmitDialog();
-    window.alert('Thanks. Your suggested edit was sent to admin for approval.');
+    try {
+      await saveSuggestedLocationEdit(existing, court, reason);
+      elements.locationForm.reset();
+      closeSubmitDialog();
+      window.alert('Thanks. Your suggested edit was sent to admin for approval.');
+    } catch (error) {
+      console.error(error);
+      elements.formHint.textContent = error.message || 'Could not submit that suggested edit.';
+    }
+    return;
+  }
+
+  if (existing?.remoteId && canEditLocations() && window.OpenPlaySupabase?.saveAdminLocation) {
+    try {
+      const savedCourt = await window.OpenPlaySupabase.saveAdminLocation(court);
+      state.courts = state.courts.map(item => item.id === court.id ? savedCourt : item);
+      elements.locationForm.reset();
+      closeSubmitDialog();
+      render();
+      focusCourt(savedCourt.id, 'location_saved');
+    } catch (error) {
+      console.error(error);
+      elements.formHint.textContent = error.message || 'Could not save that location.';
+    }
+    return;
+  }
+
+  if (!existing && window.OpenPlaySupabase?.submitLocation) {
+    try {
+      await window.OpenPlaySupabase.submitLocation(court, state.currentUser);
+      elements.locationForm.reset();
+      closeSubmitDialog();
+      window.alert('Thanks. Your location was submitted for admin approval before it appears on the map.');
+    } catch (error) {
+      console.error(error);
+      elements.formHint.textContent = error.message || 'Could not submit that location.';
+    }
     return;
   }
 
@@ -2292,6 +2432,7 @@ async function init() {
 
   const seedCourts = await loadSeedCourts();
   state.courts = mergeSavedLocations(seedCourts, getSavedSubmissions());
+  await loadBackendCollections();
   const sharedLocationId = new URLSearchParams(window.location.search).get('location');
   if (sharedLocationId) {
     render();
@@ -2411,6 +2552,7 @@ window.addEventListener('resize', () => {
 
 window.addEventListener('open-play-session-changed', async () => {
   await loadCurrentUser();
+  await loadBackendCollections();
   renderUserPanel();
   render();
 });

@@ -4,6 +4,7 @@ const CREDITS_KEY = 'open-play-map-credits';
 
 const params = new URLSearchParams(location.search);
 let allCourts = [];
+let backendContributions = null;
 
 const SKILL_LEVELS = {
   beginner: 'Beginner: Under 3.0',
@@ -41,6 +42,7 @@ function escapeHtml(value) {
 }
 
 function getSavedSubmissions() {
+  if (backendContributions?.locations) return backendContributions.locations;
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
   } catch {
@@ -49,6 +51,7 @@ function getSavedSubmissions() {
 }
 
 function getSavedReviews() {
+  if (backendContributions?.reviews) return backendContributions.reviews;
   try {
     return JSON.parse(localStorage.getItem(REVIEWS_KEY) || '{}');
   } catch {
@@ -57,6 +60,7 @@ function getSavedReviews() {
 }
 
 function getSavedCredits() {
+  if (backendContributions?.credits) return backendContributions.credits;
   try {
     return JSON.parse(localStorage.getItem(CREDITS_KEY) || '[]');
   } catch {
@@ -94,6 +98,20 @@ function skillLevelOptions(selected) {
 function setCurrentUser(user) {
   renderCurrentUser(user);
   window.dispatchEvent(new CustomEvent('open-play-session-changed'));
+}
+
+async function loadBackendContributions(user) {
+  if (!user?.id) {
+    backendContributions = null;
+    return;
+  }
+
+  try {
+    backendContributions = await window.OpenPlaySupabase?.fetchCurrentUserContributions?.(user.id) || null;
+  } catch (error) {
+    console.warn('Supabase contribution load failed. Falling back to local account data.', error);
+    backendContributions = null;
+  }
 }
 
 function avatarMarkup(user) {
@@ -375,6 +393,9 @@ async function login(event) {
 async function init() {
   const notice = params.get('notice');
   elements.notice.textContent = notice || '';
+  const currentUser = await window.OpenPlayAuth?.currentUser?.() || null;
+  await loadBackendContributions(currentUser);
+
   try {
     let seedCourts = await window.OpenPlaySupabase?.fetchApprovedLocations?.();
     if (!seedCourts) {
@@ -386,7 +407,7 @@ async function init() {
     allCourts = getSavedSubmissions();
   }
 
-  renderCurrentUser(await window.OpenPlayAuth?.currentUser?.() || null);
+  renderCurrentUser(currentUser);
 }
 
 elements.authTabs.forEach(tab => {
@@ -401,7 +422,9 @@ elements.signupForm.addEventListener('submit', createAccount);
 elements.loginForm.addEventListener('submit', login);
 window.addEventListener('open-play-session-changed', async () => {
   try {
-    renderCurrentUser(await window.OpenPlayAuth?.currentUser?.() || null);
+    const user = await window.OpenPlayAuth?.currentUser?.() || null;
+    await loadBackendContributions(user);
+    renderCurrentUser(user);
   } catch (error) {
     console.error(error);
     renderCurrentUser(null);

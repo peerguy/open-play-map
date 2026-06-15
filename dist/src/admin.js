@@ -40,6 +40,12 @@ let allCourts = [];
 let activeModerationView = 'pending';
 let authUsers = null;
 let currentAdminUser = null;
+let backendCollections = {
+  reviews: null,
+  reports: null,
+  suggestedEdits: null,
+  credits: null
+};
 
 function normalize(value) {
   return String(value ?? '').toLowerCase();
@@ -103,6 +109,7 @@ function saveDeletedLocationIds(ids) {
 }
 
 function getSavedReviews() {
+  if (backendCollections.reviews) return backendCollections.reviews;
   try {
     return JSON.parse(localStorage.getItem(REVIEWS_KEY) || '{}');
   } catch {
@@ -111,10 +118,14 @@ function getSavedReviews() {
 }
 
 function saveReviews(reviews) {
+  if (backendCollections.reviews) {
+    backendCollections.reviews = reviews;
+  }
   localStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews));
 }
 
 function getSavedCredits() {
+  if (backendCollections.credits) return backendCollections.credits;
   try {
     return JSON.parse(localStorage.getItem(CREDITS_KEY) || '[]');
   } catch {
@@ -123,10 +134,14 @@ function getSavedCredits() {
 }
 
 function saveCredits(credits) {
+  if (backendCollections.credits) {
+    backendCollections.credits = credits;
+  }
   localStorage.setItem(CREDITS_KEY, JSON.stringify(credits));
 }
 
 function getSavedReports() {
+  if (backendCollections.reports) return backendCollections.reports;
   try {
     return JSON.parse(localStorage.getItem(REPORTS_KEY) || '[]');
   } catch {
@@ -135,10 +150,14 @@ function getSavedReports() {
 }
 
 function saveReports(reports) {
+  if (backendCollections.reports) {
+    backendCollections.reports = reports;
+  }
   localStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
 }
 
 function getSavedSuggestedEdits() {
+  if (backendCollections.suggestedEdits) return backendCollections.suggestedEdits;
   try {
     return JSON.parse(localStorage.getItem(EDITS_KEY) || '[]');
   } catch {
@@ -147,6 +166,9 @@ function getSavedSuggestedEdits() {
 }
 
 function saveSuggestedEdits(edits) {
+  if (backendCollections.suggestedEdits) {
+    backendCollections.suggestedEdits = edits;
+  }
   localStorage.setItem(EDITS_KEY, JSON.stringify(edits));
 }
 
@@ -744,7 +766,7 @@ function recentEdits() {
 function highVolumeUsers() {
   const users = getUsers();
   const reviewsToday = allReviewsWithCourt().filter(review => review.createdAt === todayIso() || review.updatedAt === todayIso());
-  const locationsToday = getSavedSubmissions().filter(court => court.createdAt === todayIso());
+  const locationsToday = allCourts.filter(court => court.createdAt === todayIso());
   return users.map(user => {
     const locationCount = locationsToday.filter(court => court.submittedBy === user.id).length;
     const reviewCount = reviewsToday.filter(review => review.userId === user.id).length;
@@ -1181,7 +1203,7 @@ function awardSuggestedEditCredits(edit) {
     id: `credit-${Date.now()}-${credits.length}`,
     userId: edit.userId,
     username: user?.username || edit.username || 'Player',
-    action: 'suggest-edit',
+    action: 'suggested-edit',
     targetType: 'suggested-edit',
     targetId: edit.id,
     locationId: edit.locationId,
@@ -1194,7 +1216,7 @@ function awardSuggestedEditCredits(edit) {
   saveCredits(credits);
 }
 
-function approveSuggestedEdit(editId) {
+async function approveSuggestedEdit(editId) {
   const edits = getSavedSuggestedEdits();
   const edit = edits.find(item => item.id === editId && (item.status || 'pending') === 'pending');
   if (!edit) return;
@@ -1215,6 +1237,26 @@ function approveSuggestedEdit(editId) {
     lastSuggestedEditByUsername: edit.username || 'Player'
   };
 
+  if (edit.remoteId && window.OpenPlaySupabase?.approveSuggestedEdit) {
+    try {
+      const savedCourt = await window.OpenPlaySupabase.approveSuggestedEdit(edit, nextCourt, currentAdminUser?.id);
+      allCourts = allCourts.some(court => court.id === savedCourt.id)
+        ? allCourts.map(court => court.id === savedCourt.id ? savedCourt : court)
+        : [...allCourts, savedCourt];
+      saveSuggestedEdits(edits.map(item => (
+        item.id === editId
+          ? { ...item, status: 'approved', approvedAt: todayIso(), approvedLocation: savedCourt }
+          : item
+      )));
+      renderModeration();
+      renderLocations();
+      renderUsers();
+    } catch (error) {
+      window.alert(error.message || 'Could not approve that suggested edit.');
+    }
+    return;
+  }
+
   upsertSavedLocation(nextCourt);
   allCourts = allCourts.some(court => court.id === nextCourt.id)
     ? allCourts.map(court => court.id === nextCourt.id ? nextCourt : court)
@@ -1231,27 +1273,76 @@ function approveSuggestedEdit(editId) {
   renderUsers();
 }
 
-function rejectSuggestedEdit(editId) {
+async function rejectSuggestedEdit(editId) {
   const edits = getSavedSuggestedEdits();
   const edit = edits.find(item => item.id === editId && (item.status || 'pending') === 'pending');
   const confirmed = window.confirm(`Reject suggested edit for ${edit?.locationName || 'this location'}?`);
   if (!confirmed) return;
+
+  if (edit?.remoteId && window.OpenPlaySupabase?.rejectSuggestedEdit) {
+    try {
+      await window.OpenPlaySupabase.rejectSuggestedEdit(edit.remoteId, currentAdminUser?.id);
+      saveSuggestedEdits(edits.map(item => (
+        item.id === editId ? { ...item, status: 'rejected', rejectedAt: todayIso() } : item
+      )));
+      renderModeration();
+    } catch (error) {
+      window.alert(error.message || 'Could not reject that suggested edit.');
+    }
+    return;
+  }
+
   saveSuggestedEdits(edits.map(item => (
     item.id === editId ? { ...item, status: 'rejected', rejectedAt: todayIso() } : item
   )));
   renderModeration();
 }
 
-function dismissReport(reportId) {
+async function dismissReport(reportId) {
+  const report = getSavedReports().find(item => item.id === reportId);
+  if (report?.remoteId && window.OpenPlaySupabase?.updateReportStatus) {
+    try {
+      await window.OpenPlaySupabase.updateReportStatus(report.remoteId, 'dismissed', currentAdminUser?.id);
+      saveReports(getSavedReports().map(item => (
+        item.id === reportId ? { ...item, status: 'dismissed', resolvedAt: todayIso() } : item
+      )));
+      renderModeration();
+    } catch (error) {
+      window.alert(error.message || 'Could not dismiss that report.');
+    }
+    return;
+  }
+
   saveReports(getSavedReports().map(report => (
     report.id === reportId ? { ...report, status: 'dismissed', resolvedAt: todayIso() } : report
   )));
   renderModeration();
 }
 
-function deleteReportedReview(courtId, reviewId, reportId) {
+async function deleteReportedReview(courtId, reviewId, reportId) {
   const confirmed = window.confirm('Delete this reported review?');
   if (!confirmed) return;
+
+  const report = getSavedReports().find(item => item.id === reportId);
+  if (report?.remoteId && reviewId && window.OpenPlaySupabase?.removeReviewForReport) {
+    try {
+      await window.OpenPlaySupabase.removeReviewForReport(reviewId, report.remoteId, currentAdminUser?.id);
+      const reviews = getSavedReviews();
+      Object.keys(reviews).forEach(key => {
+        reviews[key] = reviews[key].filter(review => review.id !== reviewId);
+      });
+      saveReviews(reviews);
+      saveReports(getSavedReports().map(item => (
+        item.id === reportId ? { ...item, status: 'resolved', resolvedAt: todayIso() } : item
+      )));
+      renderModeration();
+      renderUsers();
+    } catch (error) {
+      window.alert(error.message || 'Could not remove that review.');
+    }
+    return;
+  }
+
   const reviews = getSavedReviews();
   reviews[courtId] = (reviews[courtId] || []).filter(review => review.id !== reviewId);
   saveReviews(reviews);
@@ -1400,6 +1491,27 @@ async function loadUsers() {
   }
 }
 
+async function loadBackendCollections() {
+  try {
+    const collections = await window.OpenPlaySupabase?.fetchAdminCollections?.();
+    if (!collections) return;
+    backendCollections = {
+      reviews: collections.reviews || {},
+      reports: collections.reports || [],
+      suggestedEdits: collections.suggestedEdits || [],
+      credits: collections.credits || []
+    };
+  } catch (error) {
+    console.warn('Supabase moderation data load failed. Falling back to local moderation data.', error);
+    backendCollections = {
+      reviews: null,
+      reports: null,
+      suggestedEdits: null,
+      credits: null
+    };
+  }
+}
+
 async function init() {
   currentAdminUser = await currentUser();
   if (!isAdmin(currentAdminUser)) {
@@ -1413,6 +1525,7 @@ async function init() {
 
   await loadCourts();
   await loadUsers();
+  await loadBackendCollections();
   renderModeration();
   renderUsers();
   renderLocations();

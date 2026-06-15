@@ -12,6 +12,8 @@ const elements = {
 };
 
 let currentUserCache = null;
+let backendLeaderboardRows = null;
+let backendMonthlyWinners = null;
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -99,6 +101,8 @@ async function refreshHeaderUser() {
 }
 
 function leaderboardRows() {
+  if (backendLeaderboardRows) return backendLeaderboardRows;
+
   const users = getSavedUsers();
   const usersById = new Map(users.map(user => [user.id, user]));
   const rowsById = new Map(users.map(user => [user.id, {
@@ -158,7 +162,7 @@ function renderLeaderboard() {
 }
 
 function renderMonthlyWinners() {
-  const winners = getMonthlyWinners()
+  const winners = (backendMonthlyWinners || getMonthlyWinners())
     .sort((a, b) => String(b.month || b.drawnAt || '').localeCompare(String(a.month || a.drawnAt || '')));
 
   if (!winners.length) {
@@ -204,7 +208,32 @@ elements.tabs.forEach(tab => {
 window.addEventListener('open-play-session-changed', refreshHeaderUser);
 window.OpenPlayAuth?.onAuthStateChange?.(refreshHeaderUser);
 
-renderHeaderUser();
-refreshHeaderUser();
-renderLeaderboard();
-renderMonthlyWinners();
+async function loadBackendLeaderboard() {
+  try {
+    backendLeaderboardRows = await window.OpenPlaySupabase?.fetchPublicLeaderboard?.() || null;
+  } catch (error) {
+    console.warn('Supabase leaderboard load failed. Falling back to local leaderboard.', error);
+    backendLeaderboardRows = null;
+  }
+
+  try {
+    backendMonthlyWinners = await window.OpenPlaySupabase?.fetchPublicMonthlyDrawings?.() || null;
+  } catch (error) {
+    console.warn('Supabase monthly drawing load failed. Falling back to local winners.', error);
+    backendMonthlyWinners = null;
+  }
+}
+
+async function init() {
+  renderHeaderUser();
+  await refreshHeaderUser();
+  await loadBackendLeaderboard();
+  renderLeaderboard();
+  renderMonthlyWinners();
+}
+
+init().catch(error => {
+  console.error(error);
+  renderLeaderboard();
+  renderMonthlyWinners();
+});

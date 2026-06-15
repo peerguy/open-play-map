@@ -1,8 +1,38 @@
 (function () {
   const config = window.OpenPlaySupabaseConfig || {};
+  const UI_RELIABILITY = {
+    confirmed: 'Confirmed',
+    sometimes: 'Sometimes active',
+    uncertain: 'Uncertain'
+  };
+  const DB_RELIABILITY = {
+    Confirmed: 'confirmed',
+    'Sometimes active': 'sometimes',
+    Uncertain: 'uncertain',
+    confirmed: 'confirmed',
+    sometimes: 'sometimes',
+    uncertain: 'uncertain'
+  };
 
   function isConfigured() {
     return Boolean(config.url && config.anonKey);
+  }
+
+  function client() {
+    return window.OpenPlaySupabaseClient?.getClient?.() || null;
+  }
+
+  function dateOnly(value) {
+    return value ? String(value).slice(0, 10) : '';
+  }
+
+  function normalizeReliability(value) {
+    if (!value) return null;
+    return DB_RELIABILITY[value] || DB_RELIABILITY[String(value).trim()] || null;
+  }
+
+  function displayReliability(value) {
+    return UI_RELIABILITY[value] || value || '';
   }
 
   function formatTime(value) {
@@ -40,6 +70,14 @@
     const text = String(value || '').trim();
     if (!text || /tbd/i.test(text)) return [];
     return text.split(',').map(day => day.trim()).filter(Boolean);
+  }
+
+  function slugFromCourt(court = {}) {
+    return court.id || String(court.name || 'location')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+      .slice(0, 80);
   }
 
   async function fetchLocationById(supabase, locationId) {
@@ -98,9 +136,121 @@
       sourceUrl: record.source_url || '',
       lastVerified: record.last_verified || '',
       status: record.status || 'approved',
-      createdAt: record.created_at?.slice(0, 10) || '',
-      updatedAt: record.updated_at?.slice(0, 10) || '',
-      approvedAt: record.approved_at?.slice(0, 10) || ''
+      userSubmitted: Boolean(record.submitted_by),
+      submittedBy: record.submitted_by || '',
+      submittedByUsername: record.submitted_by ? 'Community member' : '',
+      createdAt: dateOnly(record.created_at),
+      updatedAt: dateOnly(record.updated_at),
+      approvedAt: dateOnly(record.approved_at)
+    };
+  }
+
+  function reviewsToMap(reviews) {
+    return (reviews || []).reduce((map, review) => {
+      if (!map[review.courtId]) map[review.courtId] = [];
+      map[review.courtId].push(review);
+      return map;
+    }, {});
+  }
+
+  function mapReview(record, lookups = {}) {
+    const location = record.locations || lookups.locations?.get?.(record.location_id) || {};
+    const profile = record.profiles || lookups.profiles?.get?.(record.user_id) || {};
+    return {
+      id: record.id,
+      remoteId: record.id,
+      courtId: record.location_slug || location.slug || record.location_id,
+      remoteLocationId: record.location_id,
+      courtName: record.location_name || location.name || '',
+      userId: record.user_id,
+      username: record.username || profile.username || 'Player',
+      skillLevel: record.profile_skill_level || profile.skill_level || '',
+      body: record.body || '',
+      skill: Array.isArray(record.skill_levels) && record.skill_levels.length ? record.skill_levels.join(', ') : 'unknown',
+      skillLevels: Array.isArray(record.skill_levels) ? record.skill_levels.filter(Boolean) : [],
+      crowdLevel: record.crowd || '',
+      bestTime: record.best_time || '',
+      openPlayReliability: displayReliability(record.reliability),
+      netSetup: record.net_setup || '',
+      playFormat: record.play_format || '',
+      beginnerFriendliness: record.beginner_friendly || '',
+      fees: record.fees || '',
+      amenities: record.amenities || '',
+      lighting: record.lighting || '',
+      schedulingApp: record.scheduling_app || '',
+      visited: record.visited_on || '',
+      createdAt: dateOnly(record.created_at),
+      updatedAt: dateOnly(record.updated_at),
+      status: record.status || 'published'
+    };
+  }
+
+  function mapCredit(record, profiles = new Map()) {
+    const profile = record.profiles || profiles.get(record.user_id) || {};
+    return {
+      id: record.id,
+      userId: record.user_id,
+      username: profile.username || 'Player',
+      action: record.action,
+      targetType: record.target_type || '',
+      targetId: record.target_id || '',
+      activeCreditsDelta: Number(record.active_delta || 0),
+      lifetimeCreditsDelta: Number(record.lifetime_delta || 0),
+      createdAt: dateOnly(record.created_at),
+      month: dateOnly(record.created_at).slice(0, 7),
+      status: record.status || 'approved'
+    };
+  }
+
+  function mapReport(record, lookups = {}) {
+    const metadata = record.metadata || {};
+    const reporter = record.profiles || lookups.profiles?.get?.(record.reporter_id) || {};
+    const reportedReview = lookups.reviewsById?.get?.(record.target_id);
+    const location = record.target_type === 'review'
+      ? lookups.locations?.get?.(reportedReview?.remoteLocationId || reportedReview?.location_id)
+      : lookups.locations?.get?.(record.target_id);
+
+    return {
+      id: record.id,
+      remoteId: record.id,
+      targetType: record.target_type,
+      targetId: record.target_type === 'review'
+        ? (location?.slug || metadata.location_slug || record.target_id)
+        : (location?.slug || metadata.location_slug || record.target_id),
+      remoteTargetId: record.target_id,
+      targetName: metadata.target_name || location?.name || reportedReview?.courtName || '',
+      reviewId: record.target_type === 'review' ? record.target_id : '',
+      reason: record.reason || '',
+      userId: record.reporter_id || '',
+      username: reporter.username || metadata.username || 'Unknown',
+      createdAt: dateOnly(record.created_at),
+      status: record.status || 'open'
+    };
+  }
+
+  function mapSuggestedEdit(record, lookups = {}) {
+    const location = record.locations || lookups.locations?.get?.(record.location_id) || {};
+    const submitter = record.profiles || lookups.profiles?.get?.(record.submitted_by) || {};
+    const suggestedLocation = record.suggested_location || {};
+    const locationId = location.slug || suggestedLocation.id || record.location_id;
+    return {
+      id: record.id,
+      remoteId: record.id,
+      locationId,
+      remoteLocationId: record.location_id,
+      locationName: location.name || suggestedLocation.name || 'Location',
+      suggestedLocation: {
+        ...suggestedLocation,
+        id: locationId,
+        remoteId: record.location_id
+      },
+      reason: record.note || '',
+      userId: record.submitted_by,
+      username: submitter.username || 'Player',
+      createdAt: dateOnly(record.created_at),
+      status: record.status || 'pending',
+      approvedAt: record.status === 'approved' ? dateOnly(record.reviewed_at) : '',
+      rejectedAt: record.status === 'rejected' ? dateOnly(record.reviewed_at) : ''
     };
   }
 
@@ -129,7 +279,7 @@
   }
 
   async function fetchAdminLocations() {
-    const supabase = window.OpenPlaySupabaseClient?.getClient?.();
+    const supabase = client();
     if (!supabase) return null;
 
     const { data, error } = await supabase
@@ -143,7 +293,7 @@
   }
 
   async function updateLocationStatus(locationId, status, actorId = null) {
-    const supabase = window.OpenPlaySupabaseClient?.getClient?.();
+    const supabase = client();
     if (!supabase || !locationId) throw new Error('Supabase is not configured.');
 
     const payload = {
@@ -168,7 +318,7 @@
   }
 
   async function saveAdminLocation(court) {
-    const supabase = window.OpenPlaySupabaseClient?.getClient?.();
+    const supabase = client();
     if (!supabase || !court?.remoteId) throw new Error('Supabase is not configured.');
 
     const payload = {
@@ -226,11 +376,393 @@
     return fetchLocationById(supabase, court.remoteId);
   }
 
+  function locationPayload(court, user, status = 'pending') {
+    return {
+      slug: slugFromCourt(court),
+      name: court.name,
+      address: court.address || null,
+      city: court.city || null,
+      state: court.state || null,
+      country: court.country || 'USA',
+      latitude: court.latitude,
+      longitude: court.longitude,
+      access: court.access || 'unknown',
+      is_free: typeof court.isFree === 'boolean' ? court.isFree : court.access === 'public',
+      court_count: court.courts?.count ?? null,
+      surface: court.courts?.surface || null,
+      indoor_outdoor: court.courts?.indoorOutdoor || 'unknown',
+      skill_levels: Array.isArray(court.skillLevels) ? court.skillLevels : [],
+      notes: court.notes || null,
+      source_url: court.sourceUrl || null,
+      last_verified: court.lastVerified || null,
+      status,
+      submitted_by: user?.id || null,
+      updated_at: new Date().toISOString()
+    };
+  }
+
+  function slotPayloads(court, locationId) {
+    return (court.openPlay || [])
+      .map(slot => ({
+        location_id: locationId,
+        days: parseDays(slot.days),
+        start_time: parseTime(slot.startTime || ''),
+        end_time: parseTime(slot.endTime || ''),
+        notes: slot.notes || null
+      }))
+      .filter(slot => slot.days.length || slot.start_time || slot.end_time || slot.notes);
+  }
+
+  async function submitLocation(court, user) {
+    const supabase = client();
+    if (!supabase || !user?.id) throw new Error('Supabase is not configured.');
+
+    let payload = locationPayload(court, user, 'pending');
+    let result = await supabase
+      .from('locations')
+      .insert(payload)
+      .select('*,open_play_slots(*)')
+      .single();
+
+    if (result.error && String(result.error.message || '').toLowerCase().includes('duplicate')) {
+      payload = {
+        ...payload,
+        slug: `${payload.slug}-${Date.now().toString(36)}`
+      };
+      result = await supabase
+        .from('locations')
+        .insert(payload)
+        .select('*,open_play_slots(*)')
+        .single();
+    }
+
+    if (result.error) throw result.error;
+
+    const slots = slotPayloads(court, result.data.id);
+    if (slots.length) {
+      const { error: slotError } = await supabase.from('open_play_slots').insert(slots);
+      if (slotError) throw slotError;
+    }
+
+    return fetchLocationById(supabase, result.data.id);
+  }
+
+  function reviewPayload(court, review, user) {
+    return {
+      location_id: court.remoteId,
+      user_id: user.id,
+      body: review.body || null,
+      visited_on: review.visited || null,
+      skill_levels: Array.isArray(review.skillLevels) ? review.skillLevels : [],
+      crowd: review.crowdLevel || null,
+      best_time: review.bestTime || null,
+      reliability: normalizeReliability(review.openPlayReliability),
+      net_setup: review.netSetup || null,
+      play_format: review.playFormat || null,
+      beginner_friendly: review.beginnerFriendliness || null,
+      fees: review.fees || null,
+      amenities: review.amenities || null,
+      lighting: review.lighting || null,
+      scheduling_app: review.schedulingApp || null,
+      status: 'published',
+      updated_at: new Date().toISOString()
+    };
+  }
+
+  async function submitReview(court, review, user, photoUrls = []) {
+    const supabase = client();
+    if (!supabase || !court?.remoteId || !user?.id) throw new Error('Supabase is not configured.');
+
+    const { data, error } = await supabase
+      .from('reviews')
+      .upsert(reviewPayload(court, review, user), { onConflict: 'location_id,user_id' })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+
+    const photos = photoUrls
+      .filter(Boolean)
+      .map(photo => ({
+        location_id: court.remoteId,
+        review_id: data.id,
+        uploaded_by: user.id,
+        storage_path: photo,
+        status: 'pending'
+      }));
+
+    if (photos.length) {
+      const { error: photoError } = await supabase.from('photos').insert(photos);
+      if (photoError) throw photoError;
+    }
+
+    return mapReview(data, {
+      locations: new Map([[court.remoteId, { slug: court.id, name: court.name }]]),
+      profiles: new Map([[user.id, { username: user.username, skill_level: user.skillLevel }]])
+    });
+  }
+
+  async function fetchReviewMap() {
+    const supabase = client();
+    if (!supabase) return null;
+
+    const { data, error } = await supabase.rpc('location_reviews');
+    if (error) throw error;
+    return reviewsToMap((data || []).map(mapReview));
+  }
+
+  async function fetchOwnReports() {
+    const supabase = client();
+    if (!supabase) return [];
+
+    const { data, error } = await supabase
+      .from('reports')
+      .select('*')
+      .eq('status', 'open')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return (data || []).map(mapReport);
+  }
+
+  async function submitReport({ targetType, targetId, reason, metadata = {} }) {
+    const supabase = client();
+    if (!supabase || !targetType || !targetId) throw new Error('Supabase is not configured.');
+
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    const userId = sessionData.session?.user?.id;
+    if (!userId) throw new Error('You must be signed in.');
+
+    const { data, error } = await supabase
+      .from('reports')
+      .insert({
+        reporter_id: userId,
+        target_type: targetType,
+        target_id: targetId,
+        reason,
+        metadata
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return mapReport(data);
+  }
+
+  async function submitSuggestedEdit(currentLocation, suggestedLocation, reason, user) {
+    const supabase = client();
+    if (!supabase || !currentLocation?.remoteId || !user?.id) throw new Error('Supabase is not configured.');
+
+    const { data, error } = await supabase
+      .from('suggested_edits')
+      .insert({
+        location_id: currentLocation.remoteId,
+        submitted_by: user.id,
+        note: reason,
+        suggested_location: {
+          ...suggestedLocation,
+          id: currentLocation.id,
+          remoteId: currentLocation.remoteId
+        },
+        status: 'pending'
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return mapSuggestedEdit(data, {
+      locations: new Map([[currentLocation.remoteId, { slug: currentLocation.id, name: currentLocation.name }]]),
+      profiles: new Map([[user.id, { username: user.username }]])
+    });
+  }
+
+  async function updateSuggestedEditStatus(editId, status, actorId = null) {
+    const supabase = client();
+    if (!supabase || !editId) throw new Error('Supabase is not configured.');
+
+    const { data, error } = await supabase
+      .from('suggested_edits')
+      .update({
+        status,
+        reviewed_by: actorId,
+        reviewed_at: new Date().toISOString()
+      })
+      .eq('id', editId)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return mapSuggestedEdit(data);
+  }
+
+  async function approveSuggestedEdit(edit, nextCourt, actorId = null) {
+    if (!edit?.remoteId) throw new Error('A database-backed suggested edit is required.');
+    const savedCourt = await saveAdminLocation(nextCourt);
+    await updateSuggestedEditStatus(edit.remoteId, 'approved', actorId);
+    return savedCourt;
+  }
+
+  async function rejectSuggestedEdit(editId, actorId = null) {
+    return updateSuggestedEditStatus(editId, 'rejected', actorId);
+  }
+
+  async function updateReportStatus(reportId, status, actorId = null) {
+    const supabase = client();
+    if (!supabase || !reportId) throw new Error('Supabase is not configured.');
+
+    const { data, error } = await supabase
+      .from('reports')
+      .update({
+        status,
+        resolved_by: actorId,
+        resolved_at: new Date().toISOString()
+      })
+      .eq('id', reportId)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return mapReport(data);
+  }
+
+  async function removeReviewForReport(reviewId, reportId, actorId = null) {
+    const supabase = client();
+    if (!supabase || !reviewId) throw new Error('Supabase is not configured.');
+
+    const { error: reviewError } = await supabase
+      .from('reviews')
+      .update({
+        status: 'removed',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', reviewId);
+
+    if (reviewError) throw reviewError;
+    if (reportId) {
+      await updateReportStatus(reportId, 'resolved', actorId);
+    }
+  }
+
+  async function fetchCurrentUserContributions(userId) {
+    const supabase = client();
+    if (!supabase || !userId) return null;
+
+    const [locationsResult, reviewsResult, creditsResult] = await Promise.all([
+      supabase
+        .from('locations')
+        .select('*,open_play_slots(*)')
+        .eq('submitted_by', userId)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('reviews')
+        .select('*,locations(slug,name)')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false }),
+      supabase
+        .from('credits')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+    ]);
+
+    if (locationsResult.error) throw locationsResult.error;
+    if (reviewsResult.error) throw reviewsResult.error;
+    if (creditsResult.error) throw creditsResult.error;
+
+    const locations = (locationsResult.data || []).map(mapLocation);
+    const locationLookup = new Map(locations.map(location => [location.remoteId, { slug: location.id, name: location.name }]));
+
+    return {
+      locations,
+      reviews: reviewsToMap((reviewsResult.data || []).map(review => mapReview(review, { locations: locationLookup }))),
+      credits: (creditsResult.data || []).map(mapCredit)
+    };
+  }
+
+  async function fetchPublicLeaderboard() {
+    const supabase = client();
+    if (!supabase) return null;
+
+    const { data, error } = await supabase.rpc('public_leaderboard');
+    if (error) throw error;
+    return (data || []).map(row => ({
+      user: {
+        id: row.user_id,
+        username: row.username || 'Player',
+        email: ''
+      },
+      active: Number(row.active_credits || 0),
+      lifetime: Number(row.lifetime_credits || 0)
+    }));
+  }
+
+  async function fetchPublicMonthlyDrawings() {
+    const supabase = client();
+    if (!supabase) return null;
+
+    const { data, error } = await supabase.rpc('public_monthly_drawings');
+    if (error) throw error;
+    return (data || []).map(row => ({
+      id: row.id,
+      username: row.username || 'Monthly winner',
+      month: row.drawing_month,
+      prize: row.prize,
+      activeCreditsAtDraw: row.active_credits_at_draw,
+      drawnAt: dateOnly(row.drawn_at)
+    }));
+  }
+
+  async function fetchAdminCollections() {
+    const supabase = client();
+    if (!supabase) return null;
+
+    const [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult] = await Promise.all([
+      supabase.from('profiles').select('id,email,username,role,skill_level,bio,avatar_url,created_at'),
+      supabase.from('locations').select('id,slug,name'),
+      supabase.from('reviews').select('*').order('created_at', { ascending: false }),
+      supabase.from('reports').select('*').order('created_at', { ascending: false }),
+      supabase.from('suggested_edits').select('*').order('created_at', { ascending: false }),
+      supabase.from('credits').select('*').order('created_at', { ascending: false })
+    ]);
+
+    [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult]
+      .forEach(result => {
+        if (result.error) throw result.error;
+      });
+
+    const profiles = new Map((profilesResult.data || []).map(profile => [profile.id, profile]));
+    const locations = new Map((locationsResult.data || []).map(location => [location.id, location]));
+    const reviews = (reviewsResult.data || []).map(review => mapReview(review, { profiles, locations }));
+    const reviewsById = new Map(reviews.map(review => [review.id, review]));
+
+    return {
+      reviews: reviewsToMap(reviews),
+      reports: (reportsResult.data || []).map(report => mapReport(report, { profiles, locations, reviewsById })),
+      suggestedEdits: (editsResult.data || []).map(edit => mapSuggestedEdit(edit, { profiles, locations })),
+      credits: (creditsResult.data || []).map(credit => mapCredit(credit, profiles))
+    };
+  }
+
   window.OpenPlaySupabase = {
     isConfigured,
     fetchApprovedLocations,
     fetchAdminLocations,
     updateLocationStatus,
-    saveAdminLocation
+    saveAdminLocation,
+    submitLocation,
+    submitReview,
+    fetchReviewMap,
+    fetchOwnReports,
+    submitReport,
+    submitSuggestedEdit,
+    approveSuggestedEdit,
+    rejectSuggestedEdit,
+    updateReportStatus,
+    removeReviewForReport,
+    fetchCurrentUserContributions,
+    fetchPublicLeaderboard,
+    fetchPublicMonthlyDrawings,
+    fetchAdminCollections
   };
 })();
