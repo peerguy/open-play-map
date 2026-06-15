@@ -8,7 +8,7 @@
     <meta name="description" content="Create or manage an Open Play Map profile to contribute pickleball location updates." />
     <meta name="theme-color" content="#266c3f" />
     <link rel="icon" type="image/svg+xml" href="assets/icons/open-play-favicon.svg" />
-    <link rel="stylesheet" href="src/styles.css?v=photo-upload-20260615" />
+    <link rel="stylesheet" href="src/styles.css?v=mobile-photo-20260615" />
   </head>
   <body class="account-page">
     <header class="site-header account-header">
@@ -60,29 +60,29 @@
             <h3>Create profile</h3>
             <div class="form-section">
               <label><span class="field-label">Email <span class="field-help is-required">Required</span></span>
-                <input id="signupEmail" type="email" required autocomplete="email" placeholder="you@example.com" />
+                <input id="signupEmail" name="email" type="email" required autocomplete="email" placeholder="you@example.com" />
               </label>
               <label><span class="field-label">Password <span class="field-help is-required">Required</span></span>
                 <span class="password-field">
-                  <input id="signupPassword" type="password" required minlength="8" autocomplete="new-password" placeholder="Create a password" />
+                  <input id="signupPassword" name="new-password" type="password" required minlength="8" autocomplete="new-password" placeholder="Create a password" />
                   <button class="password-toggle" type="button" data-toggle-password data-password-target="signupPassword">Show</button>
                 </span>
                 <span class="field-help">Minimum 8 characters.</span>
               </label>
               <label><span class="field-label">Confirm password <span class="field-help is-required">Required</span></span>
                 <span class="password-field">
-                  <input id="signupPasswordConfirm" type="password" required minlength="8" autocomplete="new-password" placeholder="Re-enter password" />
+                  <input id="signupPasswordConfirm" name="new-password-confirm" type="password" required minlength="8" autocomplete="new-password" placeholder="Re-enter password" />
                   <button class="password-toggle" type="button" data-toggle-password data-password-target="signupPasswordConfirm">Show</button>
                 </span>
               </label>
               <label><span class="field-label">Username <span class="field-help is-required">Required</span></span>
-                <input id="signupUsername" required maxlength="28" autocomplete="username" placeholder="PickleballAce" />
+                <input id="signupUsername" name="username" required maxlength="28" autocomplete="username" placeholder="PickleballAce" />
               </label>
             </div>
 
             <div class="form-section profile-section">
               <label><span class="field-label">Skill level <span class="field-help is-optional">Optional</span></span>
-                <select id="signupSkillLevel">
+                <select id="signupSkillLevel" name="skill-level">
                   <option value="">Select a skill level</option>
                   <option value="beginner">Beginner: Under 3.0</option>
                   <option value="intermediate">Intermediate: 3.0-4.0</option>
@@ -90,7 +90,7 @@
                 </select>
               </label>
               <label><span class="field-label">Bio <span class="field-help is-optional">Optional</span></span>
-                <textarea id="signupBio" maxlength="140" rows="3" placeholder="What kind of games do you like?"></textarea>
+                <textarea id="signupBio" name="bio" maxlength="140" rows="3" placeholder="What kind of games do you like?"></textarea>
                 <span class="field-help">140 characters max.</span>
               </label>
             </div>
@@ -101,11 +101,11 @@
           <form id="loginForm" class="auth-form account-form" data-auth-panel="login" hidden>
             <h3>Log in</h3>
             <label>Email
-              <input id="loginEmail" type="email" required autocomplete="email" />
+              <input id="loginEmail" name="email" type="email" required autocomplete="username" />
             </label>
             <label>Password
               <span class="password-field">
-                <input id="loginPassword" type="password" required autocomplete="current-password" />
+                <input id="loginPassword" name="current-password" type="password" required autocomplete="current-password" />
                 <button class="password-toggle" type="button" data-toggle-password data-password-target="loginPassword">Show</button>
               </span>
             </label>
@@ -120,7 +120,7 @@
     <script src="src/analytics.js?v=seo-analytics-20260614"></script>
     <script src="src/supabase-config.js?v=supabase-read-20260614"></script>
     <script src="src/supabase-client.js?v=supabase-auth-fix-20260614"></script>
-    <script src="src/supabase-data.js?v=photo-upload-20260615"></script>
+    <script src="src/supabase-data.js?v=mobile-photo-20260615"></script>
     <script src="src/supabase-auth.js?v=supabase-auth-fix-20260614"></script>
     <script src="src/mobile-header.js?v=supabase-auth-fix-20260614"></script>
     <script src="src/account.js?v=backend-flows-20260615"></script>

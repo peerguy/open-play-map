@@ -16,6 +16,10 @@
   const PHOTO_BUCKET = 'open-play-photos';
   const PHOTO_MAX_FILES = 4;
   const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+  const PHOTO_TARGET_BYTES = Math.floor(PHOTO_MAX_BYTES * 0.94);
+  const PHOTO_MAX_DIMENSION = 2400;
+  const PHOTO_MIN_DIMENSION = 900;
+  const PHOTO_COMPRESSION_QUALITIES = [0.86, 0.78, 0.7, 0.62];
   const PHOTO_TYPES = {
     'image/jpeg': 'jpg',
     'image/png': 'png',
@@ -84,12 +88,126 @@
       if (!PHOTO_TYPES[file.type]) {
         throw new Error('Photos must be JPG, PNG, or WebP images.');
       }
-      if (file.size > PHOTO_MAX_BYTES) {
-        throw new Error('Each photo must be 5 MB or smaller.');
-      }
     });
 
     return selected;
+  }
+
+  function validatePhotoUploadSizes(files = []) {
+    files.forEach(file => {
+      if (file.size > PHOTO_MAX_BYTES) {
+        throw new Error('That photo could not be compressed under 5 MB. Try a smaller image.');
+      }
+    });
+  }
+
+  function canCompressPhotos() {
+    return Boolean(
+      typeof document !== 'undefined' &&
+      typeof URL !== 'undefined' &&
+      typeof URL.createObjectURL === 'function' &&
+      typeof HTMLCanvasElement !== 'undefined' &&
+      HTMLCanvasElement.prototype.toBlob
+    );
+  }
+
+  function loadPhotoImage(file) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      const objectUrl = URL.createObjectURL(file);
+
+      image.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve(image);
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Unable to read that photo. Try a JPG, PNG, or WebP image.'));
+      };
+      image.src = objectUrl;
+    });
+  }
+
+  function photoCanvasSize(image, maxDimension) {
+    const sourceWidth = image.naturalWidth || image.width || 1;
+    const sourceHeight = image.naturalHeight || image.height || 1;
+    const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight));
+    return {
+      width: Math.max(1, Math.round(sourceWidth * scale)),
+      height: Math.max(1, Math.round(sourceHeight * scale))
+    };
+  }
+
+  function canvasToBlob(canvas, type, quality) {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob(blob => {
+        if (blob) {
+          resolve(blob);
+          return;
+        }
+        reject(new Error('Unable to compress that photo. Try a smaller image.'));
+      }, type, quality);
+    });
+  }
+
+  function compressedPhotoName(file) {
+    const basename = safeFilePart(String(file.name || 'photo').replace(/\.[^.]+$/, ''));
+    return `${basename}-compressed.jpg`;
+  }
+
+  function photoBlobToFile(sourceFile, blob) {
+    return new File([blob], compressedPhotoName(sourceFile), {
+      type: 'image/jpeg',
+      lastModified: Date.now()
+    });
+  }
+
+  async function compressPhotoFile(file) {
+    if (file.size <= PHOTO_MAX_BYTES) return file;
+    if (!canCompressPhotos()) {
+      throw new Error('That photo is over 5 MB and this browser cannot compress it. Try a smaller JPG, PNG, or WebP image.');
+    }
+
+    const image = await loadPhotoImage(file);
+    const sourceWidth = image.naturalWidth || image.width || 1;
+    const sourceHeight = image.naturalHeight || image.height || 1;
+    let maxDimension = Math.min(PHOTO_MAX_DIMENSION, Math.max(sourceWidth, sourceHeight));
+    let bestBlob = null;
+
+    while (maxDimension >= PHOTO_MIN_DIMENSION) {
+      const { width, height } = photoCanvasSize(image, maxDimension);
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Unable to compress that photo. Try a smaller image.');
+
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+
+      for (const quality of PHOTO_COMPRESSION_QUALITIES) {
+        const blob = await canvasToBlob(canvas, 'image/jpeg', quality);
+        if (!bestBlob || blob.size < bestBlob.size) bestBlob = blob;
+        if (blob.size <= PHOTO_TARGET_BYTES) return photoBlobToFile(file, blob);
+      }
+
+      maxDimension = Math.floor(maxDimension * 0.82);
+    }
+
+    if (bestBlob && bestBlob.size <= PHOTO_MAX_BYTES) return photoBlobToFile(file, bestBlob);
+    throw new Error('That photo is too large to compress under 5 MB. Try a smaller image.');
+  }
+
+  async function preparePhotoFiles(files = []) {
+    const selected = validatePhotoFiles(files);
+    const prepared = [];
+
+    for (const file of selected) {
+      prepared.push(await compressPhotoFile(file));
+    }
+
+    return prepared;
   }
 
   function formatTime(value) {
@@ -492,7 +610,7 @@
 
   function photoStoragePath({ userId, locationId, reviewId = '', file, index }) {
     const extension = PHOTO_TYPES[file.type] || safeFilePart(file.name).split('.').pop() || 'jpg';
-    const basename = safeFilePart(file.name.replace(/\.[^.]+$/, ''));
+    const basename = safeFilePart(String(file.name || 'photo').replace(/\.[^.]+$/, ''));
     const timestamp = Date.now().toString(36);
     const scope = reviewId ? `reviews/${reviewId}` : `locations/${locationId}`;
     return `${userId}/${scope}/${timestamp}-${index + 1}-${basename}.${extension}`;
@@ -501,6 +619,7 @@
   async function uploadPhotoFiles({ locationId, reviewId = null, user, files = [] }) {
     const supabase = client();
     const selected = validatePhotoFiles(files);
+    validatePhotoUploadSizes(selected);
     if (!selected.length) return [];
     if (!supabase || !locationId || !user?.id) throw new Error('Supabase is not configured.');
 
@@ -547,12 +666,12 @@
   async function submitLocationPhotos(court, user, photoFiles = []) {
     const supabase = client();
     if (!supabase || !court?.remoteId || !user?.id) throw new Error('Supabase is not configured.');
-    validatePhotoFiles(photoFiles);
+    const preparedPhotoFiles = await preparePhotoFiles(photoFiles);
 
     const storagePaths = await uploadPhotoFiles({
       locationId: court.remoteId,
       user,
-      files: photoFiles
+      files: preparedPhotoFiles
     });
 
     return insertPhotoRows({
@@ -565,7 +684,7 @@
   async function submitLocation(court, user, photoFiles = []) {
     const supabase = client();
     if (!supabase || !user?.id) throw new Error('Supabase is not configured.');
-    validatePhotoFiles(photoFiles);
+    const preparedPhotoFiles = await preparePhotoFiles(photoFiles);
 
     let payload = locationPayload(court, user, 'pending');
     let result = await supabase
@@ -597,7 +716,7 @@
     const storagePaths = await uploadPhotoFiles({
       locationId: result.data.id,
       user,
-      files: photoFiles
+      files: preparedPhotoFiles
     });
     await insertPhotoRows({
       locationId: result.data.id,
@@ -633,7 +752,7 @@
   async function submitReview(court, review, user, photoFiles = []) {
     const supabase = client();
     if (!supabase || !court?.remoteId || !user?.id) throw new Error('Supabase is not configured.');
-    validatePhotoFiles(photoFiles);
+    const preparedPhotoFiles = await preparePhotoFiles(photoFiles);
 
     const { data, error } = await supabase
       .from('reviews')
@@ -647,7 +766,7 @@
       locationId: court.remoteId,
       reviewId: data.id,
       user,
-      files: photoFiles
+      files: preparedPhotoFiles
     });
     await insertPhotoRows({
       locationId: court.remoteId,

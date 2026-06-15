@@ -85,11 +85,13 @@ label {
 input,
 select {
   width: 100%;
+  max-width: 100%;
   min-height: 44px;
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 11px 12px;
   font: inherit;
+  font-size: 1rem;
   color: var(--ink);
   background: #fff;
 }
@@ -846,11 +848,13 @@ select {
 
 textarea {
   width: 100%;
+  max-width: 100%;
   resize: vertical;
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 11px 12px;
   font: inherit;
+  font-size: 1rem;
   color: var(--ink);
   background: #fff;
 }
@@ -3083,9 +3087,12 @@ label:has(input:required:valid) > .field-label .is-required {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .password-field input {
+  min-width: 0;
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
@@ -4857,13 +4864,35 @@ label:has(input:required:valid) > .field-label .is-required {
 }
 
 @media (max-width: 520px) {
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
   .account-shell {
     width: min(100% - 28px, 720px);
     padding: 12px 0 28px;
+    overflow-x: hidden;
   }
 
   .account-panel {
     border-radius: 18px;
+  }
+
+  .account-panel,
+  .account-summary,
+  .account-forms,
+  .account-forms .auth-form {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .account-forms input,
+  .account-forms select,
+  .account-forms textarea {
+    font-size: 16px;
   }
 
   .account-summary,
