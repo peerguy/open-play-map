@@ -273,6 +273,16 @@ async function copyTextToClipboard(text) {
   if (!copied) throw new Error('Clipboard copy failed');
 }
 
+async function shareLocation(court) {
+  try {
+    await copyTextToClipboard(locationShareUrl(court));
+    window.alert('Share link copied.');
+  } catch (error) {
+    console.error(error);
+    window.prompt('Copy this location link:', locationShareUrl(court));
+  }
+}
+
 function getSavedReviews() {
   try {
     return JSON.parse(localStorage.getItem(REVIEWS_KEY) || '{}');
@@ -1060,14 +1070,14 @@ function locationMenuItems(court, { includeEdit = false, includeShare = false } 
   `;
 }
 
-function locationActionButtons(court, className = 'popup-edit', { includeEdit = true, variant = 'popup' } = {}) {
+function locationActionButtons(court, className = 'popup-edit', { includeEdit = true, includeShare = false, variant = 'popup' } = {}) {
   const isMapInfo = variant === 'map-info';
   return `
     <div class="location-action-row location-menu-action-row${isMapInfo ? ' map-info-action-row' : ''}">
       <div class="card-menu location-overflow-menu${isMapInfo ? ' map-info-menu' : ''}" data-location-menu-wrapper>
         <button class="card-menu-toggle location-menu-toggle" type="button" data-location-menu-toggle aria-expanded="false" aria-label="More options for ${escapeHtml(court.name)}">...</button>
         <div class="card-menu-panel location-menu-panel" data-location-menu hidden>
-          ${locationMenuItems(court, { includeEdit })}
+          ${locationMenuItems(court, { includeEdit, includeShare })}
         </div>
       </div>
       <button class="${className}" type="button" data-review-location="${court.id}">Review</button>
@@ -1122,7 +1132,7 @@ function showMapInfoBox(court, options = {}) {
         ${renderReviewList(court, getCourtReviews(court.id).length)}
       </div>
     </div>
-    ${locationActionButtons(court, 'popup-edit', { includeEdit: true, variant: 'map-info' })}
+    ${locationActionButtons(court, 'popup-edit', { includeEdit: true, includeShare: true, variant: 'map-info' })}
   `;
 
   elements.mapInfoBox.querySelector('.map-info-close').addEventListener('click', () => {
@@ -1152,6 +1162,11 @@ function showMapInfoBox(court, options = {}) {
   elements.mapInfoBox.querySelector('[data-report-location]')?.addEventListener('click', () => {
     closeLocationMenus();
     reportLocation(court.id);
+  });
+
+  elements.mapInfoBox.querySelector('[data-share-location]')?.addEventListener('click', async () => {
+    closeLocationMenus();
+    await shareLocation(court);
   });
 
   elements.mapInfoBox.querySelectorAll('[data-report-review]').forEach(button => {
@@ -1261,13 +1276,7 @@ function createCourtCard(court) {
   card.querySelector('[data-share-location]').addEventListener('click', async event => {
     event.stopPropagation();
     closeCardMenus();
-    try {
-      await copyTextToClipboard(locationShareUrl(court));
-      window.alert('Share link copied.');
-    } catch (error) {
-      console.error(error);
-      window.prompt('Copy this location link:', locationShareUrl(court));
-    }
+    await shareLocation(court);
   });
   card.querySelector('[data-report-location]').addEventListener('click', event => {
     event.stopPropagation();

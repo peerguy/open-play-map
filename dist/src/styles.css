@@ -1834,6 +1834,9 @@ textarea::placeholder {
   z-index: 2;
   width: 32px;
   height: 32px;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--brand-dark);
   font-size: 1.05rem;
   box-shadow: 0 8px 18px rgba(31, 83, 140, 0.22);
 }
