@@ -60,6 +60,17 @@ let backendCollections = {
   credits: null,
   photos: null
 };
+const adminPhotoLightbox = {
+  element: null,
+  image: null,
+  caption: null,
+  previousButton: null,
+  nextButton: null,
+  closeButton: null,
+  photos: [],
+  index: 0,
+  trigger: null
+};
 
 function normalize(value) {
   return String(value ?? '').toLowerCase();
@@ -84,6 +95,102 @@ function selectOptions(options, selected = '') {
     const label = Array.isArray(option) ? option[1] : (option || 'Not sure');
     return `<option value="${escapeHtml(value)}"${String(selected || '') === String(value) ? ' selected' : ''}>${escapeHtml(label)}</option>`;
   }).join('');
+}
+
+function ensureAdminPhotoLightbox() {
+  if (adminPhotoLightbox.element) return adminPhotoLightbox.element;
+
+  const lightbox = document.createElement('div');
+  lightbox.className = 'photo-lightbox';
+  lightbox.hidden = true;
+  lightbox.setAttribute('role', 'dialog');
+  lightbox.setAttribute('aria-modal', 'true');
+  lightbox.setAttribute('aria-label', 'Photo viewer');
+  lightbox.innerHTML = `
+    <div class="photo-lightbox-panel">
+      <button class="photo-lightbox-close" type="button" aria-label="Close photo viewer">&times;</button>
+      <button class="photo-lightbox-nav photo-lightbox-prev" type="button" aria-label="Previous photo">&#8249;</button>
+      <figure class="photo-lightbox-frame">
+        <div class="photo-lightbox-image-wrap">
+          <img class="photo-lightbox-image" alt="" />
+        </div>
+        <figcaption class="photo-lightbox-caption" aria-live="polite"></figcaption>
+      </figure>
+      <button class="photo-lightbox-nav photo-lightbox-next" type="button" aria-label="Next photo">&#8250;</button>
+    </div>
+  `;
+
+  adminPhotoLightbox.element = lightbox;
+  adminPhotoLightbox.image = lightbox.querySelector('.photo-lightbox-image');
+  adminPhotoLightbox.caption = lightbox.querySelector('.photo-lightbox-caption');
+  adminPhotoLightbox.previousButton = lightbox.querySelector('.photo-lightbox-prev');
+  adminPhotoLightbox.nextButton = lightbox.querySelector('.photo-lightbox-next');
+  adminPhotoLightbox.closeButton = lightbox.querySelector('.photo-lightbox-close');
+
+  adminPhotoLightbox.closeButton.addEventListener('click', closeAdminPhotoLightbox);
+  adminPhotoLightbox.previousButton.addEventListener('click', () => stepAdminPhotoLightbox(-1));
+  adminPhotoLightbox.nextButton.addEventListener('click', () => stepAdminPhotoLightbox(1));
+  lightbox.addEventListener('click', event => {
+    if (event.target === lightbox) closeAdminPhotoLightbox();
+  });
+
+  document.body.append(lightbox);
+  return lightbox;
+}
+
+function updateAdminPhotoLightbox() {
+  const { photos, index, image, caption, previousButton, nextButton } = adminPhotoLightbox;
+  if (!photos.length || !image || !caption) return;
+
+  const photo = photos[index];
+  image.src = photo.url;
+  image.alt = photo.alt || `Review photo ${index + 1}`;
+  caption.textContent = `${photo.caption || 'Review photo'} · ${index + 1} of ${photos.length}`;
+  const hasMultiplePhotos = photos.length > 1;
+  previousButton.hidden = !hasMultiplePhotos;
+  nextButton.hidden = !hasMultiplePhotos;
+}
+
+function openAdminPhotoLightbox(photos, index = 0, trigger = null) {
+  if (!photos.length) return;
+  const lightbox = ensureAdminPhotoLightbox();
+  adminPhotoLightbox.photos = photos;
+  adminPhotoLightbox.index = Math.max(0, Math.min(Number(index) || 0, photos.length - 1));
+  adminPhotoLightbox.trigger = trigger;
+  lightbox.hidden = false;
+  document.body.classList.add('has-photo-lightbox');
+  updateAdminPhotoLightbox();
+  requestAnimationFrame(() => adminPhotoLightbox.closeButton?.focus());
+}
+
+function closeAdminPhotoLightbox() {
+  const { element, image, trigger } = adminPhotoLightbox;
+  if (!element || element.hidden) return;
+  element.hidden = true;
+  document.body.classList.remove('has-photo-lightbox');
+  if (image) image.removeAttribute('src');
+  adminPhotoLightbox.photos = [];
+  adminPhotoLightbox.index = 0;
+  adminPhotoLightbox.trigger = null;
+  trigger?.focus?.();
+}
+
+function stepAdminPhotoLightbox(delta) {
+  const { photos } = adminPhotoLightbox;
+  if (photos.length <= 1) return;
+  adminPhotoLightbox.index = (adminPhotoLightbox.index + delta + photos.length) % photos.length;
+  updateAdminPhotoLightbox();
+}
+
+function adminReviewPhotosFromButton(button) {
+  return [...button.closest('.admin-review-photo-list')?.querySelectorAll('[data-admin-review-photo-url]') || []]
+    .map((item, index) => ({
+      url: item.dataset.adminReviewPhotoUrl,
+      alt: item.dataset.adminReviewPhotoAlt || '',
+      caption: item.dataset.adminReviewPhotoCaption || 'Review photo',
+      index
+    }))
+    .filter(photo => photo.url);
 }
 
 function getUsers() {
@@ -422,9 +529,11 @@ function renderAdminReviewPhotos(review) {
 
   return `
     <div class="admin-review-photo-list">
-      ${photos.map(photo => `
+      ${photos.map((photo, index) => `
         <figure class="admin-review-photo-item">
-          <img src="${escapeHtml(photo.url)}" alt="${escapeHtml(`${review.courtName || 'Review'} photo`)}" loading="lazy" />
+          <button class="admin-review-photo-button" type="button" data-open-admin-review-photo data-admin-review-photo-url="${escapeHtml(photo.url)}" data-admin-review-photo-alt="${escapeHtml(`${review.courtName || 'Review'} photo ${index + 1}`)}" data-admin-review-photo-caption="${escapeHtml(review.courtName || 'Review photo')}" aria-label="Open review photo ${index + 1} of ${photos.length}">
+            <img src="${escapeHtml(photo.url)}" alt="${escapeHtml(`${review.courtName || 'Review'} photo ${index + 1}`)}" loading="lazy" />
+          </button>
           <figcaption>
             <span>${escapeHtml(photo.status || 'pending')}</span>
             <button class="secondary-button admin-delete-button" type="button" data-remove-review-photo="${escapeHtml(photo.id)}" data-review-photo-storage-path="${escapeHtml(photo.storagePath || '')}">Delete picture</button>
@@ -1555,6 +1664,13 @@ async function removeReviewPhoto(event) {
 }
 
 function setupAdminReviewEditors(container) {
+  container.querySelectorAll('[data-open-admin-review-photo]').forEach(button => {
+    button.addEventListener('click', () => {
+      const photos = adminReviewPhotosFromButton(button);
+      const index = photos.findIndex(photo => photo.url === button.dataset.adminReviewPhotoUrl);
+      openAdminPhotoLightbox(photos, index >= 0 ? index : 0, button);
+    });
+  });
   container.querySelectorAll('[data-save-admin-review]').forEach(button => {
     button.addEventListener('click', saveAdminReviewEdit);
   });
@@ -1915,6 +2031,20 @@ elements.navButtons.forEach(button => {
 
 elements.moderationNavButtons.forEach(button => {
   button.addEventListener('click', () => showModerationView(button.dataset.moderationView));
+});
+
+document.addEventListener('keydown', event => {
+  if (adminPhotoLightbox.element?.hidden !== false) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeAdminPhotoLightbox();
+  } else if (event.key === 'ArrowLeft') {
+    event.preventDefault();
+    stepAdminPhotoLightbox(-1);
+  } else if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    stepAdminPhotoLightbox(1);
+  }
 });
 
 init().catch(error => {
