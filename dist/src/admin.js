@@ -44,7 +44,8 @@ let backendCollections = {
   reviews: null,
   reports: null,
   suggestedEdits: null,
-  credits: null
+  credits: null,
+  photos: null
 };
 
 function normalize(value) {
@@ -619,6 +620,12 @@ function pendingSuggestedEdits() {
     .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
 }
 
+function pendingPhotos() {
+  return (backendCollections.photos || [])
+    .filter(photo => (photo.status || 'pending') === 'pending')
+    .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+}
+
 function liveLocationForSuggestedEdit(edit) {
   return allCourts.find(court => court.id === edit.locationId)
     || edit.currentLocation
@@ -802,6 +809,7 @@ function renderModeration() {
   const reports = openReports();
   const edits = recentEdits();
   const volume = highVolumeUsers();
+  const photos = pendingPhotos();
   const queues = {
     pending: {
       title: 'Pending locations',
@@ -828,6 +836,29 @@ function renderModeration() {
               ${renderLocationFields(court, { disabled: true })}
             </form>
           </details>
+        </article>
+      `
+    },
+    photos: {
+      title: 'Pending photos',
+      countText: `${photos.length} pending photo${photos.length === 1 ? '' : 's'}`,
+      items: photos,
+      emptyText: 'No pending photos.',
+      description: 'Approve useful court photos before they appear publicly on the map.',
+      renderItem: photo => `
+        <article class="moderation-item moderation-photo-item">
+          <img class="moderation-photo-preview" src="${escapeHtml(photo.url)}" alt="${escapeHtml(`${photo.locationName} submitted photo`)}" loading="lazy" />
+          <div class="moderation-item-main">
+            <div class="moderation-item-title-row">
+              <strong>${escapeHtml(photo.locationName || 'Location photo')}</strong>
+              <span class="moderation-badge">Photo</span>
+            </div>
+            <span class="moderation-meta">Uploaded by ${escapeHtml(photo.username || 'Unknown')} · ${escapeHtml(photo.createdAt || 'unknown')}</span>
+          </div>
+          <div class="admin-row-actions moderation-actions">
+            <button class="secondary-button admin-edit-button admin-approve-button" type="button" data-approve-photo="${escapeHtml(photo.id)}">Approve +2 credits</button>
+            <button class="secondary-button admin-delete-button" type="button" data-reject-photo="${escapeHtml(photo.id)}">Reject</button>
+          </div>
         </article>
       `
     },
@@ -900,6 +931,12 @@ function renderModeration() {
   });
   elements.moderationList.querySelectorAll('[data-reject-location]').forEach(button => {
     button.addEventListener('click', () => rejectLocation(button.dataset.rejectLocation));
+  });
+  elements.moderationList.querySelectorAll('[data-approve-photo]').forEach(button => {
+    button.addEventListener('click', () => approvePhoto(button.dataset.approvePhoto));
+  });
+  elements.moderationList.querySelectorAll('[data-reject-photo]').forEach(button => {
+    button.addEventListener('click', () => rejectPhoto(button.dataset.rejectPhoto));
   });
   elements.moderationList.querySelectorAll('[data-approve-suggested-edit]').forEach(button => {
     button.addEventListener('click', () => approveSuggestedEdit(button.dataset.approveSuggestedEdit));
@@ -1192,6 +1229,32 @@ async function rejectLocation(locationId) {
   allCourts = allCourts.filter(item => item.id !== locationId);
   renderModeration();
   renderLocations();
+}
+
+async function updatePhotoModerationStatus(photoId, status) {
+  const photo = (backendCollections.photos || []).find(item => item.id === photoId);
+  if (!photo) return;
+
+  try {
+    const updated = await window.OpenPlaySupabase.updatePhotoStatus(photo.remoteId || photo.id, status);
+    backendCollections.photos = (backendCollections.photos || []).map(item => (
+      item.id === photoId ? { ...item, ...updated, status } : item
+    ));
+    renderModeration();
+    renderUsers();
+  } catch (error) {
+    window.alert(error.message || `Could not ${status} that photo.`);
+  }
+}
+
+async function approvePhoto(photoId) {
+  await updatePhotoModerationStatus(photoId, 'approved');
+}
+
+async function rejectPhoto(photoId) {
+  const confirmed = window.confirm('Reject this photo? It will not appear publicly on the map.');
+  if (!confirmed) return;
+  await updatePhotoModerationStatus(photoId, 'rejected');
 }
 
 function awardSuggestedEditCredits(edit) {
@@ -1499,7 +1562,8 @@ async function loadBackendCollections() {
       reviews: collections.reviews || {},
       reports: collections.reports || [],
       suggestedEdits: collections.suggestedEdits || [],
-      credits: collections.credits || []
+      credits: collections.credits || [],
+      photos: collections.photos || []
     };
   } catch (error) {
     console.warn('Supabase moderation data load failed. Falling back to local moderation data.', error);
@@ -1507,7 +1571,8 @@ async function loadBackendCollections() {
       reviews: null,
       reports: null,
       suggestedEdits: null,
-      credits: null
+      credits: null,
+      photos: null
     };
   }
 }

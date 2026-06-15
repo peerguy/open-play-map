@@ -8,7 +8,7 @@
     <meta name="description" content="Open Play Map admin moderation tools." />
     <meta name="theme-color" content="#266c3f" />
     <link rel="icon" type="image/svg+xml" href="assets/icons/open-play-favicon.svg" />
-    <link rel="stylesheet" href="src/styles.css?v=actions-favicon-20260614" />
+    <link rel="stylesheet" href="src/styles.css?v=photo-upload-20260615" />
   </head>
   <body class="admin-page">
     <header class="site-header account-header">
@@ -35,6 +35,7 @@
         <button class="admin-nav-button is-active" type="button" data-admin-view="moderation">Moderation</button>
         <div id="moderationSubnav" class="admin-subnav" aria-label="Moderation queues">
           <button class="admin-subnav-button is-active" type="button" data-moderation-view="pending">Pending locations</button>
+          <button class="admin-subnav-button" type="button" data-moderation-view="photos">Pending photos</button>
           <button class="admin-subnav-button" type="button" data-moderation-view="reports">Open reports</button>
           <button class="admin-subnav-button" type="button" data-moderation-view="edits">Recent edits</button>
           <button class="admin-subnav-button" type="button" data-moderation-view="volume">High-volume users today</button>
@@ -91,8 +92,8 @@
     <script src="src/supabase-config.js?v=supabase-read-20260614"></script>
     <script src="src/supabase-client.js?v=supabase-auth-fix-20260614"></script>
     <script src="src/supabase-auth.js?v=supabase-auth-fix-20260614"></script>
-    <script src="src/supabase-data.js?v=backend-flows-20260615"></script>
+    <script src="src/supabase-data.js?v=photo-upload-20260615"></script>
     <script src="src/mobile-header.js?v=supabase-auth-fix-20260614"></script>
-    <script src="src/admin.js?v=backend-flows-20260615"></script>
+    <script src="src/admin.js?v=photo-upload-20260615"></script>
   </body>
 </html>

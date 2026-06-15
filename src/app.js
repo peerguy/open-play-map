@@ -275,6 +275,10 @@ async function copyTextToClipboard(text) {
   if (!copied) throw new Error('Clipboard copy failed');
 }
 
+function selectedPhotoFiles(input) {
+  return Array.from(input?.files || []);
+}
+
 async function shareLocation(court) {
   try {
     await copyTextToClipboard(locationShareUrl(court));
@@ -1758,6 +1762,14 @@ function setSuggestEditNoteVisible(isVisible) {
   if (!isVisible) elements.suggestEditReason.value = '';
 }
 
+function setLocationPhotoUploadVisible(isVisible) {
+  const field = elements.newPhotos.closest('.field-photos');
+  if (!field) return;
+  field.hidden = !isVisible;
+  elements.newPhotos.disabled = !isVisible;
+  if (!isVisible) elements.newPhotos.value = '';
+}
+
 function setLocationDialogCopy({ eyebrow, title, button, hint }) {
   elements.submitEyebrow.textContent = eyebrow;
   elements.submitTitle.textContent = title;
@@ -1782,7 +1794,7 @@ function populateLocationForm(court) {
     end: slot.endTime || parseOpenPlayHours(slot.hours).end
   })));
   elements.newNotes.value = court.notes || '';
-  elements.newPhotos.value = court.photos?.join(', ') || '';
+  elements.newPhotos.value = '';
 }
 
 function openSubmitDialog() {
@@ -1795,6 +1807,7 @@ function openSubmitDialog() {
   elements.newDays.open = false;
   resetTimeWindows();
   setSuggestEditNoteVisible(false);
+  setLocationPhotoUploadVisible(true);
   setLocationDialogCopy({
     eyebrow: 'Community submission',
     title: 'Add an open play location',
@@ -1821,6 +1834,7 @@ function openEditDialog(id) {
   state.editingId = id;
   state.suggestingEditId = null;
   setSuggestEditNoteVisible(false);
+  setLocationPhotoUploadVisible(true);
   setLocationDialogCopy({
     eyebrow: 'Admin edit',
     title: 'Edit open play location',
@@ -1850,6 +1864,7 @@ function openSuggestEditDialog(id) {
   elements.locationForm.reset();
   populateLocationForm(court);
   setSuggestEditNoteVisible(true);
+  setLocationPhotoUploadVisible(false);
   setLocationDialogCopy({
     eyebrow: 'Suggested edit',
     title: `Suggest an edit for ${court.name}`,
@@ -1879,6 +1894,7 @@ function closeSubmitDialog() {
   state.editingId = null;
   state.suggestingEditId = null;
   setSuggestEditNoteVisible(false);
+  setLocationPhotoUploadVisible(true);
   clearDraftMarker();
 }
 
@@ -1916,6 +1932,7 @@ function closeReviewDialog() {
 }
 
 function reviewFormValues() {
+  const photoFiles = selectedPhotoFiles(elements.reviewPhotos);
   return {
     body: elements.reviewBody.value.trim(),
     skillLevels: selectedReviewSkills(),
@@ -1931,14 +1948,11 @@ function reviewFormValues() {
       lighting: elements.reviewLighting.value,
       schedulingApp: elements.reviewSchedulingApp.value.trim()
     },
-    photoUrls: elements.reviewPhotos.value
-      .split(',')
-      .map(photo => photo.trim())
-      .filter(Boolean)
+    photoFiles
   };
 }
 
-function usefulReviewFieldCount({ body, skillLevels, reviewDetails, photoUrls }) {
+function usefulReviewFieldCount({ body, skillLevels, reviewDetails, photoFiles = [] }) {
   return [
     skillLevels.length ? 'skill' : '',
     reviewDetails.crowdLevel,
@@ -1952,7 +1966,7 @@ function usefulReviewFieldCount({ body, skillLevels, reviewDetails, photoUrls })
     reviewDetails.lighting,
     reviewDetails.schedulingApp,
     body,
-    photoUrls.length ? 'photos' : ''
+    photoFiles.length ? 'photos' : ''
   ].filter(value => String(value).trim() !== '').length;
 }
 
@@ -1976,14 +1990,12 @@ async function submitReview(event) {
   if (!requireCurrentUser('Sign in or create a profile before posting a review.')) return;
 
   const court = state.courts.find(item => item.id === state.reviewCourtId);
-  const { body, skillLevels, reviewDetails, photoUrls: reviewPhotoUrls } = reviewFormValues();
+  const { body, skillLevels, reviewDetails, photoFiles: reviewPhotoFiles } = reviewFormValues();
   const hasReviewDetails = skillLevels.length || Object.values(reviewDetails).some(value => String(value).trim() !== '');
-  const previousPhotoUrls = new Set((court?.photos || []).map(photo => normalize(photo)));
-  const addedReviewPhotos = reviewPhotoUrls.filter(photo => !previousPhotoUrls.has(normalize(photo)));
   const allReviews = getSavedReviews();
   const courtReviews = allReviews[court?.id] || [];
   const existingReview = courtReviews.find(review => review.userId === state.currentUser.id) || null;
-  const usefulFields = usefulReviewFieldCount({ body, skillLevels, reviewDetails, photoUrls: reviewPhotoUrls });
+  const usefulFields = usefulReviewFieldCount({ body, skillLevels, reviewDetails, photoFiles: reviewPhotoFiles });
   if (!court) return;
 
   if (!elements.reviewVisited.value) {
@@ -2019,7 +2031,8 @@ async function submitReview(event) {
 
   if (court.remoteId && window.OpenPlaySupabase?.submitReview) {
     try {
-      const savedReview = await window.OpenPlaySupabase.submitReview(court, nextReview, state.currentUser, addedReviewPhotos);
+      setReviewHint(reviewPhotoFiles.length ? 'Uploading photos and saving review...' : 'Saving review...');
+      const savedReview = await window.OpenPlaySupabase.submitReview(court, nextReview, state.currentUser, reviewPhotoFiles);
       const allReviews = getSavedReviews();
       const courtReviews = allReviews[court.id] || [];
       allReviews[court.id] = [
@@ -2050,21 +2063,6 @@ async function submitReview(event) {
         targetId: court.id
       });
     }
-  }
-
-  if (addedReviewPhotos.length) {
-    const nextCourt = {
-      ...court,
-      photos: [...(court.photos || []), ...addedReviewPhotos],
-      lastVerified: todayIso()
-    };
-    upsertSavedLocation(nextCourt);
-    state.courts = state.courts.map(item => item.id === court.id ? nextCourt : item);
-    awardCredits({
-      action: 'add-photo',
-      targetType: 'location',
-      targetId: court.id
-    });
   }
 
   closeReviewDialog();
@@ -2298,12 +2296,7 @@ async function addSubmittedLocation(event) {
   const skillLevels = selectedLocationSkills();
   const estimatedSkillLevel = formatLocationSkillLevel(skillLevels);
   const openPlay = getOpenPlaySlots();
-  const previousPhotoUrls = new Set((existing?.photos || []).map(photo => normalize(photo)));
-  const photoUrls = elements.newPhotos.value
-    .split(',')
-    .map(photo => photo.trim())
-    .filter(Boolean);
-  const addedNewPhoto = photoUrls.some(photo => !previousPhotoUrls.has(normalize(photo)));
+  const photoFiles = selectedPhotoFiles(elements.newPhotos);
   const court = {
     ...(existing || {}),
     id: existing?.id || `${slugify(name)}-${Date.now()}`,
@@ -2325,7 +2318,7 @@ async function addSubmittedLocation(event) {
       surface: existing?.courts?.surface || 'unknown',
       indoorOutdoor: existing?.courts?.indoorOutdoor || 'unknown'
     },
-    photos: photoUrls,
+    photos: existing?.photos || [],
     notes: elements.newNotes.value.trim(),
     sourceUrl: existing?.sourceUrl || '',
     lastVerified: todayIso(),
@@ -2363,6 +2356,9 @@ async function addSubmittedLocation(event) {
   if (existing?.remoteId && canEditLocations() && window.OpenPlaySupabase?.saveAdminLocation) {
     try {
       const savedCourt = await window.OpenPlaySupabase.saveAdminLocation(court);
+      if (photoFiles.length && window.OpenPlaySupabase?.submitLocationPhotos) {
+        await window.OpenPlaySupabase.submitLocationPhotos(savedCourt, state.currentUser, photoFiles);
+      }
       state.courts = state.courts.map(item => item.id === court.id ? savedCourt : item);
       elements.locationForm.reset();
       closeSubmitDialog();
@@ -2377,7 +2373,8 @@ async function addSubmittedLocation(event) {
 
   if (!existing && window.OpenPlaySupabase?.submitLocation) {
     try {
-      await window.OpenPlaySupabase.submitLocation(court, state.currentUser);
+      elements.formHint.textContent = photoFiles.length ? 'Uploading photos and submitting location...' : 'Submitting location...';
+      await window.OpenPlaySupabase.submitLocation(court, state.currentUser, photoFiles);
       elements.locationForm.reset();
       closeSubmitDialog();
       window.alert('Thanks. Your location was submitted for admin approval before it appears on the map.');
@@ -2404,13 +2401,6 @@ async function addSubmittedLocation(event) {
     });
   }
 
-  if (addedNewPhoto) {
-    awardCredits({
-      action: 'add-photo',
-      targetType: 'location',
-      targetId: court.id
-    });
-  }
   elements.locationForm.reset();
   closeSubmitDialog();
   render();

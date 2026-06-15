@@ -4394,6 +4394,20 @@ label:has(input:required:valid) > .field-label .is-required {
   padding-top: 1px;
 }
 
+.moderation-photo-item {
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.moderation-photo-preview {
+  width: 92px;
+  aspect-ratio: 4 / 3;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f6f3ed;
+  object-fit: cover;
+}
+
 .admin-approve-button {
   border-color: #bbd8b7;
   color: #216222;

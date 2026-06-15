@@ -13,6 +13,14 @@
     sometimes: 'sometimes',
     uncertain: 'uncertain'
   };
+  const PHOTO_BUCKET = 'open-play-photos';
+  const PHOTO_MAX_FILES = 4;
+  const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+  const PHOTO_TYPES = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp'
+  };
 
   function isConfigured() {
     return Boolean(config.url && config.anonKey);
@@ -33,6 +41,55 @@
 
   function displayReliability(value) {
     return UI_RELIABILITY[value] || value || '';
+  }
+
+  function publicStorageUrl(path) {
+    if (!path) return '';
+    if (/^https?:\/\//i.test(path) || path.startsWith('assets/')) return path;
+    const encodedPath = String(path).split('/').map(encodeURIComponent).join('/');
+    return `${config.url}/storage/v1/object/public/${PHOTO_BUCKET}/${encodedPath}`;
+  }
+
+  function mapPhotoUrl(photo) {
+    if (typeof photo === 'string') return publicStorageUrl(photo);
+    return publicStorageUrl(photo?.storage_path || photo?.url || '');
+  }
+
+  function mapLocationPhotos(photos = []) {
+    return photos
+      .filter(photo => !photo.status || photo.status === 'approved')
+      .map(mapPhotoUrl)
+      .filter(Boolean);
+  }
+
+  function safeFilePart(value) {
+    return String(value || 'photo')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+      .slice(0, 40) || 'photo';
+  }
+
+  function normalizePhotoFiles(files = []) {
+    return Array.from(files || []).filter(file => file && typeof file === 'object' && 'size' in file && 'type' in file);
+  }
+
+  function validatePhotoFiles(files = []) {
+    const selected = normalizePhotoFiles(files);
+    if (selected.length > PHOTO_MAX_FILES) {
+      throw new Error(`Upload up to ${PHOTO_MAX_FILES} photos at a time.`);
+    }
+
+    selected.forEach(file => {
+      if (!PHOTO_TYPES[file.type]) {
+        throw new Error('Photos must be JPG, PNG, or WebP images.');
+      }
+      if (file.size > PHOTO_MAX_BYTES) {
+        throw new Error('Each photo must be 5 MB or smaller.');
+      }
+    });
+
+    return selected;
   }
 
   function formatTime(value) {
@@ -83,7 +140,7 @@
   async function fetchLocationById(supabase, locationId) {
     const { data, error } = await supabase
       .from('locations')
-      .select('*,open_play_slots(*)')
+      .select('*,open_play_slots(*),photos(id,storage_path,status)')
       .eq('id', locationId)
       .single();
 
@@ -131,7 +188,7 @@
         surface: record.surface || 'unknown',
         indoorOutdoor: record.indoor_outdoor || 'unknown'
       },
-      photos: [],
+      photos: mapLocationPhotos(record.photos || []),
       notes: record.notes || '',
       sourceUrl: record.source_url || '',
       lastVerified: record.last_verified || '',
@@ -254,6 +311,26 @@
     };
   }
 
+  function mapPhoto(record, lookups = {}) {
+    const location = record.locations || lookups.locations?.get?.(record.location_id) || {};
+    const uploader = record.profiles || lookups.profiles?.get?.(record.uploaded_by) || {};
+    return {
+      id: record.id,
+      remoteId: record.id,
+      locationId: location.slug || record.location_id,
+      remoteLocationId: record.location_id,
+      reviewId: record.review_id || '',
+      uploadedBy: record.uploaded_by || '',
+      username: uploader.username || 'Player',
+      storagePath: record.storage_path,
+      url: publicStorageUrl(record.storage_path),
+      caption: record.caption || '',
+      status: record.status || 'pending',
+      locationName: location.name || 'Location',
+      createdAt: dateOnly(record.created_at)
+    };
+  }
+
   async function request(path) {
     if (!isConfigured()) return null;
 
@@ -273,7 +350,7 @@
   }
 
   async function fetchApprovedLocations() {
-    const rows = await request('locations?select=*,open_play_slots(*)&status=eq.approved&order=name.asc');
+    const rows = await request('locations?select=*,open_play_slots(*),photos(id,storage_path,status)&status=eq.approved&order=name.asc');
     if (!rows) return null;
     return rows.map(mapLocation);
   }
@@ -284,7 +361,7 @@
 
     const { data, error } = await supabase
       .from('locations')
-      .select('*,open_play_slots(*)')
+      .select('*,open_play_slots(*),photos(id,storage_path,status)')
       .order('status', { ascending: true })
       .order('name', { ascending: true });
 
@@ -413,9 +490,82 @@
       .filter(slot => slot.days.length || slot.start_time || slot.end_time || slot.notes);
   }
 
-  async function submitLocation(court, user) {
+  function photoStoragePath({ userId, locationId, reviewId = '', file, index }) {
+    const extension = PHOTO_TYPES[file.type] || safeFilePart(file.name).split('.').pop() || 'jpg';
+    const basename = safeFilePart(file.name.replace(/\.[^.]+$/, ''));
+    const timestamp = Date.now().toString(36);
+    const scope = reviewId ? `reviews/${reviewId}` : `locations/${locationId}`;
+    return `${userId}/${scope}/${timestamp}-${index + 1}-${basename}.${extension}`;
+  }
+
+  async function uploadPhotoFiles({ locationId, reviewId = null, user, files = [] }) {
+    const supabase = client();
+    const selected = validatePhotoFiles(files);
+    if (!selected.length) return [];
+    if (!supabase || !locationId || !user?.id) throw new Error('Supabase is not configured.');
+
+    const uploaded = [];
+    for (const [index, file] of selected.entries()) {
+      const storagePath = photoStoragePath({ userId: user.id, locationId, reviewId, file, index });
+      const { error: uploadError } = await supabase.storage
+        .from(PHOTO_BUCKET)
+        .upload(storagePath, file, {
+          cacheControl: '31536000',
+          contentType: file.type,
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+      uploaded.push(storagePath);
+    }
+
+    return uploaded;
+  }
+
+  async function insertPhotoRows({ locationId, reviewId = null, user, storagePaths = [] }) {
+    const supabase = client();
+    if (!storagePaths.length) return [];
+    if (!supabase || !locationId || !user?.id) throw new Error('Supabase is not configured.');
+
+    const rows = storagePaths.map(storagePath => ({
+      location_id: locationId,
+      review_id: reviewId,
+      uploaded_by: user.id,
+      storage_path: storagePath,
+      status: 'pending'
+    }));
+
+    const { data, error } = await supabase
+      .from('photos')
+      .insert(rows)
+      .select('*');
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function submitLocationPhotos(court, user, photoFiles = []) {
+    const supabase = client();
+    if (!supabase || !court?.remoteId || !user?.id) throw new Error('Supabase is not configured.');
+    validatePhotoFiles(photoFiles);
+
+    const storagePaths = await uploadPhotoFiles({
+      locationId: court.remoteId,
+      user,
+      files: photoFiles
+    });
+
+    return insertPhotoRows({
+      locationId: court.remoteId,
+      user,
+      storagePaths
+    });
+  }
+
+  async function submitLocation(court, user, photoFiles = []) {
     const supabase = client();
     if (!supabase || !user?.id) throw new Error('Supabase is not configured.');
+    validatePhotoFiles(photoFiles);
 
     let payload = locationPayload(court, user, 'pending');
     let result = await supabase
@@ -444,6 +594,17 @@
       if (slotError) throw slotError;
     }
 
+    const storagePaths = await uploadPhotoFiles({
+      locationId: result.data.id,
+      user,
+      files: photoFiles
+    });
+    await insertPhotoRows({
+      locationId: result.data.id,
+      user,
+      storagePaths
+    });
+
     return fetchLocationById(supabase, result.data.id);
   }
 
@@ -469,9 +630,10 @@
     };
   }
 
-  async function submitReview(court, review, user, photoUrls = []) {
+  async function submitReview(court, review, user, photoFiles = []) {
     const supabase = client();
     if (!supabase || !court?.remoteId || !user?.id) throw new Error('Supabase is not configured.');
+    validatePhotoFiles(photoFiles);
 
     const { data, error } = await supabase
       .from('reviews')
@@ -481,20 +643,18 @@
 
     if (error) throw error;
 
-    const photos = photoUrls
-      .filter(Boolean)
-      .map(photo => ({
-        location_id: court.remoteId,
-        review_id: data.id,
-        uploaded_by: user.id,
-        storage_path: photo,
-        status: 'pending'
-      }));
-
-    if (photos.length) {
-      const { error: photoError } = await supabase.from('photos').insert(photos);
-      if (photoError) throw photoError;
-    }
+    const storagePaths = await uploadPhotoFiles({
+      locationId: court.remoteId,
+      reviewId: data.id,
+      user,
+      files: photoFiles
+    });
+    await insertPhotoRows({
+      locationId: court.remoteId,
+      reviewId: data.id,
+      user,
+      storagePaths
+    });
 
     return mapReview(data, {
       locations: new Map([[court.remoteId, { slug: court.id, name: court.name }]]),
@@ -644,6 +804,21 @@
     }
   }
 
+  async function updatePhotoStatus(photoId, status) {
+    const supabase = client();
+    if (!supabase || !photoId) throw new Error('Supabase is not configured.');
+
+    const { data, error } = await supabase
+      .from('photos')
+      .update({ status })
+      .eq('id', photoId)
+      .select('*,locations(slug,name),profiles:uploaded_by(username)')
+      .single();
+
+    if (error) throw error;
+    return mapPhoto(data);
+  }
+
   async function fetchCurrentUserContributions(userId) {
     const supabase = client();
     if (!supabase || !userId) return null;
@@ -717,16 +892,17 @@
     const supabase = client();
     if (!supabase) return null;
 
-    const [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult] = await Promise.all([
+    const [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult, photosResult] = await Promise.all([
       supabase.from('profiles').select('id,email,username,role,skill_level,bio,avatar_url,created_at'),
       supabase.from('locations').select('id,slug,name'),
       supabase.from('reviews').select('*').order('created_at', { ascending: false }),
       supabase.from('reports').select('*').order('created_at', { ascending: false }),
       supabase.from('suggested_edits').select('*').order('created_at', { ascending: false }),
-      supabase.from('credits').select('*').order('created_at', { ascending: false })
+      supabase.from('credits').select('*').order('created_at', { ascending: false }),
+      supabase.from('photos').select('*').order('created_at', { ascending: false })
     ]);
 
-    [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult]
+    [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult, photosResult]
       .forEach(result => {
         if (result.error) throw result.error;
       });
@@ -740,7 +916,8 @@
       reviews: reviewsToMap(reviews),
       reports: (reportsResult.data || []).map(report => mapReport(report, { profiles, locations, reviewsById })),
       suggestedEdits: (editsResult.data || []).map(edit => mapSuggestedEdit(edit, { profiles, locations })),
-      credits: (creditsResult.data || []).map(credit => mapCredit(credit, profiles))
+      credits: (creditsResult.data || []).map(credit => mapCredit(credit, profiles)),
+      photos: (photosResult.data || []).map(photo => mapPhoto(photo, { profiles, locations }))
     };
   }
 
@@ -751,6 +928,7 @@
     updateLocationStatus,
     saveAdminLocation,
     submitLocation,
+    submitLocationPhotos,
     submitReview,
     fetchReviewMap,
     fetchOwnReports,
@@ -760,6 +938,7 @@
     rejectSuggestedEdit,
     updateReportStatus,
     removeReviewForReport,
+    updatePhotoStatus,
     fetchCurrentUserContributions,
     fetchPublicLeaderboard,
     fetchPublicMonthlyDrawings,
