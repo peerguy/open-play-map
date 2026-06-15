@@ -867,6 +867,31 @@ function closeDialog(dialog) {
   }
 }
 
+function resetDialogScroll(dialog, form, { focusCloseButton = false } = {}) {
+  const reset = () => {
+    dialog.scrollTo?.({ top: 0, left: 0, behavior: 'auto' });
+    dialog.scrollTop = 0;
+    dialog.scrollLeft = 0;
+    form?.scrollTo?.({ top: 0, left: 0, behavior: 'auto' });
+    if (form) {
+      form.scrollTop = 0;
+      form.scrollLeft = 0;
+    }
+
+    if (focusCloseButton && isMobileLayout()) {
+      const activeElement = document.activeElement;
+      if (activeElement?.matches?.('input, textarea, select')) {
+        activeElement.blur();
+      }
+      form?.querySelector?.('[data-close-review], [data-close-submit]')?.focus({ preventScroll: true });
+    }
+  };
+
+  reset();
+  requestAnimationFrame(reset);
+  setTimeout(reset, 80);
+}
+
 function getSavedSubmissions() {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
@@ -1943,10 +1968,8 @@ function openSubmitDialog() {
   });
   document.body.classList.add('is-submitting-location');
   elements.submitDialog.show();
-  elements.locationForm.scrollTop = 0;
-  if (isMobileLayout()) {
-    elements.submitDialog.scrollTop = 0;
-  } else {
+  resetDialogScroll(elements.submitDialog, elements.locationForm, { focusCloseButton: true });
+  if (!isMobileLayout()) {
     elements.placeSearch.focus();
   }
   setTimeout(() => map.invalidateSize(), 50);
@@ -1977,7 +2000,7 @@ function openEditDialog(id) {
 
   document.body.classList.add('is-submitting-location');
   elements.submitDialog.show();
-  elements.locationForm.scrollTop = 0;
+  resetDialogScroll(elements.submitDialog, elements.locationForm, { focusCloseButton: true });
   setTimeout(() => map.invalidateSize(), 50);
 }
 
@@ -2006,10 +2029,8 @@ function openSuggestEditDialog(id) {
 
   document.body.classList.add('is-submitting-location');
   elements.submitDialog.show();
-  elements.locationForm.scrollTop = 0;
-  if (isMobileLayout()) {
-    elements.submitDialog.scrollTop = 0;
-  } else {
+  resetDialogScroll(elements.submitDialog, elements.locationForm, { focusCloseButton: true });
+  if (!isMobileLayout()) {
     elements.suggestEditReason.focus();
   }
   setTimeout(() => map.invalidateSize(), 50);
@@ -2050,7 +2071,7 @@ function openReviewDialog(id) {
   setReviewHint(existingReview ? 'Saving will replace your previous review for this location.' : '');
   updateReviewRequirement();
   openDialog(elements.reviewDialog);
-  elements.reviewBody.focus();
+  resetDialogScroll(elements.reviewDialog, elements.reviewForm, { focusCloseButton: true });
 }
 
 function closeReviewDialog() {

@@ -5406,7 +5406,7 @@ label:has(input:required:valid) > .field-label .is-required {
   border-right: 0;
 }
 
-.has-current-user .account-summary ul {
+.has-current-user .account-summary > ul {
   display: none;
 }
 
@@ -6061,21 +6061,52 @@ label:has(input:required:valid) > .field-label .is-required {
     position: fixed;
     inset: 0;
     z-index: 2600;
-    width: 100vw;
+    width: auto;
     max-width: none;
+    min-width: 0;
     height: 100dvh;
     max-height: none;
     margin: 0;
     border-radius: 0;
     overflow: hidden;
+    overscroll-behavior: contain;
   }
 
   .map-page .location-form {
+    width: 100%;
+    max-width: 100%;
     height: 100dvh;
     max-height: none;
     padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+    overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .map-page .location-form input,
+  .map-page .location-form select,
+  .map-page .location-form textarea {
+    min-width: 0;
+    font-size: 16px;
+  }
+
+  .map-page .form-grid,
+  .map-page .location-fields,
+  .map-page .review-fields,
+  .map-page .checkbox-fieldset,
+  .map-page .checkbox-dropdown-field,
+  .map-page .time-window-field,
+  .map-page .time-window-row {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .map-page .checkbox-fieldset label,
+  .map-page .checkbox-dropdown-menu label {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .map-page .form-header {

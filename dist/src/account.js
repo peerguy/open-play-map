@@ -5,6 +5,7 @@ const CREDITS_KEY = 'open-play-map-credits';
 const params = new URLSearchParams(location.search);
 let allCourts = [];
 let backendContributions = null;
+let refreshAccountPromise = null;
 
 const SKILL_LEVELS = {
   beginner: 'Beginner: Under 3.0',
@@ -70,12 +71,17 @@ function getSavedCredits() {
 }
 
 function getCreditBalances(userId) {
-  return getSavedCredits()
+  const balances = getSavedCredits()
     .filter(credit => credit.userId === userId && (credit.status === 'approved' || !credit.status))
     .reduce((balances, credit) => ({
       active: balances.active + Number(credit.activeCreditsDelta || 0),
       lifetime: balances.lifetime + Number(credit.lifetimeCreditsDelta || 0)
     }), { active: 0, lifetime: 0 });
+  const missingReviewCredits = getUncreditedReviewCount(userId);
+  return {
+    active: balances.active + missingReviewCredits,
+    lifetime: balances.lifetime + missingReviewCredits
+  };
 }
 
 function normalizeSkillLevel(value, fallback = '') {
@@ -84,6 +90,52 @@ function normalizeSkillLevel(value, fallback = '') {
 
 function skillLevelLabel(value) {
   return SKILL_LEVELS[normalizeSkillLevel(value)] || '';
+}
+
+function contributionStatusLabel(status) {
+  const labels = {
+    approved: 'Approved',
+    pending: 'Pending review',
+    rejected: 'Rejected',
+    published: 'Published',
+    hidden: 'Hidden',
+    removed: 'Removed'
+  };
+  return labels[status] || '';
+}
+
+function compactDate(value) {
+  return value || '';
+}
+
+function flattenedReviews() {
+  const allReviews = getSavedReviews();
+  if (Array.isArray(allReviews)) return allReviews;
+  return Object.entries(allReviews)
+    .flatMap(([courtId, reviews]) => (reviews || []).map(review => ({
+      ...review,
+      courtId: review.courtId || courtId
+    })));
+}
+
+function getUncreditedReviewCount(userId) {
+  const creditedReviewTargets = new Set(getSavedCredits()
+    .filter(credit => (
+      credit.userId === userId
+      && credit.action === 'add-review'
+      && (credit.status === 'approved' || !credit.status)
+    ))
+    .flatMap(credit => [credit.targetId, credit.remoteId].filter(Boolean)));
+
+  return flattenedReviews()
+    .filter(review => (
+      review.userId === userId
+      && (review.status === 'published' || !review.status)
+      && !creditedReviewTargets.has(review.id)
+      && !creditedReviewTargets.has(review.remoteId)
+      && !creditedReviewTargets.has(review.courtId)
+    ))
+    .length;
 }
 
 function skillLevelOptions(selected) {
@@ -227,22 +279,21 @@ function renderCurrentUser(user) {
 }
 
 function getAddedPlaces(user) {
-  return getSavedSubmissions().filter(court => court.submittedBy === user.id);
+  const places = getSavedSubmissions();
+  if (backendContributions?.locations) return places;
+  return places.filter(court => court.submittedBy === user.id);
 }
 
 function getReviewedPlaces(user) {
   const courtsById = new Map(allCourts.map(court => [court.id, court]));
-  const allReviews = getSavedReviews();
   const seenCourtIds = new Set();
 
-  return Object.entries(allReviews)
-    .flatMap(([courtId, reviews]) => reviews
-      .filter(review => review.userId === user.id)
-      .map(review => ({
-        ...review,
-        courtId,
-        courtName: review.courtName || courtsById.get(courtId)?.name || courtId
-      })))
+  return flattenedReviews()
+    .filter(review => backendContributions?.reviews || review.userId === user.id)
+    .map(review => ({
+      ...review,
+      courtName: review.courtName || courtsById.get(review.courtId)?.name || review.courtId
+    }))
     .filter(review => {
       if (seenCourtIds.has(review.courtId)) return false;
       seenCourtIds.add(review.courtId);
@@ -255,14 +306,32 @@ function renderPlaceList(places, emptyMessage) {
 
   return `
     <ul class="profile-list">
-      ${places.map(place => `
-        <li>
-          <strong>${escapeHtml(place.name)}</strong>
-          <span>${escapeHtml([place.city, place.state].filter(Boolean).join(', '))}</span>
-        </li>
-      `).join('')}
+      ${places.map(place => {
+        const location = [place.city, place.state].filter(Boolean).join(', ');
+        const status = contributionStatusLabel(place.status);
+        const date = compactDate(place.createdAt || place.updatedAt);
+        return `
+          <li>
+            <strong>${escapeHtml(place.name)}</strong>
+            <span>${escapeHtml([location, status, date].filter(Boolean).join(' · '))}</span>
+          </li>
+        `;
+      }).join('')}
     </ul>
   `;
+}
+
+function reviewSummary(review) {
+  return review.body
+    || [
+      review.openPlayReliability,
+      review.crowdLevel,
+      review.bestTime,
+      review.netSetup,
+      review.playFormat,
+      review.amenities
+    ].filter(Boolean).join(' · ')
+    || 'Review details submitted.';
 }
 
 function renderReviewList(reviews) {
@@ -270,12 +339,16 @@ function renderReviewList(reviews) {
 
   return `
     <ul class="profile-list">
-      ${reviews.map(review => `
-        <li>
-          <strong>${escapeHtml(review.courtName)}</strong>
-          <span>${escapeHtml(review.visited || review.createdAt)} · ${escapeHtml(review.body)}</span>
-        </li>
-      `).join('')}
+      ${reviews.map(review => {
+        const status = contributionStatusLabel(review.status);
+        const date = compactDate(review.visited || review.createdAt);
+        return `
+          <li>
+            <strong>${escapeHtml(review.courtName)}</strong>
+            <span>${escapeHtml([date, status, reviewSummary(review)].filter(Boolean).join(' · '))}</span>
+          </li>
+        `;
+      }).join('')}
     </ul>
   `;
 }
@@ -396,24 +469,37 @@ async function login(event) {
   }
 }
 
+async function refreshAccount() {
+  if (refreshAccountPromise) return refreshAccountPromise;
+  refreshAccountPromise = (async () => {
+    const currentUser = await window.OpenPlayAuth?.currentUser?.() || null;
+    await loadBackendContributions(currentUser);
+
+    try {
+      let seedCourts = await window.OpenPlaySupabase?.fetchApprovedLocations?.();
+      if (!seedCourts) {
+        const response = await fetch('data/courts.json');
+        seedCourts = response.ok ? await response.json() : [];
+      }
+      allCourts = [...seedCourts, ...getSavedSubmissions()];
+    } catch {
+      allCourts = getSavedSubmissions();
+    }
+
+    renderCurrentUser(currentUser);
+  })();
+
+  try {
+    await refreshAccountPromise;
+  } finally {
+    refreshAccountPromise = null;
+  }
+}
+
 async function init() {
   const notice = params.get('notice');
   elements.notice.textContent = notice || '';
-  const currentUser = await window.OpenPlayAuth?.currentUser?.() || null;
-  await loadBackendContributions(currentUser);
-
-  try {
-    let seedCourts = await window.OpenPlaySupabase?.fetchApprovedLocations?.();
-    if (!seedCourts) {
-      const response = await fetch('data/courts.json');
-      seedCourts = response.ok ? await response.json() : [];
-    }
-    allCourts = [...seedCourts, ...getSavedSubmissions()];
-  } catch {
-    allCourts = getSavedSubmissions();
-  }
-
-  renderCurrentUser(currentUser);
+  await refreshAccount();
 }
 
 elements.authTabs.forEach(tab => {
@@ -428,12 +514,18 @@ elements.signupForm.addEventListener('submit', createAccount);
 elements.loginForm.addEventListener('submit', login);
 window.addEventListener('open-play-session-changed', async () => {
   try {
-    const user = await window.OpenPlayAuth?.currentUser?.() || null;
-    await loadBackendContributions(user);
-    renderCurrentUser(user);
+    await refreshAccount();
   } catch (error) {
     console.error(error);
     renderCurrentUser(null);
+  }
+});
+window.addEventListener('pageshow', () => {
+  refreshAccount().catch(error => console.error(error));
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    refreshAccount().catch(error => console.error(error));
   }
 });
 init().catch(error => {

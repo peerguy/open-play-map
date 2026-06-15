@@ -1019,17 +1019,23 @@
         .order('created_at', { ascending: false })
     ]);
 
-    if (locationsResult.error) throw locationsResult.error;
-    if (reviewsResult.error) throw reviewsResult.error;
-    if (creditsResult.error) throw creditsResult.error;
+    if (locationsResult.error) {
+      console.warn('Could not load current user locations.', locationsResult.error);
+    }
+    if (reviewsResult.error) {
+      console.warn('Could not load current user reviews.', reviewsResult.error);
+    }
+    if (creditsResult.error) {
+      console.warn('Could not load current user credits.', creditsResult.error);
+    }
 
-    const locations = (locationsResult.data || []).map(mapLocation);
+    const locations = (locationsResult.error ? [] : locationsResult.data || []).map(mapLocation);
     const locationLookup = new Map(locations.map(location => [location.remoteId, { slug: location.id, name: location.name }]));
 
     return {
       locations,
-      reviews: reviewsToMap((reviewsResult.data || []).map(review => mapReview(review, { locations: locationLookup }))),
-      credits: (creditsResult.data || []).map(mapCredit)
+      reviews: reviewsToMap((reviewsResult.error ? [] : reviewsResult.data || []).map(review => mapReview(review, { locations: locationLookup }))),
+      credits: (creditsResult.error ? [] : creditsResult.data || []).map(mapCredit)
     };
   }
 
