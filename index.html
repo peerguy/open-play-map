@@ -22,7 +22,7 @@
     <link rel="icon" type="image/svg+xml" href="assets/icons/open-play-favicon.svg" />
     <link rel="stylesheet" href="src/leaflet-fix.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ6C/DNF8D6qS3hC9cc1N02p2o6sX7k=" crossorigin="" />
-    <link rel="stylesheet" href="src/styles.css?v=admin-review-thumbs-20260615" />
+    <link rel="stylesheet" href="src/styles.css?v=legal-pages-20260615" />
   </head>
   <body class="map-page">
     <header class="site-header">
@@ -238,7 +238,7 @@
           </div>
           <label class="field-photos">Upload photos
             <input id="newPhotos" type="file" accept="image/jpeg,image/png,image/webp" multiple />
-            <span class="field-help">Up to 4 JPG, PNG, or WebP images. Photos appear after admin approval.</span>
+            <span class="field-help">Up to 4 JPG, PNG, or WebP images. Only upload photos you took or have permission to share. Photos appear after admin approval.</span>
           </label>
         </div>
 
@@ -355,10 +355,11 @@
         </div>
         <label>Review / open play information
           <textarea id="reviewBody" rows="4" maxlength="600" placeholder="Open play times, level, nets, fees, amenities, lighting, or recent changes."></textarea>
+          <span class="field-help">Reviews should reflect your real court experience and stay focused on open play details.</span>
         </label>
         <label>Upload photos
           <input id="reviewPhotos" type="file" accept="image/jpeg,image/png,image/webp" multiple />
-          <span class="field-help">Up to 4 JPG, PNG, or WebP images. Photos appear after admin approval.</span>
+          <span class="field-help">Up to 4 JPG, PNG, or WebP images. Only upload photos you took or have permission to share. Photos appear after admin approval.</span>
         </label>
         <p id="reviewHint" class="form-hint"></p>
 
@@ -369,14 +370,28 @@
       </form>
     </dialog>
 
+    <footer class="site-footer">
+      <div class="site-footer-inner">
+        <a class="footer-brand" href="index.html">Open Play Map</a>
+        <nav class="footer-nav" aria-label="Footer">
+          <a href="about.html">About</a>
+          <a href="privacy.html">Privacy</a>
+          <a href="terms.html">Terms</a>
+          <a href="community-guidelines.html">Guidelines</a>
+          <a href="copyright.html">Copyright</a>
+          <a href="contact.html">Contact</a>
+        </nav>
+      </div>
+    </footer>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="src/analytics.js?v=seo-analytics-20260614"></script>
     <script src="src/supabase-config.js?v=supabase-read-20260614"></script>
     <script src="src/supabase-client.js?v=supabase-auth-fix-20260614"></script>
-    <script src="src/supabase-data.js?v=admin-review-thumbs-20260615"></script>
+    <script src="src/supabase-data.js?v=legal-pages-20260615"></script>
     <script src="src/supabase-auth.js?v=supabase-auth-fix-20260614"></script>
     <script src="src/mobile-header.js?v=supabase-auth-fix-20260614"></script>
-    <script src="src/app.js?v=admin-review-thumbs-20260615"></script>
+    <script src="src/app.js?v=legal-pages-20260615"></script>
   </body>
 </html>

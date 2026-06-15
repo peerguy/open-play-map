@@ -22,6 +22,7 @@ const elements = {
   signupUsername: document.querySelector('#signupUsername'),
   signupSkillLevel: document.querySelector('#signupSkillLevel'),
   signupBio: document.querySelector('#signupBio'),
+  signupTerms: document.querySelector('#signupTerms'),
   signupHint: document.querySelector('#signupHint'),
   loginForm: document.querySelector('#loginForm'),
   loginEmail: document.querySelector('#loginEmail'),
@@ -317,6 +318,11 @@ async function createAccount(event) {
 
   if (bio.length > 140) {
     elements.signupHint.textContent = 'Bio must be 140 characters or less.';
+    return;
+  }
+
+  if (!elements.signupTerms?.checked) {
+    elements.signupHint.textContent = 'Please agree to the Terms and Privacy Policy to create an account.';
     return;
   }
 
