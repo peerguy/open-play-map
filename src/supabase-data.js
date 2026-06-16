@@ -1308,21 +1308,22 @@
       .maybeSingle();
 
     if (error) throw error;
-    if (!data) return null;
+    const contributionData = Array.isArray(data) ? data[0] : data;
+    if (!contributionData) return null;
 
-    const locations = (data.locations || []).map(mapLocation);
+    const locations = (contributionData.locations || []).map(mapLocation);
     const locationLookup = new Map(locations.map(location => [location.remoteId, { slug: location.id, name: location.name }]));
 
     return {
       locations,
-      reviews: reviewsToMap((data.reviews || []).map(review => mapReview(review, { locations: locationLookup }))),
-      credits: (data.credits || []).map(mapCredit),
+      reviews: reviewsToMap((contributionData.reviews || []).map(review => mapReview(review, { locations: locationLookup }))),
+      credits: (contributionData.credits || []).map(mapCredit),
       creditBalances: {
-        active: Number(data.active_credits || 0),
-        lifetime: Number(data.lifetime_credits || 0)
+        active: Number(contributionData.active_credits || 0),
+        lifetime: Number(contributionData.lifetime_credits || 0)
       },
-      profile: data.profile || null,
-      userId: data.profile?.id || user.id || ''
+      profile: contributionData.profile || null,
+      userId: contributionData.profile?.id || user.id || ''
     };
   }
 
