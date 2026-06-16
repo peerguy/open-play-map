@@ -1074,6 +1074,18 @@ function titleWithCount(title, count) {
   return `${title} (${Number(count) || 0})`;
 }
 
+function setAdminNavLabel(viewName, title, count) {
+  const button = [...elements.navButtons].find(item => item.dataset.adminView === viewName);
+  if (button) button.textContent = titleWithCount(title, count);
+}
+
+function setModerationNavLabels(queues) {
+  elements.moderationNavButtons.forEach(button => {
+    const queue = queues[button.dataset.moderationView];
+    if (queue) button.textContent = titleWithCount(queue.title, queue.items.length);
+  });
+}
+
 function moderationSection(title, items, emptyText, renderItem, description = '') {
   return `
     <section class="moderation-section">
@@ -1196,7 +1208,11 @@ function renderModeration() {
     }
   };
   const activeQueue = queues[activeModerationView] || queues.pending;
+  const moderationTotal = Object.values(queues)
+    .reduce((total, queue) => total + queue.items.length, 0);
 
+  setAdminNavLabel('moderation', 'Moderation', moderationTotal);
+  setModerationNavLabels(queues);
   elements.moderationTitle.textContent = titleWithCount(activeQueue.title, activeQueue.items.length);
   elements.moderationCount.textContent = activeQueue.countText;
   elements.moderationNavButtons.forEach(button => {
@@ -1333,6 +1349,7 @@ function userCard(user) {
 
 function renderUsers() {
   const users = getUsers();
+  setAdminNavLabel('users', 'Users', users.length);
   elements.usersTitle.textContent = titleWithCount('App users', users.length);
   elements.userCount.textContent = `${users.length} user${users.length === 1 ? '' : 's'}`;
   elements.usersList.replaceChildren(adminListHeader('user'), ...users.map(userCard));
@@ -1449,6 +1466,7 @@ function locationCard(court) {
 }
 
 function renderLocations() {
+  setAdminNavLabel('locations', 'Locations', allCourts.length);
   elements.locationsTitle.textContent = titleWithCount('Open-play locations', allCourts.length);
   elements.locationCount.textContent = `${allCourts.length} location${allCourts.length === 1 ? '' : 's'}`;
   elements.locationsList.replaceChildren(adminListHeader('location'), ...allCourts.map(locationCard));
