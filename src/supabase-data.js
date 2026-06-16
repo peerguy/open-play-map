@@ -415,13 +415,13 @@
     const location = record.locations || lookups.locations?.get?.(record.location_id) || {};
     const submitter = record.profiles || lookups.profiles?.get?.(record.submitted_by) || {};
     const suggestedLocation = record.suggested_location || {};
-    const locationId = location.slug || suggestedLocation.id || record.location_id;
+    const locationId = record.location_slug || location.slug || suggestedLocation.id || record.location_id;
     return {
       id: record.id,
-      remoteId: record.id,
+      remoteId: record.remoteId || record.id,
       locationId,
       remoteLocationId: record.location_id,
-      locationName: location.name || suggestedLocation.name || 'Location',
+      locationName: record.location_name || location.name || suggestedLocation.name || 'Location',
       suggestedLocation: {
         ...suggestedLocation,
         id: locationId,
@@ -1380,6 +1380,7 @@
     return {
       locations,
       reviews: reviewsToMap((contributionData.reviews || []).map(review => mapReview(review, { locations: locationLookup }))),
+      suggestedEdits: (contributionData.suggested_edits || contributionData.suggestedEdits || []).map(edit => mapSuggestedEdit(edit, { locations: locationLookup })),
       credits,
       creditBalances: {
         active: Number(contributionData.active_credits ?? creditBalancesFromRows(credits).active),
@@ -1395,7 +1396,7 @@
   async function fetchDirectCurrentUserContributions(supabase, user, status) {
     if (!user?.id) return null;
 
-    const [locationsResult, reviewsResult, creditsResult] = await Promise.all([
+    const [locationsResult, reviewsResult, editsResult, creditsResult] = await Promise.all([
       supabase
         .from('locations')
         .select(LOCATION_SELECT)
@@ -1409,6 +1410,11 @@
         .eq('locations.status', 'approved')
         .order('updated_at', { ascending: false }),
       supabase
+        .from('suggested_edits')
+        .select('*,locations(slug,name,status)')
+        .eq('submitted_by', user.id)
+        .order('created_at', { ascending: false }),
+      supabase
         .from('credits')
         .select('*')
         .eq('user_id', user.id)
@@ -1418,6 +1424,7 @@
     const errors = [
       locationsResult.error && `locations: ${locationsResult.error.message}`,
       reviewsResult.error && `reviews: ${reviewsResult.error.message}`,
+      editsResult.error && `suggested_edits: ${editsResult.error.message}`,
       creditsResult.error && `credits: ${creditsResult.error.message}`
     ].filter(Boolean);
 
@@ -1432,6 +1439,7 @@
       profile: { id: user.id },
       locations: locationsResult.error ? [] : locationsResult.data || [],
       reviews: reviewsResult.error ? [] : reviewsResult.data || [],
+      suggested_edits: editsResult.error ? [] : editsResult.data || [],
       credits,
       active_credits: balances.active,
       lifetime_credits: balances.lifetime

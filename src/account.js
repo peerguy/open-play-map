@@ -13,6 +13,13 @@ const SKILL_LEVELS = {
   advanced: 'Advanced: 4.0+'
 };
 
+const CONTRIBUTION_CREDITS = {
+  'add-location': 5,
+  'add-review': 1,
+  'add-photo': 2,
+  'suggested-edit': 3
+};
+
 const elements = {
   notice: document.querySelector('#accountNotice'),
   currentUserCard: document.querySelector('#currentUserCard'),
@@ -56,6 +63,7 @@ function emptyBackendContributions(status = 'Not loaded') {
   return {
     locations: [],
     reviews: {},
+    suggestedEdits: [],
     credits: [],
     creditBalances: { active: 0, lifetime: 0 },
     source: 'empty',
@@ -119,6 +127,76 @@ function contributionStatusLabel(status) {
 
 function compactDate(value) {
   return value || '';
+}
+
+function photoUrl(photo) {
+  if (typeof photo === 'string') return photo.trim();
+  return String(photo?.url || photo?.storagePath || photo?.storage_path || '').trim();
+}
+
+function photoReviewId(photo) {
+  return String(photo?.reviewId || photo?.review_id || '').trim();
+}
+
+function normalizedPhotos(photos = []) {
+  return (photos || [])
+    .map(photo => {
+      const url = photoUrl(photo);
+      if (!url) return null;
+      const source = typeof photo === 'object' ? photo : {};
+      return {
+        ...source,
+        id: source.id || source.remoteId || url,
+        remoteId: source.remoteId || source.id || '',
+        reviewId: photoReviewId(source),
+        uploadedBy: source.uploadedBy || source.uploaded_by || '',
+        url
+      };
+    })
+    .filter(Boolean);
+}
+
+function approvedCreditRows() {
+  return getSavedCredits().filter(credit => credit.status === 'approved' || !credit.status);
+}
+
+function idCandidates(item = {}) {
+  return [...new Set([item.remoteId, item.id].filter(Boolean).map(String))];
+}
+
+function creditRowsFor(action, targetType, targetIds = []) {
+  const ids = new Set(targetIds.filter(Boolean).map(String));
+  if (!ids.size) return [];
+  return approvedCreditRows().filter(credit => (
+    credit.action === action
+    && credit.targetType === targetType
+    && ids.has(String(credit.targetId || ''))
+  ));
+}
+
+function sumCreditRows(rows) {
+  return rows.reduce((total, credit) => total + Number(credit.activeCreditsDelta || credit.lifetimeCreditsDelta || 0), 0);
+}
+
+function targetCreditValue(action, targetType, item, fallback = 0) {
+  const rows = creditRowsFor(action, targetType, idCandidates(item));
+  if (rows.length) return sumCreditRows(rows);
+  return backendContributions?.credits ? 0 : fallback;
+}
+
+function photoCreditValue(photos = []) {
+  const photoIds = photos.flatMap(idCandidates);
+  const rows = creditRowsFor('add-photo', 'photo', photoIds);
+  if (rows.length) return sumCreditRows(rows);
+  return backendContributions?.credits ? 0 : (photos.length ? CONTRIBUTION_CREDITS['add-photo'] : 0);
+}
+
+function contributionCreditPill(value) {
+  return `<span class="profile-credit-pill">${Number(value) > 0 ? '+' : ''}${escapeHtml(Number(value) || 0)}</span>`;
+}
+
+function imageStatusLabel(hasImages) {
+  return hasImages ? 'Includes images' : 'No images';
 }
 
 function flattenedReviews() {
@@ -187,6 +265,7 @@ function renderCurrentUser(user) {
   elements.currentUserCard.hidden = false;
   const addedPlaces = getAddedPlaces(user);
   const reviewedPlaces = getReviewedPlaces(user);
+  const suggestedEdits = getSuggestedEdits(user);
   const isAdmin = user.role === 'admin';
   const profileSkillLevel = skillLevelLabel(user.skillLevel);
   const creditBalances = getCreditBalances(user.id);
@@ -214,11 +293,15 @@ function renderCurrentUser(user) {
     <div class="profile-contributions">
       <section>
         <h3>Places you added</h3>
-        ${renderPlaceList(addedPlaces, 'No added places yet.')}
+        ${renderPlaceList(addedPlaces, user, 'No added places yet.')}
       </section>
       <section>
         <h3>Places you reviewed</h3>
-        ${renderReviewList(reviewedPlaces)}
+        ${renderReviewList(reviewedPlaces, user)}
+      </section>
+      <section>
+        <h3>Suggested edits</h3>
+        ${renderSuggestedEditList(suggestedEdits)}
       </section>
     </div>
     <div class="current-user-actions">
@@ -294,7 +377,38 @@ function getReviewedPlaces(user) {
     });
 }
 
-function renderPlaceList(places, emptyMessage) {
+function getSuggestedEdits(user) {
+  const edits = backendContributions?.suggestedEdits || [];
+  if (backendContributions?.suggestedEdits) return edits;
+  return edits.filter(edit => edit.userId === user.id);
+}
+
+function locationContributionPhotos(place, user) {
+  return normalizedPhotos(place.photos)
+    .filter(photo => !photo.reviewId && (!photo.uploadedBy || photo.uploadedBy === user.id));
+}
+
+function reviewContributionPhotos(review, user) {
+  const reviewIds = new Set(idCandidates(review));
+  const court = allCourts.find(item => (
+    item.id === review.courtId
+    || item.remoteId === review.remoteLocationId
+    || item.remoteId === review.courtId
+  ));
+
+  return normalizedPhotos(court?.photos || [])
+    .filter(photo => (
+      photo.reviewId
+      && reviewIds.has(photo.reviewId)
+      && (!photo.uploadedBy || photo.uploadedBy === user.id)
+    ));
+}
+
+function suggestedEditContributionPhotos(edit) {
+  return normalizedPhotos(edit.photos || edit.imageUrls || edit.images || []);
+}
+
+function renderPlaceList(places, user, emptyMessage) {
   if (!places.length) return `<p class="empty-profile-list">${emptyMessage}</p>`;
 
   return `
@@ -303,10 +417,16 @@ function renderPlaceList(places, emptyMessage) {
         const location = [place.city, place.state].filter(Boolean).join(', ');
         const status = contributionStatusLabel(place.status);
         const date = compactDate(place.createdAt || place.updatedAt);
+        const photos = locationContributionPhotos(place, user);
+        const credits = targetCreditValue('add-location', 'location', place, place.status === 'approved' ? CONTRIBUTION_CREDITS['add-location'] : 0)
+          + photoCreditValue(photos);
         return `
-          <li>
-            <strong>${escapeHtml(place.name)}</strong>
-            <span>${escapeHtml([location, status, date].filter(Boolean).join(' · '))}</span>
+          <li class="profile-contribution-item">
+            <div class="profile-contribution-main">
+              <strong>${escapeHtml(place.name)}</strong>
+              <span>${escapeHtml([location, status, date, imageStatusLabel(photos.length > 0)].filter(Boolean).join(' · '))}</span>
+            </div>
+            ${contributionCreditPill(credits)}
           </li>
         `;
       }).join('')}
@@ -327,7 +447,7 @@ function reviewSummary(review) {
     || 'Review details submitted.';
 }
 
-function renderReviewList(reviews) {
+function renderReviewList(reviews, user) {
   if (!reviews.length) return '<p class="empty-profile-list">No reviews yet.</p>';
 
   return `
@@ -335,10 +455,44 @@ function renderReviewList(reviews) {
       ${reviews.map(review => {
         const status = contributionStatusLabel(review.status);
         const date = compactDate(review.visited || review.createdAt);
+        const photos = reviewContributionPhotos(review, user);
+        const credits = targetCreditValue('add-review', 'review', review, review.status === 'published' ? CONTRIBUTION_CREDITS['add-review'] : 0)
+          + photoCreditValue(photos);
         return `
-          <li>
-            <strong>${escapeHtml(review.courtName)}</strong>
-            <span>${escapeHtml([date, status, reviewSummary(review)].filter(Boolean).join(' · '))}</span>
+          <li class="profile-contribution-item">
+            <div class="profile-contribution-main">
+              <strong>${escapeHtml(review.courtName)}</strong>
+              <span>${escapeHtml([date, status, imageStatusLabel(photos.length > 0), reviewSummary(review)].filter(Boolean).join(' · '))}</span>
+            </div>
+            ${contributionCreditPill(credits)}
+          </li>
+        `;
+      }).join('')}
+    </ul>
+  `;
+}
+
+function renderSuggestedEditList(edits) {
+  if (!edits.length) return '<p class="empty-profile-list">No suggested edits yet.</p>';
+
+  return `
+    <ul class="profile-list">
+      ${edits.map(edit => {
+        const status = contributionStatusLabel(edit.status);
+        const date = compactDate(edit.approvedAt || edit.createdAt);
+        const photos = suggestedEditContributionPhotos(edit);
+        const imageCredits = photos.length
+          ? Math.max(photoCreditValue(photos), CONTRIBUTION_CREDITS['add-photo'])
+          : 0;
+        const credits = targetCreditValue('suggested-edit', 'suggested-edit', edit, edit.status === 'approved' ? CONTRIBUTION_CREDITS['suggested-edit'] : 0)
+          + imageCredits;
+        return `
+          <li class="profile-contribution-item">
+            <div class="profile-contribution-main">
+              <strong>${escapeHtml(edit.locationName || edit.suggestedLocation?.name || 'Suggested edit')}</strong>
+              <span>${escapeHtml([date, status, imageStatusLabel(photos.length > 0), edit.reason].filter(Boolean).join(' · '))}</span>
+            </div>
+            ${contributionCreditPill(credits)}
           </li>
         `;
       }).join('')}
