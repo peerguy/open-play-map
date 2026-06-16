@@ -1,16 +1,6 @@
 (function () {
-  const PROFILE_ALIASES = {
-    'smolenral@gmail.com': {
-      username: 'Osprey'
-    }
-  };
-
   function client() {
     return window.OpenPlaySupabaseClient?.getClient?.() || null;
-  }
-
-  function profileAlias(email) {
-    return PROFILE_ALIASES[String(email || '').trim().toLowerCase()] || null;
   }
 
   function normalizeProfile(profile, authUser) {
@@ -18,12 +8,10 @@
     const profileEmail = profile?.email || '';
     const authEmail = authUser?.email || '';
     const email = profileEmail || authEmail;
-    const alias = profileAlias(profileEmail) || profileAlias(authEmail);
     return {
       id: profile?.id || authUser?.id || '',
       email,
-      authEmail,
-      username: alias?.username || profile?.username || authUser?.user_metadata?.username || authUser?.email?.split('@')[0] || 'Player',
+      username: profile?.username || authUser?.user_metadata?.username || authUser?.email?.split('@')[0] || 'Player',
       photo: profile?.avatar_url || '',
       skillLevel: profile?.skill_level || authUser?.user_metadata?.skill_level || '',
       bio: profile?.bio || authUser?.user_metadata?.bio || '',

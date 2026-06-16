@@ -52,6 +52,15 @@ function getSavedSubmissions() {
   }
 }
 
+function emptyBackendContributions() {
+  return {
+    locations: [],
+    reviews: {},
+    credits: [],
+    creditBalances: { active: 0, lifetime: 0 }
+  };
+}
+
 function getSavedReviews() {
   if (backendContributions?.reviews) return backendContributions.reviews;
   try {
@@ -142,15 +151,10 @@ async function loadBackendContributions(user) {
   }
 
   try {
-    backendContributions = await window.OpenPlaySupabase?.fetchCurrentUserContributions?.(user) || null;
+    backendContributions = await window.OpenPlaySupabase?.fetchCurrentUserContributions?.(user) || emptyBackendContributions();
   } catch (error) {
     console.warn('Supabase contribution load failed.', error);
-    backendContributions = {
-      locations: [],
-      reviews: {},
-      credits: [],
-      creditBalances: { active: 0, lifetime: 0 }
-    };
+    backendContributions = emptyBackendContributions();
   }
 }
 

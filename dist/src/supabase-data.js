@@ -1298,112 +1298,31 @@
     return mapPhoto(data);
   }
 
-  function normalizedIdentity(value) {
-    return String(value || '').trim().toLowerCase();
-  }
-
-  const CONTRIBUTION_ALIASES = [
-    {
-      userId: '4528ce68-a84c-49bb-ad44-0b2bd3e5fc89',
-      username: 'osprey',
-      emails: ['smolenral@gmail.com']
-    }
-  ];
-
-  function contributionAliasForUser(user = {}, authUser = null) {
-    const emails = [
-      user.email,
-      user.authEmail,
-      authUser?.email
-    ].map(normalizedIdentity).filter(Boolean);
-    const usernames = [
-      user.username,
-      authUser?.user_metadata?.username
-    ].map(normalizedIdentity).filter(Boolean);
-
-    return CONTRIBUTION_ALIASES.find(alias => (
-      alias.emails.some(email => emails.includes(normalizedIdentity(email)))
-      || usernames.includes(normalizedIdentity(alias.username))
-    )) || null;
-  }
-
   async function fetchCurrentUserContributions(userOrId) {
     const supabase = client();
     const user = typeof userOrId === 'object' && userOrId ? userOrId : { id: userOrId };
     if (!supabase) return null;
 
-    let authUser = null;
-    try {
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) throw sessionError;
-      authUser = sessionData.session?.user || null;
-    } catch (error) {
-      console.warn('Could not inspect current Supabase session for contribution aliases.', error);
-    }
+    const { data, error } = await supabase
+      .rpc('current_user_contributions')
+      .maybeSingle();
 
-    const userId = user.id || authUser?.id || '';
-    const username = normalizedIdentity(user.username || authUser?.user_metadata?.username);
-    const alias = contributionAliasForUser(user, authUser);
-    const aliasUsername = normalizedIdentity(alias?.username);
-    if (!userId) return null;
+    if (error) throw error;
+    if (!data) return null;
 
-    const { data: leaderboardRows, error: leaderboardError } = await supabase.rpc('public_leaderboard');
-    if (leaderboardError) {
-      console.warn('Could not load current user credit balance.', leaderboardError);
-    }
-
-    const leaderboardRow = (leaderboardError ? [] : leaderboardRows || [])
-      .find(row => (
-        row.user_id === userId
-        || row.user_id === alias?.userId
-        || (username && normalizedIdentity(row.username) === username)
-        || (aliasUsername && normalizedIdentity(row.username) === aliasUsername)
-      ));
-    const contributionUserId = leaderboardRow?.user_id || alias?.userId || userId;
-
-    const [locationsResult, reviewsResult, creditsResult] = await Promise.all([
-      supabase
-        .from('locations')
-        .select('*,open_play_slots(*)')
-        .eq('submitted_by', contributionUserId)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('reviews')
-        .select('*,locations(slug,name)')
-        .eq('user_id', contributionUserId)
-        .eq('status', 'published')
-        .order('updated_at', { ascending: false }),
-      supabase
-        .from('credits')
-        .select('*')
-        .eq('user_id', contributionUserId)
-        .order('created_at', { ascending: false })
-    ]);
-
-    if (locationsResult.error) {
-      console.warn('Could not load current user locations.', locationsResult.error);
-    }
-    if (reviewsResult.error) {
-      console.warn('Could not load current user reviews.', reviewsResult.error);
-    }
-    if (creditsResult.error) {
-      console.warn('Could not load current user credits.', creditsResult.error);
-    }
-
-    const locations = (locationsResult.error ? [] : locationsResult.data || []).map(mapLocation);
+    const locations = (data.locations || []).map(mapLocation);
     const locationLookup = new Map(locations.map(location => [location.remoteId, { slug: location.id, name: location.name }]));
-    const creditBalances = leaderboardRow
-      ? {
-        active: Number(leaderboardRow.active_credits || 0),
-        lifetime: Number(leaderboardRow.lifetime_credits || 0)
-      }
-      : { active: 0, lifetime: 0 };
 
     return {
       locations,
-      reviews: reviewsToMap((reviewsResult.error ? [] : reviewsResult.data || []).map(review => mapReview(review, { locations: locationLookup }))),
-      credits: (creditsResult.error ? [] : creditsResult.data || []).map(mapCredit),
-      creditBalances
+      reviews: reviewsToMap((data.reviews || []).map(review => mapReview(review, { locations: locationLookup }))),
+      credits: (data.credits || []).map(mapCredit),
+      creditBalances: {
+        active: Number(data.active_credits || 0),
+        lifetime: Number(data.lifetime_credits || 0)
+      },
+      profile: data.profile || null,
+      userId: data.profile?.id || user.id || ''
     };
   }
 
