@@ -295,7 +295,7 @@ function renderCurrentUser(user) {
         <strong>${escapeHtml(creditBalances.lifetime)}</strong>
       </div>
     </div>
-    <p class="credit-disclaimer">Rewards are in beta. Credits have no cash value, are not transferable, and do not guarantee a prize.</p>
+    <p class="credit-disclaimer">Credits have no cash value, are not transferable, and do not guarantee a prize. See the <a href="official-rules.html">Official Rules</a> for drawing eligibility, timing, prize details, and redraw terms.</p>
     <div class="profile-contributions">
       <section>
         <h3>Places you added</h3>

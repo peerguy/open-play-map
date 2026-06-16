@@ -5045,7 +5045,7 @@ label:has(input:required:valid) > .field-label .is-required {
 }
 
 .admin-drawing-row {
-  grid-template-columns: minmax(170px, 1.2fr) 112px 116px minmax(130px, 1fr) 156px 160px;
+  grid-template-columns: minmax(150px, 1.35fr) 94px 104px minmax(112px, 1fr) 126px 112px;
 }
 
 .admin-row-main {
@@ -5092,6 +5092,12 @@ label:has(input:required:valid) > .field-label .is-required {
 .admin-row-actions {
   display: flex;
   gap: 6px;
+}
+
+.admin-drawing-row .admin-row-actions {
+  width: 100%;
+  justify-content: center;
+  justify-self: center;
 }
 
 .admin-edit-button,
