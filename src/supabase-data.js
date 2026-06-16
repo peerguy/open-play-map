@@ -695,9 +695,17 @@
     return false;
   }
 
-  async function syncReviewCredit(supabase, record, actorId = null) {
+  function locationStatusForRecord(record = {}, locations = new Map()) {
+    return record.location_status
+      || record.locations?.status
+      || locations.get?.(record.location_id)?.status
+      || '';
+  }
+
+  async function syncReviewCredit(supabase, record, actorId = null, locations = new Map()) {
     if (!record?.id) return false;
-    if (record.status === 'published' && record.user_id) {
+    const locationStatus = locationStatusForRecord(record, locations);
+    if (record.status === 'published' && record.user_id && (!locationStatus || locationStatus === 'approved')) {
       return syncCreditForTarget(supabase, {
         userId: record.user_id,
         action: 'add-review',
@@ -710,9 +718,23 @@
     return voidCreditForTarget(supabase, 'add-review', 'review', record.id);
   }
 
-  async function syncPhotoCredit(supabase, record, actorId = null) {
+  function reviewStatusForRecord(record = {}, reviews = new Map()) {
+    return record.review_status
+      || record.reviews?.status
+      || reviews.get?.(record.review_id)?.status
+      || '';
+  }
+
+  async function syncPhotoCredit(supabase, record, actorId = null, locations = new Map(), reviews = new Map()) {
     if (!record?.id) return false;
-    if (record.status === 'approved' && record.uploaded_by) {
+    const locationStatus = locationStatusForRecord(record, locations);
+    const reviewStatus = reviewStatusForRecord(record, reviews);
+    if (
+      record.status === 'approved'
+      && record.uploaded_by
+      && (!locationStatus || locationStatus === 'approved')
+      && (!reviewStatus || reviewStatus === 'published')
+    ) {
       return syncCreditForTarget(supabase, {
         userId: record.uploaded_by,
         action: 'add-photo',
@@ -749,15 +771,17 @@
   async function reconcileAdminCredits(supabase, { locations = [], reviews = [], photos = [], suggestedEdits = [] } = {}) {
     if (!supabase) return false;
     let changed = false;
+    const locationsById = new Map((locations || []).map(location => [location.id, location]));
+    const reviewsById = new Map((reviews || []).map(review => [review.id, review]));
 
     for (const location of locations) {
       changed = await syncLocationCredit(supabase, location) || changed;
     }
     for (const review of reviews) {
-      changed = await syncReviewCredit(supabase, review) || changed;
+      changed = await syncReviewCredit(supabase, review, null, locationsById) || changed;
     }
     for (const photo of photos) {
-      changed = await syncPhotoCredit(supabase, photo) || changed;
+      changed = await syncPhotoCredit(supabase, photo, null, locationsById, reviewsById) || changed;
     }
     for (const edit of suggestedEdits) {
       changed = await syncSuggestedEditCredit(supabase, edit) || changed;
@@ -1293,7 +1317,7 @@
       .from('reviews')
       .update(payload)
       .eq('id', reviewId)
-      .select('*,locations(slug,name),profiles:user_id(username,skill_level)')
+      .select('*,locations(slug,name,status),profiles:user_id(username,skill_level)')
       .single();
 
     if (error) throw error;
@@ -1379,9 +1403,10 @@
         .order('created_at', { ascending: false }),
       supabase
         .from('reviews')
-        .select('*,locations(slug,name)')
+        .select('*,locations!inner(slug,name,status)')
         .eq('user_id', user.id)
         .eq('status', 'published')
+        .eq('locations.status', 'approved')
         .order('updated_at', { ascending: false }),
       supabase
         .from('credits')
