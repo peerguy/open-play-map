@@ -385,6 +385,33 @@
     };
   }
 
+  function mapRewardPeriod(record = {}) {
+    return {
+      id: record.id,
+      drawingId: record.drawing_id || '',
+      drawingMonth: dateOnly(record.drawing_month),
+      startsAt: record.starts_at || '',
+      endsAt: record.ends_at || '',
+      drawingAt: record.drawing_at || '',
+      periodStatus: record.period_status || record.status || 'scheduled',
+      drawingStatus: record.drawing_status || '',
+      rulesVersion: record.rules_version || '',
+      officialRulesUrl: record.official_rules_url || 'official-rules.html',
+      estimatedEntries: Number(record.estimated_entries || 0),
+      totalEntries: record.total_entries === null || record.total_entries === undefined ? null : Number(record.total_entries),
+      winnerUserId: record.winner_user_id || '',
+      winnerUsername: record.winner_username || '',
+      prize: record.prize || '',
+      activeCreditsAtDraw: record.active_credits_at_draw === null || record.active_credits_at_draw === undefined ? null : Number(record.active_credits_at_draw),
+      drawnAt: record.drawn_at || '',
+      winnerNotifiedAt: record.winner_notified_at || '',
+      winnerClaimDeadline: record.winner_claim_deadline || '',
+      canRun: Boolean(record.can_run),
+      canClaim: Boolean(record.can_claim),
+      canRedraw: Boolean(record.can_redraw)
+    };
+  }
+
   function mapReport(record, lookups = {}) {
     const metadata = record.metadata || {};
     const reporter = record.profiles || lookups.profiles?.get?.(record.reporter_id) || {};
@@ -1553,17 +1580,18 @@
     const supabase = client();
     if (!supabase) return null;
 
-    const [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult, photosResult] = await Promise.all([
+    const [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult, photosResult, rewardPeriodsResult] = await Promise.all([
       supabase.from('profiles').select('id,email,username,role,skill_level,bio,avatar_url,created_at'),
       supabase.from('locations').select('id,slug,name,status,submitted_by,approved_by'),
       supabase.from('reviews').select('*').order('created_at', { ascending: false }),
       supabase.from('reports').select('*').order('created_at', { ascending: false }),
       supabase.from('suggested_edits').select('*').order('created_at', { ascending: false }),
       supabase.rpc('admin_contribution_credits'),
-      supabase.from('photos').select('*').order('created_at', { ascending: false })
+      supabase.from('photos').select('*').order('created_at', { ascending: false }),
+      supabase.rpc('admin_reward_periods')
     ]);
 
-    [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult, photosResult]
+    [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult, photosResult, rewardPeriodsResult]
       .forEach(result => {
         if (result.error) throw result.error;
       });
@@ -1578,8 +1606,42 @@
       reports: (reportsResult.data || []).map(report => mapReport(report, { profiles, locations, reviewsById })),
       suggestedEdits: (editsResult.data || []).map(edit => mapSuggestedEdit(edit, { profiles, locations })),
       credits: (creditsResult.data || []).map(credit => mapCredit(credit, profiles)),
-      photos: (photosResult.data || []).map(photo => mapPhoto(photo, { profiles, locations }))
+      photos: (photosResult.data || []).map(photo => mapPhoto(photo, { profiles, locations })),
+      rewardPeriods: (rewardPeriodsResult.data || []).map(mapRewardPeriod)
     };
+  }
+
+  async function runMonthlyDrawing(drawingMonth) {
+    const supabase = client();
+    if (!supabase) throw new Error('Supabase is not configured.');
+
+    const { data, error } = await supabase.rpc('run_monthly_drawing', {
+      p_drawing_month: drawingMonth || null
+    });
+    if (error) throw error;
+    return data;
+  }
+
+  async function claimMonthlyDrawing(drawingId) {
+    const supabase = client();
+    if (!supabase) throw new Error('Supabase is not configured.');
+
+    const { data, error } = await supabase.rpc('claim_monthly_drawing', {
+      p_drawing_id: drawingId
+    });
+    if (error) throw error;
+    return data;
+  }
+
+  async function runMonthlyRedraw(drawingId) {
+    const supabase = client();
+    if (!supabase) throw new Error('Supabase is not configured.');
+
+    const { data, error } = await supabase.rpc('run_monthly_redraw', {
+      p_drawing_id: drawingId
+    });
+    if (error) throw error;
+    return data;
   }
 
   window.OpenPlaySupabase = {
@@ -1605,6 +1667,9 @@
     fetchCurrentUserContributions,
     fetchPublicLeaderboard,
     fetchPublicMonthlyDrawings,
-    fetchAdminCollections
+    fetchAdminCollections,
+    runMonthlyDrawing,
+    claimMonthlyDrawing,
+    runMonthlyRedraw
   };
 })();

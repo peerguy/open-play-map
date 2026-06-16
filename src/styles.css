@@ -5044,6 +5044,10 @@ label:has(input:required:valid) > .field-label .is-required {
   grid-template-columns: minmax(180px, 1.45fr) 110px 78px 96px minmax(120px, 1fr) 64px 150px;
 }
 
+.admin-drawing-row {
+  grid-template-columns: minmax(170px, 1.2fr) 112px 116px minmax(130px, 1fr) 156px 160px;
+}
+
 .admin-row-main {
   min-width: 0;
 }
@@ -5133,6 +5137,17 @@ label:has(input:required:valid) > .field-label .is-required {
   color: var(--brand-dark);
   font-size: 1.35rem;
   line-height: 1.1;
+}
+
+.admin-drawing-summary {
+  grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(0, 1fr));
+  padding: 0 10px 10px;
+}
+
+.admin-drawing-summary strong {
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+  line-height: 1.25;
 }
 
 .admin-expanded-section {
@@ -5309,7 +5324,8 @@ label:has(input:required:valid) > .field-label .is-required {
   }
 
   .admin-user-row,
-  .admin-location-row {
+  .admin-location-row,
+  .admin-drawing-row {
     grid-template-columns: 1fr;
   }
 
@@ -5321,7 +5337,8 @@ label:has(input:required:valid) > .field-label .is-required {
   }
 
   .admin-user-row > span,
-  .admin-location-row > span {
+  .admin-location-row > span,
+  .admin-drawing-row > span {
     display: none;
   }
 

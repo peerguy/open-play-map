@@ -8,7 +8,7 @@
     <meta name="description" content="Open Play Map admin moderation tools." />
     <meta name="theme-color" content="#266c3f" />
     <link rel="icon" type="image/svg+xml" href="assets/icons/open-play-favicon.svg" />
-    <link rel="stylesheet" href="src/styles.css?v=profile-contribution-credits-20260616" />
+    <link rel="stylesheet" href="src/styles.css?v=reward-drawings-20260616" />
   </head>
   <body class="admin-page">
     <header class="site-header account-header">
@@ -42,6 +42,7 @@
         </div>
         <button class="admin-nav-button" type="button" data-admin-view="users">Users</button>
         <button class="admin-nav-button" type="button" data-admin-view="locations">Locations</button>
+        <button class="admin-nav-button" type="button" data-admin-view="drawings">Drawings</button>
         <a class="secondary-button admin-map-link" href="index.html">Back to map</a>
       </aside>
 
@@ -84,6 +85,17 @@
           </div>
           <div id="adminLocationsList" class="admin-list"></div>
         </section>
+
+        <section id="drawingsAdminView" class="admin-view" hidden>
+          <div class="admin-view-header">
+            <div>
+              <p class="eyebrow">Rewards</p>
+              <h2 id="drawingsAdminTitle">Monthly drawings</h2>
+            </div>
+            <p id="drawingAdminCount" class="admin-count"></p>
+          </div>
+          <div id="adminDrawingsList" class="admin-list"></div>
+        </section>
       </section>
     </main>
 
@@ -94,6 +106,7 @@
           <a href="about.html">About</a>
           <a href="privacy.html">Privacy</a>
           <a href="terms.html">Terms</a>
+          <a href="official-rules.html">Official Rules</a>
           <a href="community-guidelines.html">Guidelines</a>
           <a href="copyright.html">Copyright</a>
           <a href="contact.html">Contact</a>
@@ -104,10 +117,10 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="src/analytics.js?v=seo-analytics-20260614"></script>
     <script src="src/supabase-config.js?v=supabase-read-20260614"></script>
-    <script src="src/supabase-client.js?v=profile-contribution-credits-20260616"></script>
-    <script src="src/supabase-auth.js?v=profile-contribution-credits-20260616"></script>
-    <script src="src/supabase-data.js?v=profile-contribution-credits-20260616"></script>
-    <script src="src/mobile-header.js?v=profile-contribution-credits-20260616"></script>
-    <script src="src/admin.js?v=profile-contribution-credits-20260616"></script>
+    <script src="src/supabase-client.js?v=reward-drawings-20260616"></script>
+    <script src="src/supabase-auth.js?v=reward-drawings-20260616"></script>
+    <script src="src/supabase-data.js?v=reward-drawings-20260616"></script>
+    <script src="src/mobile-header.js?v=reward-drawings-20260616"></script>
+    <script src="src/admin.js?v=reward-drawings-20260616"></script>
   </body>
 </html>

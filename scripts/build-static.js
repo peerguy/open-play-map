@@ -12,6 +12,7 @@ const entries = [
   'admin.html',
   'privacy.html',
   'terms.html',
+  'official-rules.html',
   'community-guidelines.html',
   'copyright.html',
   'contact.html',

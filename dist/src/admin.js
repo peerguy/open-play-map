@@ -37,15 +37,19 @@ const elements = {
   moderationView: document.querySelector('#moderationAdminView'),
   usersView: document.querySelector('#usersAdminView'),
   locationsView: document.querySelector('#locationsAdminView'),
+  drawingsView: document.querySelector('#drawingsAdminView'),
   moderationList: document.querySelector('#adminModerationList'),
   usersList: document.querySelector('#adminUsersList'),
   locationsList: document.querySelector('#adminLocationsList'),
+  drawingsList: document.querySelector('#adminDrawingsList'),
   moderationTitle: document.querySelector('#moderationAdminTitle'),
   usersTitle: document.querySelector('#usersAdminTitle'),
   locationsTitle: document.querySelector('#locationsAdminTitle'),
+  drawingsTitle: document.querySelector('#drawingsAdminTitle'),
   moderationCount: document.querySelector('#moderationAdminCount'),
   userCount: document.querySelector('#userAdminCount'),
   locationCount: document.querySelector('#locationAdminCount'),
+  drawingCount: document.querySelector('#drawingAdminCount'),
   navButtons: document.querySelectorAll('[data-admin-view]'),
   moderationSubnav: document.querySelector('#moderationSubnav'),
   moderationNavButtons: document.querySelectorAll('[data-moderation-view]')
@@ -60,7 +64,8 @@ let backendCollections = {
   reports: null,
   suggestedEdits: null,
   credits: null,
-  photos: null
+  photos: null,
+  rewardPeriods: null
 };
 const adminPhotoLightbox = {
   element: null,
@@ -80,6 +85,30 @@ function normalize(value) {
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function formatAdminDateTime(value) {
+  if (!value) return 'Not set';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short'
+  });
+}
+
+function formatAdminMonth(value) {
+  if (!value) return 'Drawing month';
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString([], {
+    month: 'long',
+    year: 'numeric'
+  });
 }
 
 function escapeHtml(value) {
@@ -778,6 +807,7 @@ function showView(viewName) {
   elements.moderationView.hidden = viewName !== 'moderation';
   elements.usersView.hidden = viewName !== 'users';
   elements.locationsView.hidden = viewName !== 'locations';
+  elements.drawingsView.hidden = viewName !== 'drawings';
 }
 
 function showModerationView(viewName) {
@@ -803,8 +833,8 @@ function collapseAdminRow(card) {
 function adminListHeader(type) {
   const header = document.createElement('div');
   header.className = `admin-list-header admin-${type}-row`;
-  header.innerHTML = type === 'user'
-    ? `
+  if (type === 'user') {
+    header.innerHTML = `
       <span>User</span>
       <span>Role</span>
       <span>Skill</span>
@@ -812,8 +842,18 @@ function adminListHeader(type) {
       <span>Lifetime</span>
       <span>Joined</span>
       <span>Actions</span>
-    `
-    : `
+    `;
+  } else if (type === 'drawing') {
+    header.innerHTML = `
+      <span>Month</span>
+      <span>Status</span>
+      <span>Entries</span>
+      <span>Winner</span>
+      <span>Deadline</span>
+      <span>Actions</span>
+    `;
+  } else {
+    header.innerHTML = `
       <span>Location</span>
       <span>Access</span>
       <span>Status</span>
@@ -822,6 +862,7 @@ function adminListHeader(type) {
       <span>Photos</span>
       <span>Actions</span>
     `;
+  }
   return header;
 }
 
@@ -1472,6 +1513,165 @@ function renderLocations() {
   elements.locationsList.replaceChildren(adminListHeader('location'), ...allCourts.map(locationCard));
 }
 
+function drawingStatusLabel(period) {
+  if (period.drawingStatus === 'claimed') return 'Claimed';
+  if (period.drawingStatus === 'drawn') return 'Awaiting claim';
+  if (period.periodStatus === 'drawn') return 'Drawn';
+  if (period.periodStatus === 'cancelled') return 'Cancelled';
+  return 'Scheduled';
+}
+
+function drawingEntryText(period) {
+  if (period.totalEntries !== null && period.totalEntries !== undefined) {
+    return `${period.totalEntries} snapshotted`;
+  }
+  return `${period.estimatedEntries || 0} estimated`;
+}
+
+function drawingActionHtml(period) {
+  const actions = [];
+  if (period.canRun) {
+    actions.push(`<button class="secondary-button admin-edit-button admin-approve-button" type="button" data-run-drawing="${escapeHtml(period.drawingMonth)}">Run drawing</button>`);
+  }
+  if (period.canClaim && period.drawingId) {
+    actions.push(`<button class="secondary-button admin-edit-button admin-approve-button" type="button" data-claim-drawing="${escapeHtml(period.drawingId)}">Mark claimed</button>`);
+  }
+  if (period.canRedraw && period.drawingId) {
+    actions.push(`<button class="secondary-button admin-delete-button" type="button" data-redraw-drawing="${escapeHtml(period.drawingId)}">Redraw</button>`);
+  }
+  if (!actions.length) {
+    actions.push('<button class="secondary-button admin-edit-button" type="button" disabled>No action</button>');
+  }
+  return actions.join('');
+}
+
+function drawingCard(period) {
+  const card = document.createElement('article');
+  card.className = 'admin-card';
+  const winnerLabel = period.winnerUsername
+    ? `${period.winnerUsername}${period.drawingStatus === 'claimed' ? '' : ' (potential)'}`
+    : 'No winner yet';
+  const deadlineLabel = period.winnerClaimDeadline ? formatAdminDateTime(period.winnerClaimDeadline) : 'None';
+  const drawLabel = formatAdminDateTime(period.drawingAt);
+  card.innerHTML = `
+    <div class="admin-row-summary admin-drawing-row">
+      <div class="admin-row-main">
+        <h3>${escapeHtml(formatAdminMonth(period.drawingMonth))}</h3>
+        <p>Draws ${escapeHtml(drawLabel)}</p>
+      </div>
+      <span>${escapeHtml(drawingStatusLabel(period))}</span>
+      <span>${escapeHtml(drawingEntryText(period))}</span>
+      <span>${escapeHtml(winnerLabel)}</span>
+      <span>${escapeHtml(deadlineLabel)}</span>
+      <div class="admin-row-actions">
+        ${drawingActionHtml(period)}
+      </div>
+    </div>
+    <div class="admin-expanded-summary admin-drawing-summary">
+      <div>
+        <span>Prize</span>
+        <strong>${escapeHtml(period.prize || 'Paddle or $100 gear')}</strong>
+      </div>
+      <div>
+        <span>Rules</span>
+        <strong>${escapeHtml(period.rulesVersion || '2026-08-01')}</strong>
+      </div>
+      <div>
+        <span>Potential winner entries</span>
+        <strong>${escapeHtml(period.activeCreditsAtDraw ?? 'Not drawn')}</strong>
+      </div>
+      <div>
+        <span>Notification</span>
+        <strong>${escapeHtml(period.winnerNotifiedAt ? formatAdminDateTime(period.winnerNotifiedAt) : 'Not sent')}</strong>
+      </div>
+    </div>
+    <p class="form-hint" data-drawing-hint></p>
+  `;
+
+  card.querySelectorAll('[data-run-drawing]').forEach(button => {
+    button.addEventListener('click', () => runDrawing(button.dataset.runDrawing, button));
+  });
+  card.querySelectorAll('[data-claim-drawing]').forEach(button => {
+    button.addEventListener('click', () => claimDrawing(button.dataset.claimDrawing, button));
+  });
+  card.querySelectorAll('[data-redraw-drawing]').forEach(button => {
+    button.addEventListener('click', () => redrawDrawing(button.dataset.redrawDrawing, button));
+  });
+  return card;
+}
+
+function renderDrawings() {
+  const rewardPeriods = backendCollections.rewardPeriods || [];
+  setAdminNavLabel('drawings', 'Drawings', rewardPeriods.length);
+  elements.drawingsTitle.textContent = titleWithCount('Monthly drawings', rewardPeriods.length);
+  elements.drawingCount.textContent = `${rewardPeriods.length} drawing period${rewardPeriods.length === 1 ? '' : 's'}`;
+
+  if (!rewardPeriods.length) {
+    const empty = document.createElement('p');
+    empty.className = 'empty-profile-list';
+    empty.textContent = 'No drawing periods yet.';
+    elements.drawingsList.replaceChildren(empty);
+    return;
+  }
+
+  elements.drawingsList.replaceChildren(adminListHeader('drawing'), ...rewardPeriods.map(drawingCard));
+}
+
+function setDrawingHint(button, message, isError = false) {
+  const hint = button.closest('.admin-card')?.querySelector('[data-drawing-hint]');
+  if (!hint) return;
+  hint.textContent = message;
+  hint.classList.toggle('is-error', isError);
+}
+
+async function refreshDrawingAdmin() {
+  await loadBackendCollections();
+  renderDrawings();
+  renderUsers();
+}
+
+async function runDrawing(drawingMonth, button) {
+  if (!window.confirm(`Run the ${formatAdminMonth(drawingMonth)} monthly drawing now?`)) return;
+  button.disabled = true;
+  setDrawingHint(button, 'Running drawing...');
+
+  try {
+    await window.OpenPlaySupabase.runMonthlyDrawing(drawingMonth);
+    await refreshDrawingAdmin();
+  } catch (error) {
+    button.disabled = false;
+    setDrawingHint(button, error.message, true);
+  }
+}
+
+async function claimDrawing(drawingId, button) {
+  if (!window.confirm('Mark this winner as claimed and reset their active drawing credits back to the baseline entry?')) return;
+  button.disabled = true;
+  setDrawingHint(button, 'Marking claimed...');
+
+  try {
+    await window.OpenPlaySupabase.claimMonthlyDrawing(drawingId);
+    await refreshDrawingAdmin();
+  } catch (error) {
+    button.disabled = false;
+    setDrawingHint(button, error.message, true);
+  }
+}
+
+async function redrawDrawing(drawingId, button) {
+  if (!window.confirm('Run a redraw from the same original entry pool?')) return;
+  button.disabled = true;
+  setDrawingHint(button, 'Running redraw...');
+
+  try {
+    await window.OpenPlaySupabase.runMonthlyRedraw(drawingId);
+    await refreshDrawingAdmin();
+  } catch (error) {
+    button.disabled = false;
+    setDrawingHint(button, error.message, true);
+  }
+}
+
 async function approveLocation(locationId) {
   const remoteCourt = allCourts.find(court => court.id === locationId && court.remoteId);
   if (remoteCourt) {
@@ -1482,6 +1682,7 @@ async function approveLocation(locationId) {
       renderModeration();
       renderLocations();
       renderUsers();
+      renderDrawings();
     } catch (error) {
       elements.moderationList.querySelector(`[data-approve-location="${CSS.escape(locationId)}"]`)?.closest('.moderation-item')?.querySelector('.moderation-meta')?.insertAdjacentHTML('afterend', `<p class="form-hint">${escapeHtml(error.message)}</p>`);
     }
@@ -1524,6 +1725,7 @@ async function rejectLocation(locationId) {
       renderModeration();
       renderLocations();
       renderUsers();
+      renderDrawings();
     } catch (error) {
       elements.moderationList.querySelector(`[data-reject-location="${CSS.escape(locationId)}"]`)?.closest('.moderation-item')?.querySelector('.moderation-meta')?.insertAdjacentHTML('afterend', `<p class="form-hint">${escapeHtml(error.message)}</p>`);
     }
@@ -1550,6 +1752,7 @@ async function updatePhotoModerationStatus(photoId, status) {
     await loadBackendCollections();
     renderModeration();
     renderUsers();
+    renderDrawings();
   } catch (error) {
     window.alert(error.message || `Could not ${status} that photo.`);
   }
@@ -1658,6 +1861,7 @@ async function saveAdminReviewEdit(event) {
       hint.textContent = 'Saved.';
       renderModeration();
       renderUsers();
+      renderDrawings();
     } catch (error) {
       hint.textContent = error.message || 'Could not save that review.';
     }
@@ -1782,6 +1986,7 @@ async function approveSuggestedEdit(editId) {
       renderModeration();
       renderLocations();
       renderUsers();
+      renderDrawings();
     } catch (error) {
       window.alert(error.message || 'Could not approve that suggested edit.');
     }
@@ -1870,6 +2075,7 @@ async function deleteReportedReview(courtId, reviewId, reportId) {
       )));
       renderModeration();
       renderUsers();
+      renderDrawings();
     } catch (error) {
       window.alert(error.message || 'Could not remove that review.');
     }
@@ -1898,6 +2104,7 @@ async function deleteLocation(court) {
       renderModeration();
       renderLocations();
       renderUsers();
+      renderDrawings();
     } catch (error) {
       window.alert(error.message);
     }
@@ -2034,7 +2241,8 @@ async function loadBackendCollections() {
       reports: collections.reports || [],
       suggestedEdits: collections.suggestedEdits || [],
       credits: collections.credits || [],
-      photos: collections.photos || []
+      photos: collections.photos || [],
+      rewardPeriods: collections.rewardPeriods || []
     };
   } catch (error) {
     console.warn('Supabase moderation data load failed. Falling back to local moderation data.', error);
@@ -2043,7 +2251,8 @@ async function loadBackendCollections() {
       reports: null,
       suggestedEdits: null,
       credits: null,
-      photos: null
+      photos: null,
+      rewardPeriods: null
     };
   }
 }
@@ -2056,6 +2265,7 @@ async function init() {
     elements.moderationView.hidden = true;
     elements.usersView.hidden = true;
     elements.locationsView.hidden = true;
+    elements.drawingsView.hidden = true;
     return;
   }
 
@@ -2065,6 +2275,7 @@ async function init() {
   renderModeration();
   renderUsers();
   renderLocations();
+  renderDrawings();
 }
 
 elements.navButtons.forEach(button => {
