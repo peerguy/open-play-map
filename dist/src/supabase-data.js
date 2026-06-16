@@ -1298,33 +1298,101 @@
     return mapPhoto(data);
   }
 
+  function creditBalancesFromRows(credits = []) {
+    return credits
+      .filter(credit => credit.status === 'approved' || !credit.status)
+      .reduce((balances, credit) => ({
+        active: balances.active + Number(credit.activeCreditsDelta || 0),
+        lifetime: balances.lifetime + Number(credit.lifetimeCreditsDelta || 0)
+      }), { active: 0, lifetime: 0 });
+  }
+
+  function currentContributionResponse(contributionData, user, source, status) {
+    const locations = (contributionData.locations || []).map(mapLocation);
+    const locationLookup = new Map(locations.map(location => [location.remoteId, { slug: location.id, name: location.name }]));
+    const credits = (contributionData.credits || []).map(mapCredit);
+
+    return {
+      locations,
+      reviews: reviewsToMap((contributionData.reviews || []).map(review => mapReview(review, { locations: locationLookup }))),
+      credits,
+      creditBalances: {
+        active: Number(contributionData.active_credits ?? creditBalancesFromRows(credits).active),
+        lifetime: Number(contributionData.lifetime_credits ?? creditBalancesFromRows(credits).lifetime)
+      },
+      profile: contributionData.profile || null,
+      userId: contributionData.profile?.id || user.id || '',
+      source,
+      status
+    };
+  }
+
+  async function fetchDirectCurrentUserContributions(supabase, user, status) {
+    if (!user?.id) return null;
+
+    const [locationsResult, reviewsResult, creditsResult] = await Promise.all([
+      supabase
+        .from('locations')
+        .select('*,open_play_slots(*),photos(id,storage_path,status)')
+        .eq('submitted_by', user.id)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('reviews')
+        .select('*,locations(slug,name)')
+        .eq('user_id', user.id)
+        .eq('status', 'published')
+        .order('updated_at', { ascending: false }),
+      supabase
+        .from('credits')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+    ]);
+
+    const errors = [
+      locationsResult.error && `locations: ${locationsResult.error.message}`,
+      reviewsResult.error && `reviews: ${reviewsResult.error.message}`,
+      creditsResult.error && `credits: ${creditsResult.error.message}`
+    ].filter(Boolean);
+
+    if (errors.length) {
+      console.warn('Direct contribution load had errors.', errors);
+    }
+
+    const credits = creditsResult.error ? [] : creditsResult.data || [];
+    const balances = creditBalancesFromRows(credits.map(mapCredit));
+
+    return currentContributionResponse({
+      profile: { id: user.id },
+      locations: locationsResult.error ? [] : locationsResult.data || [],
+      reviews: reviewsResult.error ? [] : reviewsResult.data || [],
+      credits,
+      active_credits: balances.active,
+      lifetime_credits: balances.lifetime
+    }, user, 'direct-table-fallback', errors.length ? `${status}; ${errors.join('; ')}` : status);
+  }
+
   async function fetchCurrentUserContributions(userOrId) {
     const supabase = client();
     const user = typeof userOrId === 'object' && userOrId ? userOrId : { id: userOrId };
     if (!supabase) return null;
 
-    const { data, error } = await supabase
-      .rpc('current_user_contributions')
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .rpc('current_user_contributions')
+        .maybeSingle();
 
-    if (error) throw error;
-    const contributionData = Array.isArray(data) ? data[0] : data;
-    if (!contributionData) return null;
+      if (error) throw error;
+      const contributionData = Array.isArray(data) ? data[0] : data;
+      if (contributionData) {
+        return currentContributionResponse(contributionData, user, 'current_user_contributions_rpc', 'RPC loaded');
+      }
 
-    const locations = (contributionData.locations || []).map(mapLocation);
-    const locationLookup = new Map(locations.map(location => [location.remoteId, { slug: location.id, name: location.name }]));
-
-    return {
-      locations,
-      reviews: reviewsToMap((contributionData.reviews || []).map(review => mapReview(review, { locations: locationLookup }))),
-      credits: (contributionData.credits || []).map(mapCredit),
-      creditBalances: {
-        active: Number(contributionData.active_credits || 0),
-        lifetime: Number(contributionData.lifetime_credits || 0)
-      },
-      profile: contributionData.profile || null,
-      userId: contributionData.profile?.id || user.id || ''
-    };
+      return fetchDirectCurrentUserContributions(supabase, user, 'RPC returned no row');
+    } catch (error) {
+      console.warn('Current user contribution RPC failed; using direct table fallback.', error);
+      return fetchDirectCurrentUserContributions(supabase, user, `RPC failed: ${error.message || 'Unknown error'}`);
+    }
   }
 
   async function fetchPublicLeaderboard() {

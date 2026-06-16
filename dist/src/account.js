@@ -52,12 +52,14 @@ function getSavedSubmissions() {
   }
 }
 
-function emptyBackendContributions() {
+function emptyBackendContributions(status = 'Not loaded') {
   return {
     locations: [],
     reviews: {},
     credits: [],
-    creditBalances: { active: 0, lifetime: 0 }
+    creditBalances: { active: 0, lifetime: 0 },
+    source: 'empty',
+    status
   };
 }
 
@@ -151,10 +153,10 @@ async function loadBackendContributions(user) {
   }
 
   try {
-    backendContributions = await window.OpenPlaySupabase?.fetchCurrentUserContributions?.(user) || emptyBackendContributions();
+    backendContributions = await window.OpenPlaySupabase?.fetchCurrentUserContributions?.(user) || emptyBackendContributions('Supabase returned no contribution data');
   } catch (error) {
     console.warn('Supabase contribution load failed.', error);
-    backendContributions = emptyBackendContributions();
+    backendContributions = emptyBackendContributions(error.message || 'Supabase contribution load failed');
   }
 }
 
@@ -176,6 +178,14 @@ function profileDebugIdsMarkup(user) {
       <span>
         Contribution UUID
         <code>${escapeHtml(contributionUserId || 'Not returned by Supabase')}</code>
+      </span>
+      <span>
+        Contribution source
+        <code>${escapeHtml(backendContributions?.source || 'Not loaded')}</code>
+      </span>
+      <span>
+        Contribution status
+        <code>${escapeHtml(backendContributions?.status || 'Not loaded')}</code>
       </span>
     </div>
   `;
