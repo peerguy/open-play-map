@@ -1,14 +1,26 @@
 (function () {
+  const PROFILE_ALIASES = {
+    'smolenral@gmail.com': {
+      username: 'Osprey'
+    }
+  };
+
   function client() {
     return window.OpenPlaySupabaseClient?.getClient?.() || null;
   }
 
+  function profileAlias(email) {
+    return PROFILE_ALIASES[String(email || '').trim().toLowerCase()] || null;
+  }
+
   function normalizeProfile(profile, authUser) {
     if (!authUser && !profile) return null;
+    const email = profile?.email || authUser?.email || '';
+    const alias = profileAlias(email);
     return {
       id: profile?.id || authUser?.id || '',
-      email: profile?.email || authUser?.email || '',
-      username: profile?.username || authUser?.user_metadata?.username || authUser?.email?.split('@')[0] || 'Player',
+      email,
+      username: alias?.username || profile?.username || authUser?.user_metadata?.username || authUser?.email?.split('@')[0] || 'Player',
       photo: profile?.avatar_url || '',
       skillLevel: profile?.skill_level || authUser?.user_metadata?.skill_level || '',
       bio: profile?.bio || authUser?.user_metadata?.bio || '',

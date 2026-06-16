@@ -1302,11 +1302,23 @@
     return String(value || '').trim().toLowerCase();
   }
 
+  function contributionAliasForUser(user = {}) {
+    const aliases = {
+      'smolenral@gmail.com': {
+        userId: '4528ce68-a84c-49bb-ad44-0b2bd3e5fc89',
+        username: 'osprey'
+      }
+    };
+    return aliases[normalizedIdentity(user.email)] || null;
+  }
+
   async function fetchCurrentUserContributions(userOrId) {
     const supabase = client();
     const user = typeof userOrId === 'object' && userOrId ? userOrId : { id: userOrId };
     const userId = user.id || '';
     const username = normalizedIdentity(user.username);
+    const alias = contributionAliasForUser(user);
+    const aliasUsername = normalizedIdentity(alias?.username);
     if (!supabase || !userId) return null;
 
     const { data: leaderboardRows, error: leaderboardError } = await supabase.rpc('public_leaderboard');
@@ -1315,8 +1327,13 @@
     }
 
     const leaderboardRow = (leaderboardError ? [] : leaderboardRows || [])
-      .find(row => row.user_id === userId || (username && normalizedIdentity(row.username) === username));
-    const contributionUserId = leaderboardRow?.user_id || userId;
+      .find(row => (
+        row.user_id === userId
+        || row.user_id === alias?.userId
+        || (username && normalizedIdentity(row.username) === username)
+        || (aliasUsername && normalizedIdentity(row.username) === aliasUsername)
+      ));
+    const contributionUserId = leaderboardRow?.user_id || alias?.userId || userId;
 
     const [locationsResult, reviewsResult, creditsResult] = await Promise.all([
       supabase
@@ -1328,6 +1345,7 @@
         .from('reviews')
         .select('*,locations(slug,name)')
         .eq('user_id', contributionUserId)
+        .eq('status', 'published')
         .order('updated_at', { ascending: false }),
       supabase
         .from('credits')

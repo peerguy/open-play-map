@@ -144,8 +144,13 @@ async function loadBackendContributions(user) {
   try {
     backendContributions = await window.OpenPlaySupabase?.fetchCurrentUserContributions?.(user) || null;
   } catch (error) {
-    console.warn('Supabase contribution load failed. Falling back to local account data.', error);
-    backendContributions = null;
+    console.warn('Supabase contribution load failed.', error);
+    backendContributions = {
+      locations: [],
+      reviews: {},
+      credits: [],
+      creditBalances: { active: 0, lifetime: 0 }
+    };
   }
 }
 
