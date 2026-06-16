@@ -969,7 +969,7 @@ function renderSuggestedEditItem(edit) {
         <span class="moderation-meta">Submitted by ${escapeHtml(edit.username || 'Unknown')} · ${escapeHtml(edit.createdAt || 'unknown')} · ${escapeHtml(edit.reason || 'No note provided')}</span>
       </div>
       <div class="admin-row-actions moderation-actions">
-        <button class="secondary-button admin-edit-button admin-approve-button" type="button" data-approve-suggested-edit="${escapeHtml(edit.id)}">Approve +3 credits</button>
+        <button class="secondary-button admin-edit-button admin-approve-button" type="button" data-approve-suggested-edit="${escapeHtml(edit.id)}">Approve edit</button>
         <button class="secondary-button admin-delete-button" type="button" data-reject-suggested-edit="${escapeHtml(edit.id)}">Reject</button>
       </div>
       <details class="pending-location-details suggested-edit-details" open>
@@ -1135,7 +1135,7 @@ function renderModeration() {
             <span class="moderation-meta">Uploaded by ${escapeHtml(photo.username || 'Unknown')} · ${escapeHtml(photo.createdAt || 'unknown')}</span>
           </div>
           <div class="admin-row-actions moderation-actions">
-            <button class="secondary-button admin-edit-button admin-approve-button" type="button" data-approve-photo="${escapeHtml(photo.id)}">Approve +2 credits</button>
+            <button class="secondary-button admin-edit-button admin-approve-button" type="button" data-approve-photo="${escapeHtml(photo.id)}">Approve photo</button>
             <button class="secondary-button admin-delete-button" type="button" data-reject-photo="${escapeHtml(photo.id)}">Reject</button>
           </div>
         </article>

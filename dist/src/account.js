@@ -187,8 +187,14 @@ function targetCreditValue(action, targetType, item, fallback = 0) {
 function photoCreditValue(photos = []) {
   const photoIds = photos.flatMap(idCandidates);
   const rows = creditRowsFor('add-photo', 'photo', photoIds);
-  if (rows.length) return sumCreditRows(rows);
+  if (rows.length) return Math.min(sumCreditRows(rows), CONTRIBUTION_CREDITS['add-photo']);
   return backendContributions?.credits ? 0 : (photos.length ? CONTRIBUTION_CREDITS['add-photo'] : 0);
+}
+
+function imageCreditValue(parentType, item, photos = []) {
+  const parentRows = creditRowsFor('add-photo', parentType, idCandidates(item));
+  if (parentRows.length) return sumCreditRows(parentRows);
+  return photoCreditValue(photos);
 }
 
 function contributionCreditPill(value) {
@@ -405,7 +411,15 @@ function reviewContributionPhotos(review, user) {
 }
 
 function suggestedEditContributionPhotos(edit) {
-  return normalizedPhotos(edit.photos || edit.imageUrls || edit.images || []);
+  return normalizedPhotos(
+    edit.photos
+    || edit.imageUrls
+    || edit.images
+    || edit.suggestedLocation?.photos
+    || edit.suggestedLocation?.imageUrls
+    || edit.suggestedLocation?.images
+    || []
+  );
 }
 
 function renderPlaceList(places, user, emptyMessage) {
@@ -419,7 +433,7 @@ function renderPlaceList(places, user, emptyMessage) {
         const date = compactDate(place.createdAt || place.updatedAt);
         const photos = locationContributionPhotos(place, user);
         const credits = targetCreditValue('add-location', 'location', place, place.status === 'approved' ? CONTRIBUTION_CREDITS['add-location'] : 0)
-          + photoCreditValue(photos);
+          + imageCreditValue('location', place, photos);
         return `
           <li class="profile-contribution-item">
             <div class="profile-contribution-main">
@@ -457,7 +471,7 @@ function renderReviewList(reviews, user) {
         const date = compactDate(review.visited || review.createdAt);
         const photos = reviewContributionPhotos(review, user);
         const credits = targetCreditValue('add-review', 'review', review, review.status === 'published' ? CONTRIBUTION_CREDITS['add-review'] : 0)
-          + photoCreditValue(photos);
+          + imageCreditValue('review', review, photos);
         return `
           <li class="profile-contribution-item">
             <div class="profile-contribution-main">
@@ -481,9 +495,7 @@ function renderSuggestedEditList(edits) {
         const status = contributionStatusLabel(edit.status);
         const date = compactDate(edit.approvedAt || edit.createdAt);
         const photos = suggestedEditContributionPhotos(edit);
-        const imageCredits = photos.length
-          ? Math.max(photoCreditValue(photos), CONTRIBUTION_CREDITS['add-photo'])
-          : 0;
+        const imageCredits = imageCreditValue('suggested-edit', edit, photos);
         const credits = targetCreditValue('suggested-edit', 'suggested-edit', edit, edit.status === 'approved' ? CONTRIBUTION_CREDITS['suggested-edit'] : 0)
           + imageCredits;
         return `

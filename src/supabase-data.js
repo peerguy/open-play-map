@@ -427,6 +427,9 @@
         id: locationId,
         remoteId: record.location_id
       },
+      photos: Array.isArray(suggestedLocation.photos) ? suggestedLocation.photos : [],
+      imageUrls: Array.isArray(suggestedLocation.imageUrls) ? suggestedLocation.imageUrls : [],
+      images: Array.isArray(suggestedLocation.images) ? suggestedLocation.images : [],
       reason: record.note || '',
       userId: record.submitted_by,
       username: submitter.username || 'Player',
@@ -578,24 +581,7 @@
   }
 
   async function voidCreditForTarget(supabase, action, targetType, targetId) {
-    if (!supabase || !action || !targetType || !targetId) return false;
-    const { data: existingRows, error: selectError } = await supabase
-      .from('credits')
-      .select('id,status')
-      .eq('action', action)
-      .eq('target_type', targetType)
-      .eq('target_id', targetId)
-      .limit(1);
-    if (selectError) throw selectError;
-    const existing = existingRows?.[0] || null;
-    if (!existing || existing.status === 'void') return false;
-
-    const { error } = await supabase
-      .from('credits')
-      .update({ status: 'void' })
-      .eq('id', existing.id);
-    if (error) throw error;
-    return true;
+    return false;
   }
 
   async function voidCreditsForTargets(supabase, action, targetType, targetIds = []) {
@@ -654,44 +640,6 @@
   }
 
   async function syncLocationCredit(supabase, record, actorId = null) {
-    if (!record?.id) return false;
-    if (record.status === 'archived') {
-      return voidLocationCredits(supabase, record.id);
-    }
-    if (record.status === 'rejected') {
-      const locationChanged = record.submitted_by
-        ? await syncCreditForTarget(supabase, {
-          userId: record.submitted_by,
-          action: 'add-location',
-          targetType: 'location',
-          targetId: record.id,
-          status: 'rejected',
-          awardedBy: actorId || record.approved_by || null
-        })
-        : await voidCreditForTarget(supabase, 'add-location', 'location', record.id);
-      const childChanged = await voidLocationChildCredits(supabase, record.id);
-      return locationChanged || childChanged;
-    }
-    if (!record.submitted_by) return false;
-    if (record.status === 'approved') {
-      return syncCreditForTarget(supabase, {
-        userId: record.submitted_by,
-        action: 'add-location',
-        targetType: 'location',
-        targetId: record.id,
-        status: 'approved',
-        awardedBy: actorId || record.approved_by || null
-      });
-    }
-    if (record.status === 'pending') {
-      return syncCreditForTarget(supabase, {
-        userId: record.submitted_by,
-        action: 'add-location',
-        targetType: 'location',
-        targetId: record.id,
-        status: 'pending'
-      });
-    }
     return false;
   }
 
@@ -703,19 +651,7 @@
   }
 
   async function syncReviewCredit(supabase, record, actorId = null, locations = new Map()) {
-    if (!record?.id) return false;
-    const locationStatus = locationStatusForRecord(record, locations);
-    if (record.status === 'published' && record.user_id && (!locationStatus || locationStatus === 'approved')) {
-      return syncCreditForTarget(supabase, {
-        userId: record.user_id,
-        action: 'add-review',
-        targetType: 'review',
-        targetId: record.id,
-        status: 'approved',
-        awardedBy: actorId
-      });
-    }
-    return voidCreditForTarget(supabase, 'add-review', 'review', record.id);
+    return false;
   }
 
   function reviewStatusForRecord(record = {}, reviews = new Map()) {
@@ -726,68 +662,15 @@
   }
 
   async function syncPhotoCredit(supabase, record, actorId = null, locations = new Map(), reviews = new Map()) {
-    if (!record?.id) return false;
-    const locationStatus = locationStatusForRecord(record, locations);
-    const reviewStatus = reviewStatusForRecord(record, reviews);
-    if (
-      record.status === 'approved'
-      && record.uploaded_by
-      && (!locationStatus || locationStatus === 'approved')
-      && (!reviewStatus || reviewStatus === 'published')
-    ) {
-      return syncCreditForTarget(supabase, {
-        userId: record.uploaded_by,
-        action: 'add-photo',
-        targetType: 'photo',
-        targetId: record.id,
-        status: 'approved',
-        awardedBy: actorId
-      });
-    }
-    if (record.status === 'rejected' || record.status === 'removed') {
-      return voidCreditForTarget(supabase, 'add-photo', 'photo', record.id);
-    }
     return false;
   }
 
   async function syncSuggestedEditCredit(supabase, record, actorId = null) {
-    if (!record?.id) return false;
-    if (record.status === 'approved' && record.submitted_by) {
-      return syncCreditForTarget(supabase, {
-        userId: record.submitted_by,
-        action: 'suggested-edit',
-        targetType: 'suggested-edit',
-        targetId: record.id,
-        status: 'approved',
-        awardedBy: actorId || record.reviewed_by || null
-      });
-    }
-    if (record.status === 'rejected') {
-      return voidCreditForTarget(supabase, 'suggested-edit', 'suggested-edit', record.id);
-    }
     return false;
   }
 
   async function reconcileAdminCredits(supabase, { locations = [], reviews = [], photos = [], suggestedEdits = [] } = {}) {
-    if (!supabase) return false;
-    let changed = false;
-    const locationsById = new Map((locations || []).map(location => [location.id, location]));
-    const reviewsById = new Map((reviews || []).map(review => [review.id, review]));
-
-    for (const location of locations) {
-      changed = await syncLocationCredit(supabase, location) || changed;
-    }
-    for (const review of reviews) {
-      changed = await syncReviewCredit(supabase, review, null, locationsById) || changed;
-    }
-    for (const photo of photos) {
-      changed = await syncPhotoCredit(supabase, photo, null, locationsById, reviewsById) || changed;
-    }
-    for (const edit of suggestedEdits) {
-      changed = await syncSuggestedEditCredit(supabase, edit) || changed;
-    }
-
-    return changed;
+    return false;
   }
 
   async function request(path) {
@@ -1372,6 +1255,151 @@
       }), { active: 0, lifetime: 0 });
   }
 
+  function derivedCreditRow({ id, userId, action, targetType, targetId, amount, awardedBy = null, createdAt = null }) {
+    return {
+      id,
+      user_id: userId,
+      action,
+      target_type: targetType,
+      target_id: targetId,
+      active_delta: amount,
+      lifetime_delta: amount,
+      status: 'approved',
+      awarded_by: awardedBy,
+      created_at: createdAt || new Date().toISOString()
+    };
+  }
+
+  function earliestCreatedAt(rows = []) {
+    return rows
+      .map(row => row.created_at)
+      .filter(Boolean)
+      .sort()[0] || null;
+  }
+
+  function hasSuggestedEditImages(edit = {}) {
+    const suggested = edit.suggested_location || edit.suggestedLocation || {};
+    return ['photos', 'imageUrls', 'images'].some(key => (
+      Array.isArray(suggested[key]) && suggested[key].filter(Boolean).length > 0
+    ));
+  }
+
+  function uniqueRowsById(rows = []) {
+    return [...rows.reduce((map, row) => {
+      if (row?.id) map.set(row.id, row);
+      return map;
+    }, new Map()).values()];
+  }
+
+  function deriveContributionCreditRows({ user, locations = [], reviews = [], suggestedEdits = [], photos = [], adjustments = [] } = {}) {
+    if (!user?.id) return [];
+    const embeddedPhotos = locations.flatMap(location => location.photos || []);
+    const photoRows = uniqueRowsById([...photos, ...embeddedPhotos]);
+    const derived = [];
+
+    locations
+      .filter(location => location.status === 'approved' && location.submitted_by === user.id)
+      .forEach(location => {
+        derived.push(derivedCreditRow({
+          id: `location:${location.id}`,
+          userId: user.id,
+          action: 'add-location',
+          targetType: 'location',
+          targetId: location.id,
+          amount: CONTRIBUTION_CREDITS['add-location'],
+          awardedBy: location.approved_by || null,
+          createdAt: location.approved_at || location.created_at
+        }));
+
+        const imageRows = photoRows.filter(photo => (
+          photo.status === 'approved'
+          && photo.location_id === location.id
+          && !photo.review_id
+          && photo.uploaded_by === user.id
+        ));
+        if (imageRows.length) {
+          derived.push(derivedCreditRow({
+            id: `location-image:${location.id}`,
+            userId: user.id,
+            action: 'add-photo',
+            targetType: 'location',
+            targetId: location.id,
+            amount: CONTRIBUTION_CREDITS['add-photo'],
+            awardedBy: location.approved_by || null,
+            createdAt: earliestCreatedAt(imageRows)
+          }));
+        }
+      });
+
+    reviews
+      .filter(review => review.status === 'published' && review.user_id === user.id)
+      .forEach(review => {
+        derived.push(derivedCreditRow({
+          id: `review:${review.id}`,
+          userId: user.id,
+          action: 'add-review',
+          targetType: 'review',
+          targetId: review.id,
+          amount: CONTRIBUTION_CREDITS['add-review'],
+          createdAt: review.created_at
+        }));
+
+        const imageRows = photoRows.filter(photo => (
+          photo.status === 'approved'
+          && photo.review_id === review.id
+          && photo.uploaded_by === user.id
+        ));
+        if (imageRows.length) {
+          derived.push(derivedCreditRow({
+            id: `review-image:${review.id}`,
+            userId: user.id,
+            action: 'add-photo',
+            targetType: 'review',
+            targetId: review.id,
+            amount: CONTRIBUTION_CREDITS['add-photo'],
+            createdAt: earliestCreatedAt(imageRows)
+          }));
+        }
+      });
+
+    suggestedEdits
+      .filter(edit => edit.status === 'approved' && edit.submitted_by === user.id && edit.locations?.status === 'approved')
+      .forEach(edit => {
+        derived.push(derivedCreditRow({
+          id: `suggested-edit:${edit.id}`,
+          userId: user.id,
+          action: 'suggested-edit',
+          targetType: 'suggested-edit',
+          targetId: edit.id,
+          amount: CONTRIBUTION_CREDITS['suggested-edit'],
+          awardedBy: edit.reviewed_by || null,
+          createdAt: edit.reviewed_at || edit.created_at
+        }));
+
+        if (hasSuggestedEditImages(edit)) {
+          derived.push(derivedCreditRow({
+            id: `suggested-edit-image:${edit.id}`,
+            userId: user.id,
+            action: 'add-photo',
+            targetType: 'suggested-edit',
+            targetId: edit.id,
+            amount: CONTRIBUTION_CREDITS['add-photo'],
+            awardedBy: edit.reviewed_by || null,
+            createdAt: edit.reviewed_at || edit.created_at
+          }));
+        }
+      });
+
+    return [
+      ...derived,
+      ...adjustments.filter(credit => (
+        credit.user_id === user.id
+        && credit.status === 'approved'
+        && ['manual-adjustment', 'monthly-reset'].includes(credit.action)
+      ))
+    ];
+  }
+
   function currentContributionResponse(contributionData, user, source, status) {
     const locations = (contributionData.locations || []).map(mapLocation);
     const locationLookup = new Map(locations.map(location => [location.remoteId, { slug: location.id, name: location.name }]));
@@ -1396,7 +1424,7 @@
   async function fetchDirectCurrentUserContributions(supabase, user, status) {
     if (!user?.id) return null;
 
-    const [locationsResult, reviewsResult, editsResult, creditsResult] = await Promise.all([
+    const [locationsResult, reviewsResult, editsResult, photosResult, adjustmentsResult] = await Promise.all([
       supabase
         .from('locations')
         .select(LOCATION_SELECT)
@@ -1415,9 +1443,15 @@
         .eq('submitted_by', user.id)
         .order('created_at', { ascending: false }),
       supabase
+        .from('photos')
+        .select(LOCATION_PHOTO_SELECT)
+        .eq('uploaded_by', user.id)
+        .order('created_at', { ascending: false }),
+      supabase
         .from('credits')
         .select('*')
         .eq('user_id', user.id)
+        .in('action', ['manual-adjustment', 'monthly-reset'])
         .order('created_at', { ascending: false })
     ]);
 
@@ -1425,21 +1459,34 @@
       locationsResult.error && `locations: ${locationsResult.error.message}`,
       reviewsResult.error && `reviews: ${reviewsResult.error.message}`,
       editsResult.error && `suggested_edits: ${editsResult.error.message}`,
-      creditsResult.error && `credits: ${creditsResult.error.message}`
+      photosResult.error && `photos: ${photosResult.error.message}`,
+      adjustmentsResult.error && `credits: ${adjustmentsResult.error.message}`
     ].filter(Boolean);
 
     if (errors.length) {
       console.warn('Direct contribution load had errors.', errors);
     }
 
-    const credits = creditsResult.error ? [] : creditsResult.data || [];
+    const rawLocations = locationsResult.error ? [] : locationsResult.data || [];
+    const rawReviews = reviewsResult.error ? [] : reviewsResult.data || [];
+    const rawSuggestedEdits = editsResult.error ? [] : editsResult.data || [];
+    const rawPhotos = photosResult.error ? [] : photosResult.data || [];
+    const rawAdjustments = adjustmentsResult.error ? [] : adjustmentsResult.data || [];
+    const credits = deriveContributionCreditRows({
+      user,
+      locations: rawLocations,
+      reviews: rawReviews,
+      suggestedEdits: rawSuggestedEdits,
+      photos: rawPhotos,
+      adjustments: rawAdjustments
+    });
     const balances = creditBalancesFromRows(credits.map(credit => mapCredit(credit)));
 
     return currentContributionResponse({
       profile: { id: user.id },
-      locations: locationsResult.error ? [] : locationsResult.data || [],
-      reviews: reviewsResult.error ? [] : reviewsResult.data || [],
-      suggested_edits: editsResult.error ? [] : editsResult.data || [],
+      locations: rawLocations,
+      reviews: rawReviews,
+      suggested_edits: rawSuggestedEdits,
       credits,
       active_credits: balances.active,
       lifetime_credits: balances.lifetime
@@ -1506,37 +1553,20 @@
     const supabase = client();
     if (!supabase) return null;
 
-    const [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, initialCreditsResult, photosResult] = await Promise.all([
+    const [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult, photosResult] = await Promise.all([
       supabase.from('profiles').select('id,email,username,role,skill_level,bio,avatar_url,created_at'),
       supabase.from('locations').select('id,slug,name,status,submitted_by,approved_by'),
       supabase.from('reviews').select('*').order('created_at', { ascending: false }),
       supabase.from('reports').select('*').order('created_at', { ascending: false }),
       supabase.from('suggested_edits').select('*').order('created_at', { ascending: false }),
-      supabase.from('credits').select('*').order('created_at', { ascending: false }),
+      supabase.rpc('admin_contribution_credits'),
       supabase.from('photos').select('*').order('created_at', { ascending: false })
     ]);
 
-    [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, initialCreditsResult, photosResult]
+    [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult, photosResult]
       .forEach(result => {
         if (result.error) throw result.error;
       });
-
-    let creditsData = initialCreditsResult.data || [];
-    const creditsChanged = await reconcileAdminCredits(supabase, {
-      locations: locationsResult.data || [],
-      reviews: reviewsResult.data || [],
-      photos: photosResult.data || [],
-      suggestedEdits: editsResult.data || []
-    });
-
-    if (creditsChanged) {
-      const refreshedCreditsResult = await supabase
-        .from('credits')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (refreshedCreditsResult.error) throw refreshedCreditsResult.error;
-      creditsData = refreshedCreditsResult.data || [];
-    }
 
     const profiles = new Map((profilesResult.data || []).map(profile => [profile.id, profile]));
     const locations = new Map((locationsResult.data || []).map(location => [location.id, location]));
@@ -1547,7 +1577,7 @@
       reviews: reviewsToMap(reviews),
       reports: (reportsResult.data || []).map(report => mapReport(report, { profiles, locations, reviewsById })),
       suggestedEdits: (editsResult.data || []).map(edit => mapSuggestedEdit(edit, { profiles, locations })),
-      credits: creditsData.map(credit => mapCredit(credit, profiles)),
+      credits: (creditsResult.data || []).map(credit => mapCredit(credit, profiles)),
       photos: (photosResult.data || []).map(photo => mapPhoto(photo, { profiles, locations }))
     };
   }
