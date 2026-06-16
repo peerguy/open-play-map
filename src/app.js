@@ -1427,7 +1427,7 @@ function createCourtCard(court) {
       <span class="badge">${court.isFree ? 'Free/public' : 'Paid/private'}</span>
       ${courtCount ? `<span class="badge">${courtCount}</span>` : ''}
       <span class="badge">${court.estimatedSkillLevel}</span>
-      ${reviews.length ? `<span class="badge">${reviews.length} update${reviews.length === 1 ? '' : 's'}</span>` : ''}
+      ${reviews.length ? `<span class="badge">${reviews.length} review${reviews.length === 1 ? '' : 's'}</span>` : ''}
     </div>
     ${renderOpenPlaySummary(court, {
       actionsHtml: `<button class="card-edit card-action-button card-review-inline" type="button" data-review-location="${court.id}" aria-label="Review ${escapeHtml(court.name)}">Review</button>`
@@ -1757,14 +1757,14 @@ async function reportReview(courtId, reviewId) {
   const review = getCourtReviews(courtId).find(item => item.id === reviewId);
   if (!court || !review) return;
   if (review.userId === state.currentUser.id) {
-    window.alert('You can edit your own update instead of reporting it.');
+    window.alert('You can edit your own review instead of reporting it.');
     return;
   }
   if (reportExists({ targetType: 'review', targetId: court.id, reviewId })) {
-    window.alert('You already reported this update.');
+    window.alert('You already reported this review.');
     return;
   }
-  const reason = window.prompt('What is wrong with this update? Examples: fake review, inaccurate details, spam, wrong hours.');
+  const reason = window.prompt('What is wrong with this review? Examples: fake review, inaccurate details, spam, wrong hours.');
   if (!reason?.trim()) return;
 
   if (court.remoteId && review.remoteId && window.OpenPlaySupabase?.submitReport) {
@@ -1787,7 +1787,7 @@ async function reportReview(courtId, reviewId) {
       }];
       window.alert('Report submitted. Thanks for helping keep reviews accurate.');
     } catch (error) {
-      window.alert(error.message.includes('duplicate') ? 'You already reported this update.' : error.message);
+      window.alert(error.message.includes('duplicate') ? 'You already reported this review.' : error.message);
     }
     return;
   }
