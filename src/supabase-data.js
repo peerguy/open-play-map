@@ -1298,27 +1298,42 @@
     return mapPhoto(data);
   }
 
-  async function fetchCurrentUserContributions(userId) {
+  function normalizedIdentity(value) {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  async function fetchCurrentUserContributions(userOrId) {
     const supabase = client();
+    const user = typeof userOrId === 'object' && userOrId ? userOrId : { id: userOrId };
+    const userId = user.id || '';
+    const username = normalizedIdentity(user.username);
     if (!supabase || !userId) return null;
 
-    const [locationsResult, reviewsResult, creditsResult, leaderboardResult] = await Promise.all([
+    const { data: leaderboardRows, error: leaderboardError } = await supabase.rpc('public_leaderboard');
+    if (leaderboardError) {
+      console.warn('Could not load current user credit balance.', leaderboardError);
+    }
+
+    const leaderboardRow = (leaderboardError ? [] : leaderboardRows || [])
+      .find(row => row.user_id === userId || (username && normalizedIdentity(row.username) === username));
+    const contributionUserId = leaderboardRow?.user_id || userId;
+
+    const [locationsResult, reviewsResult, creditsResult] = await Promise.all([
       supabase
         .from('locations')
         .select('*,open_play_slots(*)')
-        .eq('submitted_by', userId)
+        .eq('submitted_by', contributionUserId)
         .order('created_at', { ascending: false }),
       supabase
         .from('reviews')
         .select('*,locations(slug,name)')
-        .eq('user_id', userId)
+        .eq('user_id', contributionUserId)
         .order('updated_at', { ascending: false }),
       supabase
         .from('credits')
         .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false }),
-      supabase.rpc('public_leaderboard')
+        .eq('user_id', contributionUserId)
+        .order('created_at', { ascending: false })
     ]);
 
     if (locationsResult.error) {
@@ -1330,14 +1345,9 @@
     if (creditsResult.error) {
       console.warn('Could not load current user credits.', creditsResult.error);
     }
-    if (leaderboardResult.error) {
-      console.warn('Could not load current user credit balance.', leaderboardResult.error);
-    }
 
     const locations = (locationsResult.error ? [] : locationsResult.data || []).map(mapLocation);
     const locationLookup = new Map(locations.map(location => [location.remoteId, { slug: location.id, name: location.name }]));
-    const leaderboardRow = (leaderboardResult.error ? [] : leaderboardResult.data || [])
-      .find(row => row.user_id === userId);
     const creditBalances = leaderboardRow
       ? {
         active: Number(leaderboardRow.active_credits || 0),

@@ -142,7 +142,7 @@ async function loadBackendContributions(user) {
   }
 
   try {
-    backendContributions = await window.OpenPlaySupabase?.fetchCurrentUserContributions?.(user.id) || null;
+    backendContributions = await window.OpenPlaySupabase?.fetchCurrentUserContributions?.(user) || null;
   } catch (error) {
     console.warn('Supabase contribution load failed. Falling back to local account data.', error);
     backendContributions = null;
@@ -445,7 +445,9 @@ async function login(event) {
     });
     elements.loginForm.reset();
     elements.loginHint.textContent = 'Logged in.';
-    setCurrentUser(user);
+    backendContributions = null;
+    await refreshAccount();
+    window.dispatchEvent(new CustomEvent('open-play-session-changed'));
   } catch (error) {
     elements.loginHint.textContent = 'Email or password did not match.';
   }
