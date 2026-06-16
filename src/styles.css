@@ -3473,6 +3473,35 @@ label:has(input:required:valid) > .field-label .is-required {
   line-height: 1.35;
 }
 
+.profile-debug-ids {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.profile-debug-ids span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.profile-debug-ids code {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .credit-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
