@@ -370,7 +370,7 @@
   }
 
   function mapCredit(record, profiles = new Map()) {
-    const profile = record.profiles || profiles.get(record.user_id) || {};
+    const profile = record.profiles || (typeof profiles?.get === 'function' ? profiles.get(record.user_id) : null) || {};
     return {
       id: record.id,
       userId: record.user_id,
@@ -1310,7 +1310,7 @@
   function currentContributionResponse(contributionData, user, source, status) {
     const locations = (contributionData.locations || []).map(mapLocation);
     const locationLookup = new Map(locations.map(location => [location.remoteId, { slug: location.id, name: location.name }]));
-    const credits = (contributionData.credits || []).map(mapCredit);
+    const credits = (contributionData.credits || []).map(credit => mapCredit(credit));
 
     return {
       locations,
@@ -1360,7 +1360,7 @@
     }
 
     const credits = creditsResult.error ? [] : creditsResult.data || [];
-    const balances = creditBalancesFromRows(credits.map(mapCredit));
+    const balances = creditBalancesFromRows(credits.map(credit => mapCredit(credit)));
 
     return currentContributionResponse({
       profile: { id: user.id },
