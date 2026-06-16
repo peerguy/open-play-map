@@ -89,6 +89,15 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+function photoUrl(photo) {
+  if (typeof photo === 'string') return photo.trim();
+  return String(photo?.url || photo?.storagePath || photo?.storage_path || '').trim();
+}
+
+function photoUrlList(photos = []) {
+  return (photos || []).map(photoUrl).filter(Boolean);
+}
+
 function selectOptions(options, selected = '') {
   return options.map(option => {
     const value = Array.isArray(option) ? option[0] : option;
@@ -686,7 +695,7 @@ function renderLocationFields(court, { disabled = false } = {}) {
         ${disabled ? '' : '<button class="secondary-button compact-button" data-add-time-window type="button">Add time window</button>'}
       </div>
       <label class="field-photos">Photo URLs, comma separated
-        <input name="photos" value="${escapeHtml(court.photos?.join(', ') || '')}"${disabledAttr} />
+        <input name="photos" value="${escapeHtml(photoUrlList(court.photos).join(', '))}"${disabledAttr} />
       </label>
     </div>
   `;
@@ -931,7 +940,7 @@ function locationDisplayFields(court = {}) {
     ['Open play days', openPlayDaysText(court)],
     ['Open play hours', openPlayHoursText(court)],
     ['Notes', court.notes],
-    ['Photos', court.photos]
+    ['Photos', photoUrlList(court.photos)]
   ];
 }
 

@@ -291,8 +291,72 @@ function selectedPhotoFiles(input) {
   return Array.from(input?.files || []);
 }
 
+function photoUrl(photo) {
+  if (typeof photo === 'string') return photo.trim();
+  return String(photo?.url || photo?.storagePath || photo?.storage_path || '').trim();
+}
+
+function photoReviewId(photo) {
+  return String(photo?.reviewId || photo?.review_id || '').trim();
+}
+
+function formatPhotoDateTime(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+
+  const date = new Date(text);
+  if (!Number.isNaN(date.getTime())) {
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    }).format(date);
+  }
+
+  return text;
+}
+
+function reviewMatchesPhoto(review, photo) {
+  const reviewId = photoReviewId(photo);
+  return Boolean(reviewId && [review?.remoteId, review?.id].filter(Boolean).map(String).includes(reviewId));
+}
+
+function reviewForPhoto(court, photo) {
+  return getCourtReviews(court?.id).find(review => reviewMatchesPhoto(review, photo)) || null;
+}
+
+function photoSubmittedBy(photo, court, review = null) {
+  if (photo?.username) return photo.username;
+  if (review?.username) return review.username;
+  if (photo?.uploadedBy && photo.uploadedBy === court?.submittedBy && court?.submittedByUsername) return court.submittedByUsername;
+  return court?.submittedByUsername || 'Player';
+}
+
 function courtPhotoList(court) {
-  return (court?.photos || []).filter(Boolean).map(photo => String(photo).trim()).filter(Boolean);
+  return (court?.photos || [])
+    .map((photo, index) => {
+      const url = photoUrl(photo);
+      if (!url) return null;
+      const source = typeof photo === 'object' ? photo : {};
+      const review = reviewForPhoto(court, source);
+      const submittedBy = photoSubmittedBy(source, court, review);
+      const submittedAt = formatPhotoDateTime(source.createdAtTimestamp || source.created_at || source.createdAt || '');
+      return {
+        ...source,
+        id: source.id || source.remoteId || url,
+        url,
+        reviewId: photoReviewId(source),
+        username: submittedBy,
+        createdAt: source.createdAt || '',
+        createdAtTimestamp: source.createdAtTimestamp || source.created_at || '',
+        submittedText: submittedAt ? `submitted by ${submittedBy} at ${submittedAt}` : `submitted by ${submittedBy}`,
+        globalIndex: index
+      };
+    })
+    .filter(Boolean);
 }
 
 function ensurePhotoLightbox() {
@@ -342,9 +406,9 @@ function updatePhotoLightbox() {
 
   const photo = photos[index];
   const counter = `${index + 1} of ${photos.length}`;
-  image.src = photo;
+  image.src = photo.url;
   image.alt = `${courtName} photo ${index + 1}`;
-  caption.textContent = `${courtName} · ${counter}`;
+  caption.textContent = `${courtName} · ${counter} · ${photo.submittedText}`;
 
   const hasMultiplePhotos = photos.length > 1;
   previousButton.hidden = !hasMultiplePhotos;
@@ -701,7 +765,7 @@ function editableLocationSnapshot(court = {}) {
       endTime: slot.endTime || ''
     })),
     notes: court.notes || '',
-    photos: (court.photos || []).filter(Boolean).map(photo => String(photo).trim())
+    photos: (court.photos || []).map(photoUrl).filter(Boolean)
   };
 }
 
@@ -1229,9 +1293,29 @@ function renderReviewList(court, limit = 2) {
       </div>
       ${review.body ? `<p>${escapeHtml(review.body)}</p>` : ''}
       ${reviewDetailItems(review)}
+      ${renderReviewPhotoStrip(court, review)}
       <button class="report-button" type="button" data-report-review="${escapeHtml(review.id || '')}" data-court-id="${escapeHtml(court.id)}">Report review</button>
     </article>
   `).join('');
+}
+
+function renderPhotoButton(court, photo, index) {
+  return `
+    <button class="location-photo-button" type="button" data-photo-court-id="${escapeHtml(court.id)}" data-photo-lightbox-index="${index}" aria-label="Open ${escapeHtml(court.name)} photo ${index + 1}">
+      <img src="${escapeHtml(photo.url)}" alt="${escapeHtml(`${court.name} photo ${index + 1}`)}" loading="lazy" />
+    </button>
+  `;
+}
+
+function renderReviewPhotoStrip(court, review) {
+  const photos = courtPhotoList(court).filter(photo => reviewMatchesPhoto(review, photo));
+  if (!photos.length) return '';
+
+  return `
+    <div class="location-photo-strip review-photo-strip">
+      ${photos.map(photo => renderPhotoButton(court, photo, photo.globalIndex)).join('')}
+    </div>
+  `;
 }
 
 function renderPhotoStrip(court, limit = 3) {
@@ -1241,11 +1325,7 @@ function renderPhotoStrip(court, limit = 3) {
 
   return `
     <div class="location-photo-strip">
-      ${photos.map((photo, index) => `
-        <button class="location-photo-button" type="button" data-photo-court-id="${escapeHtml(court.id)}" data-photo-lightbox-index="${index}" aria-label="Open ${escapeHtml(court.name)} photo ${index + 1} of ${allPhotos.length}">
-          <img src="${escapeHtml(photo)}" alt="${escapeHtml(`${court.name} photo ${index + 1}`)}" loading="lazy" />
-        </button>
-      `).join('')}
+      ${photos.map(photo => renderPhotoButton(court, photo, photo.globalIndex)).join('')}
     </div>
   `;
 }

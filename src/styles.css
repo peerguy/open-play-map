@@ -2889,6 +2889,10 @@ textarea::placeholder {
   margin-top: 10px;
 }
 
+.review-photo-strip {
+  margin-top: 2px;
+}
+
 .location-photo-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

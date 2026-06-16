@@ -25,6 +25,8 @@
     'image/png': 'png',
     'image/webp': 'webp'
   };
+  const LOCATION_PHOTO_SELECT = 'id,location_id,review_id,uploaded_by,storage_path,caption,status,created_at';
+  const LOCATION_SELECT = `*,open_play_slots(*),photos(${LOCATION_PHOTO_SELECT})`;
   const CONTRIBUTION_CREDITS = {
     'add-location': 5,
     'add-review': 1,
@@ -61,16 +63,13 @@
     return `${config.url}/storage/v1/object/public/${PHOTO_BUCKET}/${encodedPath}`;
   }
 
-  function mapPhotoUrl(photo) {
-    if (typeof photo === 'string') return publicStorageUrl(photo);
-    return publicStorageUrl(photo?.storage_path || photo?.url || '');
-  }
-
-  function mapLocationPhotos(photos = []) {
+  function mapLocationPhotos(photos = [], location = {}) {
     return photos
       .filter(photo => !photo.status || photo.status === 'approved')
-      .map(mapPhotoUrl)
-      .filter(Boolean);
+      .map(photo => mapPhoto(photo, {
+        locations: new Map([[location.id, { slug: location.slug || location.id, name: location.name }]])
+      }))
+      .filter(photo => photo.url);
   }
 
   function safeFilePart(value) {
@@ -265,7 +264,7 @@
   async function fetchLocationById(supabase, locationId) {
     const { data, error } = await supabase
       .from('locations')
-      .select('*,open_play_slots(*),photos(id,storage_path,status)')
+      .select(LOCATION_SELECT)
       .eq('id', locationId)
       .single();
 
@@ -313,7 +312,7 @@
         surface: record.surface || 'unknown',
         indoorOutdoor: record.indoor_outdoor || 'unknown'
       },
-      photos: mapLocationPhotos(record.photos || []),
+      photos: mapLocationPhotos(record.photos || [], record),
       notes: record.notes || '',
       sourceUrl: record.source_url || '',
       lastVerified: record.last_verified || '',
@@ -439,23 +438,44 @@
   }
 
   function mapPhoto(record, lookups = {}) {
+    if (typeof record === 'string') {
+      const url = publicStorageUrl(record);
+      return {
+        id: record,
+        remoteId: '',
+        locationId: '',
+        remoteLocationId: '',
+        reviewId: '',
+        uploadedBy: '',
+        username: '',
+        storagePath: record,
+        url,
+        caption: '',
+        status: 'approved',
+        locationName: 'Location',
+        createdAt: '',
+        createdAtTimestamp: ''
+      };
+    }
+
     const location = record.locations || lookups.locations?.get?.(record.location_id) || {};
     const uploader = record.profiles || lookups.profiles?.get?.(record.uploaded_by) || {};
+    const storagePath = record.storage_path || record.storagePath || '';
     return {
       id: record.id,
-      remoteId: record.id,
-      locationId: location.slug || record.location_id,
-      remoteLocationId: record.location_id,
-      reviewId: record.review_id || '',
-      uploadedBy: record.uploaded_by || '',
-      username: uploader.username || 'Player',
-      storagePath: record.storage_path,
-      url: publicStorageUrl(record.storage_path),
+      remoteId: record.remoteId || record.id,
+      locationId: record.location_slug || record.locationId || location.slug || record.location_id,
+      remoteLocationId: record.remoteLocationId || record.location_id || '',
+      reviewId: record.reviewId || record.review_id || '',
+      uploadedBy: record.uploadedBy || record.uploaded_by || '',
+      username: record.username || uploader.username || '',
+      storagePath,
+      url: publicStorageUrl(storagePath || record.url || ''),
       caption: record.caption || '',
       status: record.status || 'pending',
-      locationName: location.name || 'Location',
-      createdAt: dateOnly(record.created_at),
-      createdAtTimestamp: record.created_at || ''
+      locationName: record.location_name || record.locationName || location.name || 'Location',
+      createdAt: dateOnly(record.created_at || record.createdAt),
+      createdAtTimestamp: record.created_at || record.createdAtTimestamp || ''
     };
   }
 
@@ -764,10 +784,31 @@
     return response.json();
   }
 
+  function groupPhotosByRemoteLocation(photos = []) {
+    return photos.reduce((map, photo) => {
+      if (!photo.remoteLocationId) return map;
+      if (!map.has(photo.remoteLocationId)) map.set(photo.remoteLocationId, []);
+      map.get(photo.remoteLocationId).push(photo);
+      return map;
+    }, new Map());
+  }
+
   async function fetchApprovedLocations() {
-    const rows = await request('locations?select=*,open_play_slots(*),photos(id,storage_path,status)&status=eq.approved&order=name.asc');
+    const rows = await request(`locations?select=${encodeURIComponent(LOCATION_SELECT)}&status=eq.approved&order=name.asc`);
     if (!rows) return null;
-    return rows.map(mapLocation);
+
+    let photosByLocation = null;
+    try {
+      const photoRows = await request('rpc/location_photos');
+      photosByLocation = groupPhotosByRemoteLocation((photoRows || []).map(mapPhoto));
+    } catch (error) {
+      console.warn('Public photo metadata load failed. Falling back to embedded photos.', error);
+    }
+
+    return rows.map(row => mapLocation({
+      ...row,
+      photos: photosByLocation?.get(row.id) || row.photos || []
+    }));
   }
 
   async function fetchAdminLocations() {
@@ -776,7 +817,7 @@
 
     const { data, error } = await supabase
       .from('locations')
-      .select('*,open_play_slots(*),photos(id,storage_path,status)')
+      .select(LOCATION_SELECT)
       .order('status', { ascending: true })
       .order('name', { ascending: true });
 
@@ -802,7 +843,7 @@
       .from('locations')
       .update(payload)
       .eq('id', locationId)
-      .select('*,open_play_slots(*)')
+      .select(LOCATION_SELECT)
       .single();
 
     if (error) throw error;
@@ -1333,7 +1374,7 @@
     const [locationsResult, reviewsResult, creditsResult] = await Promise.all([
       supabase
         .from('locations')
-        .select('*,open_play_slots(*),photos(id,storage_path,status)')
+        .select(LOCATION_SELECT)
         .eq('submitted_by', user.id)
         .order('created_at', { ascending: false }),
       supabase
