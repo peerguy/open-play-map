@@ -1302,24 +1302,50 @@
     return String(value || '').trim().toLowerCase();
   }
 
-  function contributionAliasForUser(user = {}) {
-    const aliases = {
-      'smolenral@gmail.com': {
-        userId: '4528ce68-a84c-49bb-ad44-0b2bd3e5fc89',
-        username: 'osprey'
-      }
-    };
-    return aliases[normalizedIdentity(user.email)] || null;
+  const CONTRIBUTION_ALIASES = [
+    {
+      userId: '4528ce68-a84c-49bb-ad44-0b2bd3e5fc89',
+      username: 'osprey',
+      emails: ['smolenral@gmail.com']
+    }
+  ];
+
+  function contributionAliasForUser(user = {}, authUser = null) {
+    const emails = [
+      user.email,
+      user.authEmail,
+      authUser?.email
+    ].map(normalizedIdentity).filter(Boolean);
+    const usernames = [
+      user.username,
+      authUser?.user_metadata?.username
+    ].map(normalizedIdentity).filter(Boolean);
+
+    return CONTRIBUTION_ALIASES.find(alias => (
+      alias.emails.some(email => emails.includes(normalizedIdentity(email)))
+      || usernames.includes(normalizedIdentity(alias.username))
+    )) || null;
   }
 
   async function fetchCurrentUserContributions(userOrId) {
     const supabase = client();
     const user = typeof userOrId === 'object' && userOrId ? userOrId : { id: userOrId };
-    const userId = user.id || '';
-    const username = normalizedIdentity(user.username);
-    const alias = contributionAliasForUser(user);
+    if (!supabase) return null;
+
+    let authUser = null;
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      authUser = sessionData.session?.user || null;
+    } catch (error) {
+      console.warn('Could not inspect current Supabase session for contribution aliases.', error);
+    }
+
+    const userId = user.id || authUser?.id || '';
+    const username = normalizedIdentity(user.username || authUser?.user_metadata?.username);
+    const alias = contributionAliasForUser(user, authUser);
     const aliasUsername = normalizedIdentity(alias?.username);
-    if (!supabase || !userId) return null;
+    if (!userId) return null;
 
     const { data: leaderboardRows, error: leaderboardError } = await supabase.rpc('public_leaderboard');
     if (leaderboardError) {

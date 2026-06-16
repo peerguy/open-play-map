@@ -15,11 +15,14 @@
 
   function normalizeProfile(profile, authUser) {
     if (!authUser && !profile) return null;
-    const email = profile?.email || authUser?.email || '';
-    const alias = profileAlias(email);
+    const profileEmail = profile?.email || '';
+    const authEmail = authUser?.email || '';
+    const email = profileEmail || authEmail;
+    const alias = profileAlias(profileEmail) || profileAlias(authEmail);
     return {
       id: profile?.id || authUser?.id || '',
       email,
+      authEmail,
       username: alias?.username || profile?.username || authUser?.user_metadata?.username || authUser?.email?.split('@')[0] || 'Player',
       photo: profile?.avatar_url || '',
       skillLevel: profile?.skill_level || authUser?.user_metadata?.skill_level || '',
