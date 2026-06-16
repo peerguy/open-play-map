@@ -41,6 +41,8 @@ const elements = {
   usersList: document.querySelector('#adminUsersList'),
   locationsList: document.querySelector('#adminLocationsList'),
   moderationTitle: document.querySelector('#moderationAdminTitle'),
+  usersTitle: document.querySelector('#usersAdminTitle'),
+  locationsTitle: document.querySelector('#locationsAdminTitle'),
   moderationCount: document.querySelector('#moderationAdminCount'),
   userCount: document.querySelector('#userAdminCount'),
   locationCount: document.querySelector('#locationAdminCount'),
@@ -1068,15 +1070,18 @@ function highVolumeUsers() {
     .slice(0, 12);
 }
 
+function titleWithCount(title, count) {
+  return `${title} (${Number(count) || 0})`;
+}
+
 function moderationSection(title, items, emptyText, renderItem, description = '') {
   return `
     <section class="moderation-section">
       <div class="moderation-section-header">
         <div>
-          <h3>${escapeHtml(title)}</h3>
+          <h3>${escapeHtml(titleWithCount(title, items.length))}</h3>
           ${description ? `<p>${escapeHtml(description)}</p>` : ''}
         </div>
-        <span class="moderation-section-count">${escapeHtml(items.length)}</span>
       </div>
       ${items.length ? `<div class="moderation-list">${items.map(renderItem).join('')}</div>` : `<p class="empty-profile-list">${escapeHtml(emptyText)}</p>`}
     </section>
@@ -1192,7 +1197,7 @@ function renderModeration() {
   };
   const activeQueue = queues[activeModerationView] || queues.pending;
 
-  elements.moderationTitle.textContent = activeQueue.title;
+  elements.moderationTitle.textContent = titleWithCount(activeQueue.title, activeQueue.items.length);
   elements.moderationCount.textContent = activeQueue.countText;
   elements.moderationNavButtons.forEach(button => {
     button.classList.toggle('is-active', button.dataset.moderationView === activeModerationView);
@@ -1328,6 +1333,7 @@ function userCard(user) {
 
 function renderUsers() {
   const users = getUsers();
+  elements.usersTitle.textContent = titleWithCount('App users', users.length);
   elements.userCount.textContent = `${users.length} user${users.length === 1 ? '' : 's'}`;
   elements.usersList.replaceChildren(adminListHeader('user'), ...users.map(userCard));
 }
@@ -1443,6 +1449,7 @@ function locationCard(court) {
 }
 
 function renderLocations() {
+  elements.locationsTitle.textContent = titleWithCount('Open-play locations', allCourts.length);
   elements.locationCount.textContent = `${allCourts.length} location${allCourts.length === 1 ? '' : 's'}`;
   elements.locationsList.replaceChildren(adminListHeader('location'), ...allCourts.map(locationCard));
 }
