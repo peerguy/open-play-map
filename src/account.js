@@ -167,30 +167,6 @@ function avatarMarkup(user) {
   return `<span>${escapeHtml(user.username.slice(0, 2).toUpperCase())}</span>`;
 }
 
-function profileDebugIdsMarkup(user) {
-  const contributionUserId = backendContributions?.userId || backendContributions?.profile?.id || '';
-  return `
-    <div class="profile-debug-ids" aria-label="Account identifiers">
-      <span>
-        Account UUID
-        <code>${escapeHtml(user.id || 'Not available')}</code>
-      </span>
-      <span>
-        Contribution UUID
-        <code>${escapeHtml(contributionUserId || 'Not returned by Supabase')}</code>
-      </span>
-      <span>
-        Contribution source
-        <code>${escapeHtml(backendContributions?.source || 'Not loaded')}</code>
-      </span>
-      <span>
-        Contribution status
-        <code>${escapeHtml(backendContributions?.status || 'Not loaded')}</code>
-      </span>
-    </div>
-  `;
-}
-
 function setPasswordVisibility(button) {
   const input = document.querySelector(`#${button.dataset.passwordTarget}`);
   if (!input) return;
@@ -222,7 +198,6 @@ function renderCurrentUser(user) {
         <p>${escapeHtml(user.email)}</p>
         ${profileSkillLevel ? `<p>${escapeHtml(profileSkillLevel)}</p>` : ''}
         ${user.bio ? `<p>${escapeHtml(user.bio)}</p>` : ''}
-        ${profileDebugIdsMarkup(user)}
       </div>
     </div>
     <div class="credit-summary">
