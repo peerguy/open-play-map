@@ -1302,7 +1302,7 @@
     const supabase = client();
     if (!supabase || !userId) return null;
 
-    const [locationsResult, reviewsResult, creditsResult] = await Promise.all([
+    const [locationsResult, reviewsResult, creditsResult, leaderboardResult] = await Promise.all([
       supabase
         .from('locations')
         .select('*,open_play_slots(*)')
@@ -1317,7 +1317,8 @@
         .from('credits')
         .select('*')
         .eq('user_id', userId)
-        .order('created_at', { ascending: false })
+        .order('created_at', { ascending: false }),
+      supabase.rpc('public_leaderboard')
     ]);
 
     if (locationsResult.error) {
@@ -1329,14 +1330,26 @@
     if (creditsResult.error) {
       console.warn('Could not load current user credits.', creditsResult.error);
     }
+    if (leaderboardResult.error) {
+      console.warn('Could not load current user credit balance.', leaderboardResult.error);
+    }
 
     const locations = (locationsResult.error ? [] : locationsResult.data || []).map(mapLocation);
     const locationLookup = new Map(locations.map(location => [location.remoteId, { slug: location.id, name: location.name }]));
+    const leaderboardRow = (leaderboardResult.error ? [] : leaderboardResult.data || [])
+      .find(row => row.user_id === userId);
+    const creditBalances = leaderboardRow
+      ? {
+        active: Number(leaderboardRow.active_credits || 0),
+        lifetime: Number(leaderboardRow.lifetime_credits || 0)
+      }
+      : { active: 0, lifetime: 0 };
 
     return {
       locations,
       reviews: reviewsToMap((reviewsResult.error ? [] : reviewsResult.data || []).map(review => mapReview(review, { locations: locationLookup }))),
-      credits: (creditsResult.error ? [] : creditsResult.data || []).map(mapCredit)
+      credits: (creditsResult.error ? [] : creditsResult.data || []).map(mapCredit),
+      creditBalances
     };
   }
 

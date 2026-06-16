@@ -71,6 +71,13 @@ function getSavedCredits() {
 }
 
 function getCreditBalances(userId) {
+  if (backendContributions?.creditBalances) {
+    return {
+      active: Number(backendContributions.creditBalances.active || 0),
+      lifetime: Number(backendContributions.creditBalances.lifetime || 0)
+    };
+  }
+
   return getSavedCredits()
     .filter(credit => credit.userId === userId && (credit.status === 'approved' || !credit.status))
     .reduce((balances, credit) => ({
