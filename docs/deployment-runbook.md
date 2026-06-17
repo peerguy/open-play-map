@@ -22,7 +22,8 @@
 
 ## Analytics
 
-- Enable Cloudflare Web Analytics from the Pages project Metrics tab for basic traffic and performance reporting. Cloudflare injects its pageview/performance beacon on the next deploy.
+- Cloudflare Web Analytics is configured for `play.scooppickleball.com` under account `24db418ee8f8515cc205e2d454176645`.
+- Because the production app is served from a Worker/static assets route instead of a normal zone auto-injection path, the Cloudflare beacon is installed manually in each source HTML page with the public token shown in the Cloudflare Web Analytics site settings.
 - Cloudflare Web Analytics does not currently support custom events, so the app also includes `src/analytics.js` as a first-party event layer.
 - The local event layer tracks page views, store clicks, map searches, place searches, search suggestion selections, and location views.
 - During prototype testing, recent events are kept in each browser under `localStorage` key `open-play-map-analytics-events`.
