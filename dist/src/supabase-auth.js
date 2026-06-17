@@ -166,6 +166,26 @@
     return normalizeProfile(await fetchProfile(data.user.id), data.user);
   }
 
+  async function sendPasswordReset(email) {
+    const supabase = client();
+    if (!supabase) throw new Error('Supabase is not configured.');
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/account.html`
+    });
+    if (error) throw new Error(authErrorMessage(error));
+  }
+
+  async function updatePassword(password) {
+    const supabase = client();
+    if (!supabase) throw new Error('Supabase is not configured.');
+
+    const { data, error } = await supabase.auth.updateUser({ password });
+    if (error) throw new Error(authErrorMessage(error));
+    if (!data.user?.id) return currentUser();
+    return normalizeProfile(await fetchProfile(data.user.id), data.user);
+  }
+
   async function updateProfile(user, values) {
     const supabase = client();
     if (!supabase || !user) throw new Error('You must be signed in to update your profile.');
@@ -238,8 +258,8 @@
     const supabase = client();
     if (!supabase) return { unsubscribe() {} };
 
-    const { data } = supabase.auth.onAuthStateChange(() => {
-      callback();
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      callback(event, session);
     });
 
     return data.subscription;
@@ -250,6 +270,8 @@
     checkSignupAvailability,
     signUp,
     signIn,
+    sendPasswordReset,
+    updatePassword,
     updateProfile,
     listProfiles,
     updateProfileById,

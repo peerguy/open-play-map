@@ -3388,6 +3388,23 @@ label:has(input:required:valid) > .field-label .is-required {
   cursor: pointer;
 }
 
+.auth-link-button {
+  width: fit-content;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--brand-dark);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 850;
+  text-align: left;
+  cursor: pointer;
+}
+
+.auth-link-button:hover {
+  text-decoration: underline;
+}
+
 .upload-control {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -5458,6 +5475,14 @@ label:has(input:required:valid) > .field-label .is-required {
 }
 
 .has-current-user .account-forms {
+  display: none;
+}
+
+.is-password-recovery .account-forms {
+  display: grid;
+}
+
+.is-password-recovery .account-tabs {
   display: none;
 }
 

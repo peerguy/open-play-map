@@ -41,8 +41,10 @@
 4. Apply migrations from `supabase/migrations`.
 5. Enable email auth and set allowed redirect/site URLs:
    - `http://127.0.0.1:8080`
+   - `http://127.0.0.1:8080/account.html`
    - Cloudflare preview URL
    - `https://play.scooppickleball.com`
+   - `https://play.scooppickleball.com/account.html`
 6. Create storage buckets for location photos and profile avatars.
 7. Assign Alex/admin role server-side in the `profiles` table after first signup.
 
