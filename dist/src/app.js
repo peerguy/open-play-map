@@ -638,7 +638,6 @@ function accessLabel(court = {}) {
 function updateOpenPlayFeeField() {
   if (!elements.openPlayFeeField || !elements.newOpenPlayFee || !elements.newAccess) return;
   const requiresFee = elements.newAccess.value === 'paid';
-  elements.openPlayFeeField.hidden = !requiresFee;
   elements.newOpenPlayFee.disabled = !requiresFee;
   elements.newOpenPlayFee.required = requiresFee;
   if (!requiresFee) elements.newOpenPlayFee.value = '';
@@ -1037,12 +1036,17 @@ function mergeSavedLocations(seedCourts, savedCourts) {
 function createLocationIcon(court) {
   const feeLabel = openPlayFeeLabel(court);
   const isFeeMarker = Boolean(feeLabel);
+  const feeSizeClass = isFeeMarker && feeLabel.length >= 6
+    ? ' fee-marker-long'
+    : isFeeMarker && feeLabel.length >= 4
+      ? ' fee-marker-wide'
+      : '';
   return L.divIcon({
-    className: `location-marker op-marker${isFeeMarker ? ' fee-marker' : ''}`,
+    className: `location-marker op-marker${isFeeMarker ? ' fee-marker' : ''}${feeSizeClass}`,
     html: `<span><b>${feeLabel || DEFAULT_ICON}</b></span>`,
-    iconSize: isFeeMarker ? [42, 42] : [38, 38],
-    iconAnchor: isFeeMarker ? [21, 21] : [19, 36],
-    popupAnchor: isFeeMarker ? [0, -22] : [0, -32]
+    iconSize: [38, 38],
+    iconAnchor: [19, 36],
+    popupAnchor: [0, -32]
   });
 }
 

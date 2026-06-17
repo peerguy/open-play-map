@@ -731,7 +731,6 @@ function renderLocationFields(court, { disabled = false } = {}) {
         </label>
         <label class="field-open-play-fee" data-open-play-fee-field hidden>Open play fee
           <input name="openPlayFee" type="number" min="0.01" step="0.01" inputmode="decimal" value="${escapeHtml(normalizeOpenPlayFee(court.openPlayFee) ?? '')}"${disabledAttr} />
-          <span class="field-help">Required for public open play that costs money.</span>
         </label>
         <label class="field-court-count">Number of courts
           <input name="courtCount" type="number" min="0" step="1" inputmode="numeric" value="${escapeHtml(court.courts?.count ?? '')}"${disabledAttr} />

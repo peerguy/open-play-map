@@ -693,27 +693,25 @@ select {
   grid-column: span 3;
 }
 
-.location-fields .field-open-play-fee .field-help {
-  margin-top: 6px;
-}
-
-.location-fields .access-stack .field-open-play-fee,
-.location-fields .access-stack .field-court-count {
-  grid-template-columns: minmax(112px, max-content) minmax(0, 1fr);
-  align-items: center;
-  column-gap: 10px;
-  row-gap: 4px;
-}
-
-.location-fields .access-stack .field-open-play-fee .field-help {
-  grid-column: 2;
-  margin-top: 0;
+.location-fields .field-open-play-fee input:disabled {
+  border-color: #dbe4ee;
+  background: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
+  opacity: 1;
 }
 
 .location-fields .access-stack {
   display: grid;
   grid-column: span 3;
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
+}
+
+.location-fields .access-stack .field-access,
+.location-fields .access-stack .field-open-play-fee,
+.location-fields .access-stack .field-court-count {
+  grid-column: 1 / -1;
 }
 
 .location-fields .checkbox-fieldset {
@@ -2243,25 +2241,23 @@ textarea::placeholder {
 }
 
 .location-marker.fee-marker span {
-  box-sizing: border-box;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
   background:
     radial-gradient(circle at 30% 28%, rgba(255, 255, 255, 0.3), transparent 28%),
     linear-gradient(135deg, #2f9e44, #187036);
   box-shadow: 0 8px 20px rgba(24, 112, 54, 0.32);
-  transform: none;
-}
-
-.location-marker.fee-marker span::before {
-  inset: 5px;
 }
 
 .location-marker.fee-marker b {
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   letter-spacing: 0;
-  transform: none;
+}
+
+.location-marker.fee-marker-wide b {
+  font-size: 0.64rem;
+}
+
+.location-marker.fee-marker-long b {
+  font-size: 0.55rem;
 }
 
 .logo-mark {
