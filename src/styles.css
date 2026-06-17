@@ -3748,7 +3748,6 @@ label:has(input:required:valid) > .field-label .is-required {
 
 .rewards-disclaimer,
 .credit-disclaimer {
-  margin: 0;
   border: 1px solid #d9e1ea;
   border-radius: 8px;
   background: #f4f7fa;
@@ -3758,10 +3757,12 @@ label:has(input:required:valid) > .field-label .is-required {
 }
 
 .rewards-disclaimer {
-  padding: 12px 14px;
+  margin: 14px 14px 0;
+  padding: 14px 16px;
 }
 
 .credit-disclaimer {
+  margin: 0;
   padding: 10px 12px;
 }
 
@@ -5541,6 +5542,10 @@ label:has(input:required:valid) > .field-label .is-required {
   .leaderboard-explainer {
     grid-template-columns: 1fr;
     padding: 10px 10px 0;
+  }
+
+  .rewards-disclaimer {
+    margin: 10px 10px 0;
   }
 
   .leaderboard-tabs {
