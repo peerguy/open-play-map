@@ -3,6 +3,7 @@ const REVIEWS_KEY = 'open-play-map-reviews';
 const CREDITS_KEY = 'open-play-map-credits';
 
 const params = new URLSearchParams(location.search);
+const LOCAL_PROTOTYPE_HOSTS = new Set(['', 'localhost', '127.0.0.1']);
 let allCourts = [];
 let backendContributions = null;
 let refreshAccountPromise = null;
@@ -50,13 +51,22 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+function allowPrototypeContributionStorage() {
+  return LOCAL_PROTOTYPE_HOSTS.has(window.location.hostname);
+}
+
+function readPrototypeStorage(key, fallback) {
+  if (!allowPrototypeContributionStorage()) return fallback;
+  try {
+    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
+  } catch {
+    return fallback;
+  }
+}
+
 function getSavedSubmissions() {
   if (backendContributions?.locations) return backendContributions.locations;
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  return readPrototypeStorage(STORAGE_KEY, []);
 }
 
 function emptyBackendContributions(status = 'Not loaded') {
@@ -73,20 +83,12 @@ function emptyBackendContributions(status = 'Not loaded') {
 
 function getSavedReviews() {
   if (backendContributions?.reviews) return backendContributions.reviews;
-  try {
-    return JSON.parse(localStorage.getItem(REVIEWS_KEY) || '{}');
-  } catch {
-    return {};
-  }
+  return readPrototypeStorage(REVIEWS_KEY, {});
 }
 
 function getSavedCredits() {
   if (backendContributions?.credits) return backendContributions.credits;
-  try {
-    return JSON.parse(localStorage.getItem(CREDITS_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  return readPrototypeStorage(CREDITS_KEY, []);
 }
 
 function getCreditBalances(userId) {

@@ -1,6 +1,7 @@
 const USERS_KEY = 'open-play-map-users';
 const CREDITS_KEY = 'open-play-map-credits';
 const WINNERS_KEY = 'open-play-map-monthly-winners';
+const LOCAL_PROTOTYPE_HOSTS = new Set(['', 'localhost', '127.0.0.1']);
 
 const elements = {
   userPanel: document.querySelector('#leaderboardUserPanel'),
@@ -24,28 +25,29 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
-function getSavedUsers() {
+function allowPrototypeContributionStorage() {
+  return LOCAL_PROTOTYPE_HOSTS.has(window.location.hostname);
+}
+
+function readPrototypeStorage(key, fallback) {
+  if (!allowPrototypeContributionStorage()) return fallback;
   try {
-    return JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
   } catch {
-    return [];
+    return fallback;
   }
+}
+
+function getSavedUsers() {
+  return readPrototypeStorage(USERS_KEY, []);
 }
 
 function getSavedCredits() {
-  try {
-    return JSON.parse(localStorage.getItem(CREDITS_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  return readPrototypeStorage(CREDITS_KEY, []);
 }
 
 function getMonthlyWinners() {
-  try {
-    return JSON.parse(localStorage.getItem(WINNERS_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  return readPrototypeStorage(WINNERS_KEY, []);
 }
 
 function avatarInitials(user) {
@@ -212,14 +214,14 @@ async function loadBackendLeaderboard() {
   try {
     backendLeaderboardRows = await window.OpenPlaySupabase?.fetchPublicLeaderboard?.() || null;
   } catch (error) {
-    console.warn('Supabase leaderboard load failed. Falling back to local leaderboard.', error);
+    console.warn('Supabase leaderboard load failed.', error);
     backendLeaderboardRows = null;
   }
 
   try {
     backendMonthlyWinners = await window.OpenPlaySupabase?.fetchPublicMonthlyDrawings?.() || null;
   } catch (error) {
-    console.warn('Supabase monthly drawing load failed. Falling back to local winners.', error);
+    console.warn('Supabase monthly drawing load failed.', error);
     backendMonthlyWinners = null;
   }
 }

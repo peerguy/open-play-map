@@ -10,6 +10,8 @@ const DEFAULT_ICON = 'OP';
 const DAILY_LOCATION_LIMIT = 3;
 const DAILY_REVIEW_LIMIT = 10;
 const MIN_REVIEW_FIELDS = 3;
+const LOCAL_PROTOTYPE_HOSTS = new Set(['', 'localhost', '127.0.0.1']);
+const PRODUCTION_DATABASE_UNAVAILABLE = 'The production database is unavailable, so this was not saved. Please try again in a few minutes.';
 
 const CREDIT_VALUES = {
   'add-review': 1,
@@ -211,6 +213,26 @@ function slugify(value) {
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function allowPrototypeContributionStorage() {
+  return LOCAL_PROTOTYPE_HOSTS.has(window.location.hostname);
+}
+
+function readPrototypeStorage(key, fallback) {
+  if (!allowPrototypeContributionStorage()) return fallback;
+  try {
+    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
+  } catch {
+    return fallback;
+  }
+}
+
+function writePrototypeStorage(key, value) {
+  if (!allowPrototypeContributionStorage()) {
+    throw new Error(PRODUCTION_DATABASE_UNAVAILABLE);
+  }
+  localStorage.setItem(key, JSON.stringify(value));
 }
 
 function escapeHtml(value) {
@@ -476,46 +498,36 @@ async function shareLocation(court) {
 
 function getSavedReviews() {
   if (state.reviewMap) return state.reviewMap;
-  try {
-    return JSON.parse(localStorage.getItem(REVIEWS_KEY) || '{}');
-  } catch {
-    return {};
-  }
+  return readPrototypeStorage(REVIEWS_KEY, {});
 }
 
 function saveReviews(reviews) {
   if (state.reviewMap) {
     state.reviewMap = reviews;
+    return;
   }
-  localStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews));
+  writePrototypeStorage(REVIEWS_KEY, reviews);
 }
 
 function getSavedReports() {
   if (Array.isArray(state.ownReports)) return state.ownReports;
-  try {
-    return JSON.parse(localStorage.getItem(REPORTS_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  return readPrototypeStorage(REPORTS_KEY, []);
 }
 
 function saveReports(reports) {
   if (Array.isArray(state.ownReports)) {
     state.ownReports = reports;
+    return;
   }
-  localStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
+  writePrototypeStorage(REPORTS_KEY, reports);
 }
 
 function getSavedSuggestedEdits() {
-  try {
-    return JSON.parse(localStorage.getItem(EDITS_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  return readPrototypeStorage(EDITS_KEY, []);
 }
 
 function saveSuggestedEdits(edits) {
-  localStorage.setItem(EDITS_KEY, JSON.stringify(edits));
+  writePrototypeStorage(EDITS_KEY, edits);
 }
 
 function savedSubmissionCountForToday(userId) {
@@ -562,15 +574,11 @@ function saveReport({ targetType, targetId, targetName, reviewId = '', reason })
 }
 
 function getSavedCredits() {
-  try {
-    return JSON.parse(localStorage.getItem(CREDITS_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  return readPrototypeStorage(CREDITS_KEY, []);
 }
 
 function saveCredits(credits) {
-  localStorage.setItem(CREDITS_KEY, JSON.stringify(credits));
+  writePrototypeStorage(CREDITS_KEY, credits);
 }
 
 function awardCredits({ action, targetType, targetId, status = 'approved' }) {
@@ -865,7 +873,7 @@ async function loadBackendCollections() {
   try {
     state.reviewMap = await window.OpenPlaySupabase?.fetchReviewMap?.() || null;
   } catch (error) {
-    console.warn('Supabase review load failed. Falling back to local reviews.', error);
+    console.warn('Supabase review load failed.', error);
     state.reviewMap = null;
   }
 
@@ -877,7 +885,7 @@ async function loadBackendCollections() {
   try {
     state.ownReports = await window.OpenPlaySupabase?.fetchOwnReports?.() || [];
   } catch (error) {
-    console.warn('Supabase report load failed. Falling back to local reports.', error);
+    console.warn('Supabase report load failed.', error);
     state.ownReports = null;
   }
 }
@@ -990,23 +998,15 @@ function resetDialogScroll(dialog, form, { focusCloseButton = false } = {}) {
 }
 
 function getSavedSubmissions() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  return readPrototypeStorage(STORAGE_KEY, []);
 }
 
 function getDeletedLocationIds() {
-  try {
-    return JSON.parse(localStorage.getItem(DELETED_LOCATIONS_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  return readPrototypeStorage(DELETED_LOCATIONS_KEY, []);
 }
 
 function saveSubmissions(submissions) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(submissions));
+  writePrototypeStorage(STORAGE_KEY, submissions);
 }
 
 function upsertSavedLocation(court) {
@@ -1847,6 +1847,11 @@ async function reportLocation(courtId) {
     return;
   }
 
+  if (!allowPrototypeContributionStorage()) {
+    window.alert(PRODUCTION_DATABASE_UNAVAILABLE);
+    return;
+  }
+
   saveReport({
     targetType: 'location',
     targetId: court.id,
@@ -1894,6 +1899,11 @@ async function reportReview(courtId, reviewId) {
     } catch (error) {
       window.alert(error.message.includes('duplicate') ? 'You already reported this review.' : error.message);
     }
+    return;
+  }
+
+  if (!allowPrototypeContributionStorage()) {
+    window.alert(PRODUCTION_DATABASE_UNAVAILABLE);
     return;
   }
 
@@ -2306,6 +2316,11 @@ async function submitReview(event) {
     return;
   }
 
+  if (!allowPrototypeContributionStorage()) {
+    setReviewHint(PRODUCTION_DATABASE_UNAVAILABLE, true);
+    return;
+  }
+
   if (body || hasReviewDetails) {
     allReviews[court.id] = [
       nextReview,
@@ -2645,6 +2660,11 @@ async function addSubmittedLocation(event) {
       console.error(error);
       elements.formHint.textContent = error.message || 'Could not submit that location.';
     }
+    return;
+  }
+
+  if (!allowPrototypeContributionStorage()) {
+    elements.formHint.textContent = PRODUCTION_DATABASE_UNAVAILABLE;
     return;
   }
 

@@ -919,11 +919,28 @@
           upsert: false
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        await removeUploadedPhotoFiles(uploaded);
+        throw uploadError;
+      }
       uploaded.push(storagePath);
     }
 
     return uploaded;
+  }
+
+  async function removeUploadedPhotoFiles(storagePaths = []) {
+    const supabase = client();
+    const paths = storagePaths.filter(Boolean);
+    if (!supabase || !paths.length) return;
+
+    const { error } = await supabase.storage
+      .from(PHOTO_BUCKET)
+      .remove(paths);
+
+    if (error) {
+      console.warn('Uploaded photo cleanup failed.', error);
+    }
   }
 
   async function insertPhotoRows({ locationId, reviewId = null, user, storagePaths = [] }) {
@@ -948,6 +965,15 @@
     return data || [];
   }
 
+  async function insertPhotoRowsOrCleanup({ locationId, reviewId = null, user, storagePaths = [] }) {
+    try {
+      return await insertPhotoRows({ locationId, reviewId, user, storagePaths });
+    } catch (error) {
+      await removeUploadedPhotoFiles(storagePaths);
+      throw error;
+    }
+  }
+
   async function submitLocationPhotos(court, user, photoFiles = []) {
     const supabase = client();
     if (!supabase || !court?.remoteId || !user?.id) throw new Error('Supabase is not configured.');
@@ -959,7 +985,7 @@
       files: preparedPhotoFiles
     });
 
-    return insertPhotoRows({
+    return insertPhotoRowsOrCleanup({
       locationId: court.remoteId,
       user,
       storagePaths
@@ -1003,7 +1029,7 @@
       user,
       files: preparedPhotoFiles
     });
-    await insertPhotoRows({
+    await insertPhotoRowsOrCleanup({
       locationId: result.data.id,
       user,
       storagePaths
@@ -1053,7 +1079,7 @@
       user,
       files: preparedPhotoFiles
     });
-    await insertPhotoRows({
+    await insertPhotoRowsOrCleanup({
       locationId: court.remoteId,
       reviewId: data.id,
       user,

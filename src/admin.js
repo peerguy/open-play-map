@@ -9,6 +9,8 @@ const EDITS_KEY = 'open-play-map-suggested-edits';
 const DAILY_LOCATION_LIMIT = 3;
 const DAILY_REVIEW_LIMIT = 10;
 const SUGGESTED_EDIT_CREDITS = 3;
+const LOCAL_PROTOTYPE_HOSTS = new Set(['', 'localhost', '127.0.0.1']);
+const PRODUCTION_DATABASE_UNAVAILABLE = 'The production database is unavailable, so this was not saved. Please try again in a few minutes.';
 
 const SKILL_LEVELS = {
   beginner: 'Beginner: Under 3.0',
@@ -118,6 +120,26 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function allowPrototypeContributionStorage() {
+  return LOCAL_PROTOTYPE_HOSTS.has(window.location.hostname);
+}
+
+function readPrototypeStorage(key, fallback) {
+  if (!allowPrototypeContributionStorage()) return fallback;
+  try {
+    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
+  } catch {
+    return fallback;
+  }
+}
+
+function writePrototypeStorage(key, value) {
+  if (!allowPrototypeContributionStorage()) {
+    throw new Error(PRODUCTION_DATABASE_UNAVAILABLE);
+  }
+  localStorage.setItem(key, JSON.stringify(value));
 }
 
 function photoUrl(photo) {
@@ -236,109 +258,85 @@ function adminReviewPhotosFromButton(button) {
 function getUsers() {
   if (Array.isArray(authUsers)) return authUsers;
 
-  try {
-    const users = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-    const migratedUsers = migrateUserSkillLevels(users);
-    if (JSON.stringify(users) !== JSON.stringify(migratedUsers)) {
-      saveUsers(migratedUsers);
-      migratedUsers.forEach(syncUserAttribution);
-    }
-    return migratedUsers;
-  } catch {
-    return [];
+  const users = readPrototypeStorage(USERS_KEY, []);
+  const migratedUsers = migrateUserSkillLevels(users);
+  if (allowPrototypeContributionStorage() && JSON.stringify(users) !== JSON.stringify(migratedUsers)) {
+    saveUsers(migratedUsers);
+    migratedUsers.forEach(syncUserAttribution);
   }
+  return migratedUsers;
 }
 
 function saveUsers(users) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  writePrototypeStorage(USERS_KEY, users);
 }
 
 function getSavedSubmissions() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  return readPrototypeStorage(STORAGE_KEY, []);
 }
 
 function saveSubmissions(submissions) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(submissions));
+  writePrototypeStorage(STORAGE_KEY, submissions);
 }
 
 function getDeletedLocationIds() {
-  try {
-    return JSON.parse(localStorage.getItem(DELETED_LOCATIONS_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  return readPrototypeStorage(DELETED_LOCATIONS_KEY, []);
 }
 
 function saveDeletedLocationIds(ids) {
-  localStorage.setItem(DELETED_LOCATIONS_KEY, JSON.stringify(ids));
+  writePrototypeStorage(DELETED_LOCATIONS_KEY, ids);
 }
 
 function getSavedReviews() {
   if (backendCollections.reviews) return backendCollections.reviews;
-  try {
-    return JSON.parse(localStorage.getItem(REVIEWS_KEY) || '{}');
-  } catch {
-    return {};
-  }
+  return readPrototypeStorage(REVIEWS_KEY, {});
 }
 
 function saveReviews(reviews) {
   if (backendCollections.reviews) {
     backendCollections.reviews = reviews;
+    return;
   }
-  localStorage.setItem(REVIEWS_KEY, JSON.stringify(reviews));
+  writePrototypeStorage(REVIEWS_KEY, reviews);
 }
 
 function getSavedCredits() {
   if (backendCollections.credits) return backendCollections.credits;
-  try {
-    return JSON.parse(localStorage.getItem(CREDITS_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  return readPrototypeStorage(CREDITS_KEY, []);
 }
 
 function saveCredits(credits) {
   if (backendCollections.credits) {
     backendCollections.credits = credits;
+    return;
   }
-  localStorage.setItem(CREDITS_KEY, JSON.stringify(credits));
+  writePrototypeStorage(CREDITS_KEY, credits);
 }
 
 function getSavedReports() {
   if (backendCollections.reports) return backendCollections.reports;
-  try {
-    return JSON.parse(localStorage.getItem(REPORTS_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  return readPrototypeStorage(REPORTS_KEY, []);
 }
 
 function saveReports(reports) {
   if (backendCollections.reports) {
     backendCollections.reports = reports;
+    return;
   }
-  localStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
+  writePrototypeStorage(REPORTS_KEY, reports);
 }
 
 function getSavedSuggestedEdits() {
   if (backendCollections.suggestedEdits) return backendCollections.suggestedEdits;
-  try {
-    return JSON.parse(localStorage.getItem(EDITS_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  return readPrototypeStorage(EDITS_KEY, []);
 }
 
 function saveSuggestedEdits(edits) {
   if (backendCollections.suggestedEdits) {
     backendCollections.suggestedEdits = edits;
+    return;
   }
-  localStorage.setItem(EDITS_KEY, JSON.stringify(edits));
+  writePrototypeStorage(EDITS_KEY, edits);
 }
 
 function getCreditBalances(userId) {
@@ -1907,6 +1905,11 @@ async function saveAdminReviewEdit(event) {
     return;
   }
 
+  if (!allowPrototypeContributionStorage()) {
+    hint.textContent = PRODUCTION_DATABASE_UNAVAILABLE;
+    return;
+  }
+
   upsertSavedReview(nextReview, existing);
   editor.querySelector('.moderation-badge').textContent = nextReview.status;
   hint.textContent = 'Saved.';
@@ -2032,6 +2035,11 @@ async function approveSuggestedEdit(editId) {
     return;
   }
 
+  if (!allowPrototypeContributionStorage()) {
+    window.alert(PRODUCTION_DATABASE_UNAVAILABLE);
+    return;
+  }
+
   upsertSavedLocation(nextCourt);
   allCourts = allCourts.some(court => court.id === nextCourt.id)
     ? allCourts.map(court => court.id === nextCourt.id ? nextCourt : court)
@@ -2068,6 +2076,11 @@ async function rejectSuggestedEdit(editId) {
     return;
   }
 
+  if (!allowPrototypeContributionStorage()) {
+    window.alert(PRODUCTION_DATABASE_UNAVAILABLE);
+    return;
+  }
+
   saveSuggestedEdits(edits.map(item => (
     item.id === editId ? { ...item, status: 'rejected', rejectedAt: todayIso() } : item
   )));
@@ -2086,6 +2099,11 @@ async function dismissReport(reportId) {
     } catch (error) {
       window.alert(error.message || 'Could not dismiss that report.');
     }
+    return;
+  }
+
+  if (!allowPrototypeContributionStorage()) {
+    window.alert(PRODUCTION_DATABASE_UNAVAILABLE);
     return;
   }
 
@@ -2121,6 +2139,11 @@ async function deleteReportedReview(courtId, reviewId, reportId) {
     return;
   }
 
+  if (!allowPrototypeContributionStorage()) {
+    window.alert(PRODUCTION_DATABASE_UNAVAILABLE);
+    return;
+  }
+
   const reviews = getSavedReviews();
   reviews[courtId] = (reviews[courtId] || []).filter(review => review.id !== reviewId);
   saveReviews(reviews);
@@ -2147,6 +2170,11 @@ async function deleteLocation(court) {
     } catch (error) {
       window.alert(error.message);
     }
+    return;
+  }
+
+  if (!allowPrototypeContributionStorage()) {
+    window.alert(PRODUCTION_DATABASE_UNAVAILABLE);
     return;
   }
 
@@ -2247,6 +2275,11 @@ async function saveLocationEdit(event) {
     return;
   }
 
+  if (!allowPrototypeContributionStorage()) {
+    hint.textContent = PRODUCTION_DATABASE_UNAVAILABLE;
+    return;
+  }
+
   upsertSavedLocation(nextCourt);
   allCourts = allCourts.map(court => court.id === locationId ? nextCourt : court);
   hint.textContent = 'Saved.';
@@ -2274,7 +2307,7 @@ async function loadUsers() {
   try {
     authUsers = await window.OpenPlayAuth?.listProfiles?.() || null;
   } catch (error) {
-    console.warn('Supabase profile load failed. Falling back to local users.', error);
+    console.warn('Supabase profile load failed.', error);
     authUsers = null;
   }
 }
@@ -2292,7 +2325,7 @@ async function loadBackendCollections() {
       rewardPeriods: collections.rewardPeriods || []
     };
   } catch (error) {
-    console.warn('Supabase moderation data load failed. Falling back to local moderation data.', error);
+    console.warn('Supabase moderation data load failed.', error);
     backendCollections = {
       reviews: null,
       reports: null,
