@@ -8,6 +8,7 @@ const entries = [
   'index.html',
   'about.html',
   'account.html',
+  'account-settings.html',
   'leaderboard.html',
   'admin.html',
   'privacy.html',

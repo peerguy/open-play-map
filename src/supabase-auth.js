@@ -171,7 +171,7 @@
     if (!supabase) throw new Error('Supabase is not configured.');
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/account.html`
+      redirectTo: `${window.location.origin}/account-settings.html`
     });
     if (error) throw new Error(authErrorMessage(error));
   }

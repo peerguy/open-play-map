@@ -8,7 +8,7 @@
     <meta name="description" content="Create or manage an Open Play Map profile to contribute pickleball location reviews." />
     <meta name="theme-color" content="#266c3f" />
     <link rel="icon" type="image/svg+xml" href="assets/icons/open-play-favicon.svg" />
-    <link rel="stylesheet" href="src/styles.css?v=account-password-reset-20260617" />
+    <link rel="stylesheet" href="src/styles.css?v=account-settings-20260617" />
   </head>
   <body class="account-page">
     <header class="site-header account-header">
@@ -115,38 +115,7 @@
             </label>
             <p id="loginHint" class="form-hint"></p>
             <button class="primary-button" type="submit">Log in</button>
-            <button class="auth-link-button" type="button" data-show-reset>Forgot password?</button>
-          </form>
-
-          <form id="passwordResetForm" class="auth-form account-form" data-auth-panel="reset" hidden>
-            <h3>Reset password</h3>
-            <p class="form-hint">Enter your account email and we&apos;ll send a link to set a new password.</p>
-            <label>Email
-              <input id="resetEmail" name="email" type="email" required autocomplete="username" />
-            </label>
-            <p id="resetHint" class="form-hint"></p>
-            <button class="primary-button" type="submit">Send reset link</button>
-            <button class="auth-link-button" type="button" data-show-login>Back to log in</button>
-          </form>
-
-          <form id="newPasswordForm" class="auth-form account-form" data-auth-panel="new-password" hidden>
-            <h3>Set new password</h3>
-            <p class="form-hint">Choose a new password for your Open Play Map account.</p>
-            <label><span class="field-label">New password <span class="field-help is-required">Required</span></span>
-              <span class="password-field">
-                <input id="newPassword" name="new-password" type="password" required minlength="8" autocomplete="new-password" placeholder="New password" />
-                <button class="password-toggle" type="button" data-toggle-password data-password-target="newPassword">Show</button>
-              </span>
-              <span class="field-help">Minimum 8 characters.</span>
-            </label>
-            <label><span class="field-label">Confirm new password <span class="field-help is-required">Required</span></span>
-              <span class="password-field">
-                <input id="newPasswordConfirm" name="new-password-confirm" type="password" required minlength="8" autocomplete="new-password" placeholder="Re-enter password" />
-                <button class="password-toggle" type="button" data-toggle-password data-password-target="newPasswordConfirm">Show</button>
-              </span>
-            </label>
-            <p id="newPasswordHint" class="form-hint"></p>
-            <button class="primary-button" type="submit">Update password</button>
+            <a class="auth-link-button" href="account-settings.html?mode=reset">Forgot password?</a>
           </form>
         </div>
       </section>
@@ -172,8 +141,8 @@
     <script src="src/supabase-config.js?v=supabase-read-20260614"></script>
     <script src="src/supabase-client.js?v=mobile-map-default-20260616"></script>
     <script src="src/supabase-data.js?v=mobile-map-default-20260616"></script>
-    <script src="src/supabase-auth.js?v=account-password-reset-20260617"></script>
+    <script src="src/supabase-auth.js?v=account-settings-20260617"></script>
     <script src="src/mobile-header.js?v=mobile-map-default-20260616"></script>
-    <script src="src/account.js?v=account-password-reset-20260617"></script>
+    <script src="src/account.js?v=account-settings-20260617"></script>
   </body>
 </html>

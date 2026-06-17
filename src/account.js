@@ -3,11 +3,9 @@ const REVIEWS_KEY = 'open-play-map-reviews';
 const CREDITS_KEY = 'open-play-map-credits';
 
 const params = new URLSearchParams(location.search);
-const hashParams = new URLSearchParams(location.hash.startsWith('#') ? location.hash.slice(1) : '');
 let allCourts = [];
 let backendContributions = null;
 let refreshAccountPromise = null;
-let passwordRecoveryMode = params.get('type') === 'recovery' || hashParams.get('type') === 'recovery';
 
 const SKILL_LEVELS = {
   beginner: 'Beginner: Under 3.0',
@@ -38,18 +36,9 @@ const elements = {
   loginEmail: document.querySelector('#loginEmail'),
   loginPassword: document.querySelector('#loginPassword'),
   loginHint: document.querySelector('#loginHint'),
-  passwordResetForm: document.querySelector('#passwordResetForm'),
-  resetEmail: document.querySelector('#resetEmail'),
-  resetHint: document.querySelector('#resetHint'),
-  newPasswordForm: document.querySelector('#newPasswordForm'),
-  newPassword: document.querySelector('#newPassword'),
-  newPasswordConfirm: document.querySelector('#newPasswordConfirm'),
-  newPasswordHint: document.querySelector('#newPasswordHint'),
   authTabs: document.querySelectorAll('[data-auth-tab]'),
   authPanels: document.querySelectorAll('[data-auth-panel]'),
-  passwordToggles: document.querySelectorAll('[data-toggle-password]'),
-  showResetButtons: document.querySelectorAll('[data-show-reset]'),
-  showLoginButtons: document.querySelectorAll('[data-show-login]')
+  passwordToggles: document.querySelectorAll('[data-toggle-password]')
 };
 
 function escapeHtml(value) {
@@ -226,16 +215,6 @@ function flattenedReviews() {
     })));
 }
 
-function skillLevelOptions(selected) {
-  const current = normalizeSkillLevel(selected);
-  return [
-    `<option value=""${current ? '' : ' selected'}>No skill level selected</option>`,
-    ...Object.entries(SKILL_LEVELS)
-    .map(([value, label]) => `<option value="${value}"${current === value ? ' selected' : ''}>${label}</option>`)
-  ]
-    .join('');
-}
-
 function setCurrentUser(user) {
   renderCurrentUser(user);
   window.dispatchEvent(new CustomEvent('open-play-session-changed'));
@@ -323,43 +302,11 @@ function renderCurrentUser(user) {
     </div>
     <div class="current-user-actions">
       ${isAdmin ? '<a class="primary-button" href="admin.html">Admin</a>' : ''}
-      <button class="secondary-button" type="button" data-edit-profile>Edit profile</button>
+      <a class="secondary-button" href="account-settings.html">Account settings</a>
       <button class="secondary-button" type="button" data-logout>Log out</button>
     </div>
-    <form id="profileEditForm" class="profile-edit-form" hidden>
-      <h3>Edit profile</h3>
-      <label>Email
-        <input id="editEmail" type="email" required value="${escapeHtml(user.email)}" />
-      </label>
-      <label>Username
-        <input id="editUsername" required maxlength="28" value="${escapeHtml(user.username)}" />
-      </label>
-      <label>Skill level
-        <select id="editSkillLevel">
-          ${skillLevelOptions(user.skillLevel)}
-        </select>
-      </label>
-      <label>Bio
-        <textarea id="editBio" maxlength="140" rows="3">${escapeHtml(user.bio || '')}</textarea>
-        <span class="field-help">140 characters max.</span>
-      </label>
-      <p id="editHint" class="form-hint"></p>
-      <div class="profile-edit-actions">
-        <button class="secondary-button" type="button" data-cancel-edit>Cancel</button>
-        <button class="primary-button" type="submit">Save changes</button>
-      </div>
-    </form>
   `;
 
-  const editForm = elements.currentUserCard.querySelector('#profileEditForm');
-  elements.currentUserCard.querySelector('[data-edit-profile]').addEventListener('click', () => {
-    editForm.hidden = false;
-    elements.currentUserCard.querySelector('#editUsername').focus();
-  });
-  elements.currentUserCard.querySelector('[data-cancel-edit]').addEventListener('click', () => {
-    editForm.hidden = true;
-  });
-  editForm.addEventListener('submit', event => updateProfile(event, user));
   elements.currentUserCard.querySelector('[data-logout]').addEventListener('click', async () => {
     try {
       await window.OpenPlayAuth.signOut();
@@ -533,30 +480,6 @@ function showAuthPanel(panelName) {
   });
 }
 
-function setPasswordRecoveryMode(enabled) {
-  passwordRecoveryMode = enabled;
-  document.body.classList.toggle('is-password-recovery', enabled);
-  if (!enabled) return;
-
-  showAuthPanel('new-password');
-  elements.notice.textContent = 'Enter a new password to finish resetting your account.';
-  requestAnimationFrame(() => elements.newPassword?.focus());
-}
-
-function showPasswordResetRequest() {
-  elements.resetEmail.value = elements.loginEmail.value.trim().toLowerCase();
-  elements.resetHint.textContent = '';
-  showAuthPanel('reset');
-  elements.resetEmail.focus();
-}
-
-function showLoginPanel() {
-  elements.resetHint.textContent = '';
-  elements.loginHint.textContent = '';
-  showAuthPanel('login');
-  elements.loginEmail.focus();
-}
-
 async function createAccount(event) {
   event.preventDefault();
 
@@ -613,40 +536,6 @@ async function createAccount(event) {
   }
 }
 
-async function updateProfile(event, originalUser) {
-  event.preventDefault();
-
-  const form = event.currentTarget;
-  const hint = form.querySelector('#editHint');
-  const email = form.querySelector('#editEmail').value.trim().toLowerCase();
-  const username = form.querySelector('#editUsername').value.trim();
-  const skillLevel = normalizeSkillLevel(form.querySelector('#editSkillLevel').value, '');
-  const bio = form.querySelector('#editBio').value.trim();
-
-  if (!email || !username) {
-    hint.textContent = 'Email and username are required.';
-    return;
-  }
-
-  if (bio.length > 140) {
-    hint.textContent = 'Bio must be 140 characters or less.';
-    return;
-  }
-
-  try {
-    const updatedUser = await window.OpenPlayAuth.updateProfile(originalUser, {
-      email,
-      username,
-      skillLevel,
-      bio
-    });
-    setCurrentUser(updatedUser);
-    elements.notice.textContent = 'Profile updated.';
-  } catch (error) {
-    hint.textContent = error.message;
-  }
-}
-
 async function login(event) {
   event.preventDefault();
 
@@ -662,63 +551,6 @@ async function login(event) {
     window.dispatchEvent(new CustomEvent('open-play-session-changed'));
   } catch (error) {
     elements.loginHint.textContent = 'Email or password did not match.';
-  }
-}
-
-async function requestPasswordReset(event) {
-  event.preventDefault();
-
-  const submitButton = elements.passwordResetForm.querySelector('button[type="submit"]');
-  const email = elements.resetEmail.value.trim().toLowerCase();
-  if (!email) {
-    elements.resetHint.textContent = 'Enter the email for your account.';
-    return;
-  }
-
-  elements.resetHint.textContent = 'Sending reset link...';
-  if (submitButton) submitButton.disabled = true;
-
-  try {
-    await window.OpenPlayAuth.sendPasswordReset(email);
-    elements.resetHint.textContent = 'Check your email for a password reset link.';
-  } catch (error) {
-    elements.resetHint.textContent = error.message;
-  } finally {
-    if (submitButton) submitButton.disabled = false;
-  }
-}
-
-async function submitNewPassword(event) {
-  event.preventDefault();
-
-  const submitButton = elements.newPasswordForm.querySelector('button[type="submit"]');
-  const password = elements.newPassword.value;
-  const passwordConfirm = elements.newPasswordConfirm.value;
-
-  if (password.length < 8) {
-    elements.newPasswordHint.textContent = 'Password must be at least 8 characters.';
-    return;
-  }
-
-  if (password !== passwordConfirm) {
-    elements.newPasswordHint.textContent = 'Passwords must match.';
-    return;
-  }
-
-  elements.newPasswordHint.textContent = 'Updating password...';
-  if (submitButton) submitButton.disabled = true;
-
-  try {
-    const user = await window.OpenPlayAuth.updatePassword(password);
-    elements.newPasswordForm.reset();
-    setPasswordRecoveryMode(false);
-    elements.notice.textContent = 'Password updated. You are signed in.';
-    setCurrentUser(user);
-    history.replaceState(null, document.title, `${location.pathname}${location.search && !params.get('type') ? location.search : ''}`);
-  } catch (error) {
-    elements.newPasswordHint.textContent = error.message;
-  } finally {
-    if (submitButton) submitButton.disabled = false;
   }
 }
 
@@ -752,9 +584,6 @@ async function refreshAccount() {
 async function init() {
   const notice = params.get('notice');
   elements.notice.textContent = notice || '';
-  if (passwordRecoveryMode) {
-    setPasswordRecoveryMode(true);
-  }
   await refreshAccount();
 }
 
@@ -766,23 +595,8 @@ elements.passwordToggles.forEach(button => {
   button.addEventListener('click', () => setPasswordVisibility(button));
 });
 
-elements.showResetButtons.forEach(button => {
-  button.addEventListener('click', showPasswordResetRequest);
-});
-
-elements.showLoginButtons.forEach(button => {
-  button.addEventListener('click', showLoginPanel);
-});
-
 elements.signupForm.addEventListener('submit', createAccount);
 elements.loginForm.addEventListener('submit', login);
-elements.passwordResetForm.addEventListener('submit', requestPasswordReset);
-elements.newPasswordForm.addEventListener('submit', submitNewPassword);
-window.OpenPlayAuth?.onAuthStateChange?.((event) => {
-  if (event === 'PASSWORD_RECOVERY') {
-    setPasswordRecoveryMode(true);
-  }
-});
 window.addEventListener('open-play-session-changed', async () => {
   try {
     await refreshAccount();

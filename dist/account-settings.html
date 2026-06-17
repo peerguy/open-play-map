@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Account Settings | Open Play Pickleball Map</title>
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="description" content="Manage your Open Play Map profile and password." />
+    <meta name="theme-color" content="#266c3f" />
+    <link rel="icon" type="image/svg+xml" href="assets/icons/open-play-favicon.svg" />
+    <link rel="stylesheet" href="src/styles.css?v=account-settings-20260617" />
+  </head>
+  <body class="account-page account-settings-page">
+    <header class="site-header account-header">
+      <div class="brand-lockup">
+        <a class="header-home-link" href="index.html" aria-label="Open Play Map home">
+          <div class="logo-mark" aria-hidden="true">OP</div>
+        </a>
+        <div class="brand-copy">
+          <div class="brand-title-row">
+            <a class="brand-name-link" href="index.html"><h1>Open Play Map</h1></a>
+            <a class="brand-about-link" href="about.html">About <span class="about-question" aria-hidden="true">?</span></a>
+            <span class="brand-link-divider" aria-hidden="true">|</span>
+            <a class="brand-store-link" href="https://scooppickleball.com/">Scoop Store</a>
+          </div>
+          <p class="subtitle">Manage your profile and password.</p>
+        </div>
+      </div>
+      <nav class="about-header-nav" aria-label="Account settings page navigation">
+        <a class="header-link" href="account.html">Account</a>
+        <a class="header-link" href="leaderboard.html">Leaderboard</a>
+      </nav>
+      <div class="mobile-page-title" aria-hidden="true">Settings</div>
+    </header>
+
+    <main class="account-shell">
+      <section class="account-panel account-settings-panel" aria-label="Account settings">
+        <div class="account-summary">
+          <div class="account-summary-top">
+            <p class="eyebrow">Account settings</p>
+            <a class="primary-button account-back-link" href="account.html">Back to account</a>
+          </div>
+          <h2>Profile and password settings.</h2>
+          <p>Update the profile details shown with your contributions, or change the password for your account.</p>
+          <div id="settingsUserCard" class="current-user-card settings-user-card" hidden></div>
+        </div>
+
+        <div class="account-forms account-settings-forms">
+          <p id="settingsNotice" class="account-notice"></p>
+
+          <section id="settingsSignedOut" class="settings-state-card" hidden>
+            <h3>Sign in required</h3>
+            <p>Log in before changing profile settings.</p>
+            <a class="primary-button" href="account.html">Go to account login</a>
+          </section>
+
+          <form id="profileSettingsForm" class="auth-form account-form" hidden>
+            <h3>Edit profile</h3>
+            <label>Email
+              <input id="settingsEmail" type="email" required autocomplete="email" />
+            </label>
+            <label>Username
+              <input id="settingsUsername" required maxlength="28" autocomplete="username" />
+            </label>
+            <label>Skill level
+              <select id="settingsSkillLevel">
+                <option value="">No skill level selected</option>
+                <option value="beginner">Beginner: Under 3.0</option>
+                <option value="intermediate">Intermediate: 3.0-4.0</option>
+                <option value="advanced">Advanced: 4.0+</option>
+              </select>
+            </label>
+            <label>Bio
+              <textarea id="settingsBio" maxlength="140" rows="3"></textarea>
+              <span class="field-help">140 characters max.</span>
+            </label>
+            <p id="profileSettingsHint" class="form-hint"></p>
+            <button class="primary-button" type="submit">Save profile</button>
+          </form>
+
+          <form id="passwordSettingsForm" class="auth-form account-form" hidden>
+            <h3>Change password</h3>
+            <label><span class="field-label">New password <span class="field-help is-required">Required</span></span>
+              <span class="password-field">
+                <input id="settingsPassword" name="new-password" type="password" required minlength="8" autocomplete="new-password" placeholder="New password" />
+                <button class="password-toggle" type="button" data-toggle-password data-password-target="settingsPassword">Show</button>
+              </span>
+              <span class="field-help">Minimum 8 characters.</span>
+            </label>
+            <label><span class="field-label">Confirm new password <span class="field-help is-required">Required</span></span>
+              <span class="password-field">
+                <input id="settingsPasswordConfirm" name="new-password-confirm" type="password" required minlength="8" autocomplete="new-password" placeholder="Re-enter password" />
+                <button class="password-toggle" type="button" data-toggle-password data-password-target="settingsPasswordConfirm">Show</button>
+              </span>
+            </label>
+            <p id="passwordSettingsHint" class="form-hint"></p>
+            <button class="primary-button" type="submit">Update password</button>
+          </form>
+
+          <form id="passwordResetForm" class="auth-form account-form" hidden>
+            <h3>Reset password</h3>
+            <p class="form-hint">Enter your account email and we&apos;ll send a link to set a new password.</p>
+            <label>Email
+              <input id="resetEmail" name="email" type="email" required autocomplete="username" />
+            </label>
+            <p id="resetHint" class="form-hint"></p>
+            <button class="primary-button" type="submit">Send reset link</button>
+            <a class="auth-link-button" href="account.html">Back to log in</a>
+          </form>
+
+          <form id="newPasswordForm" class="auth-form account-form" hidden>
+            <h3>Set new password</h3>
+            <p class="form-hint">Choose a new password for your Open Play Map account.</p>
+            <label><span class="field-label">New password <span class="field-help is-required">Required</span></span>
+              <span class="password-field">
+                <input id="newPassword" name="new-password" type="password" required minlength="8" autocomplete="new-password" placeholder="New password" />
+                <button class="password-toggle" type="button" data-toggle-password data-password-target="newPassword">Show</button>
+              </span>
+              <span class="field-help">Minimum 8 characters.</span>
+            </label>
+            <label><span class="field-label">Confirm new password <span class="field-help is-required">Required</span></span>
+              <span class="password-field">
+                <input id="newPasswordConfirm" name="new-password-confirm" type="password" required minlength="8" autocomplete="new-password" placeholder="Re-enter password" />
+                <button class="password-toggle" type="button" data-toggle-password data-password-target="newPasswordConfirm">Show</button>
+              </span>
+            </label>
+            <p id="newPasswordHint" class="form-hint"></p>
+            <button class="primary-button" type="submit">Update password</button>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="site-footer-inner">
+        <a class="footer-brand" href="index.html">Open Play Map</a>
+        <nav class="footer-nav" aria-label="Footer">
+          <a href="about.html">About</a>
+          <a href="privacy.html">Privacy</a>
+          <a href="terms.html">Terms</a>
+          <a href="official-rules.html">Official Rules</a>
+          <a href="community-guidelines.html">Guidelines</a>
+          <a href="copyright.html">Copyright</a>
+          <a href="contact.html">Contact</a>
+        </nav>
+      </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="src/analytics.js?v=seo-analytics-20260614"></script>
+    <script src="src/supabase-config.js?v=supabase-read-20260614"></script>
+    <script src="src/supabase-client.js?v=mobile-map-default-20260616"></script>
+    <script src="src/supabase-auth.js?v=account-settings-20260617"></script>
+    <script src="src/mobile-header.js?v=mobile-map-default-20260616"></script>
+    <script src="src/account-settings.js?v=account-settings-20260617"></script>
+  </body>
+</html>

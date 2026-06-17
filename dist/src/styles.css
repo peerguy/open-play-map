@@ -3399,6 +3399,7 @@ label:has(input:required:valid) > .field-label .is-required {
   font-weight: 850;
   text-align: left;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .auth-link-button:hover {
@@ -3450,6 +3451,26 @@ label:has(input:required:valid) > .field-label .is-required {
 
 .account-notice:empty {
   display: none;
+}
+
+.settings-state-card {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-state-card h3,
+.settings-state-card p {
+  margin: 0;
+}
+
+.settings-state-card p {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.account-settings-forms .auth-form:not([hidden]) + .auth-form:not([hidden]) {
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
 }
 
 .account-forms .primary-button,
