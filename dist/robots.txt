@@ -1,6 +1,10 @@
 User-agent: *
 Allow: /
+Disallow: /admin
 Disallow: /admin.html
+Disallow: /account
 Disallow: /account.html
+Disallow: /account-settings
+Disallow: /account-settings.html
 
 Sitemap: https://play.scooppickleball.com/sitemap.xml
