@@ -5948,36 +5948,12 @@ label:has(input:required:valid) > .field-label .is-required {
     white-space: nowrap;
   }
 
-  .mobile-results-actions {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .mobile-results-bar button {
-    min-height: 34px;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    padding: 7px 10px;
-    background: rgba(36, 119, 242, 0.1);
-    color: var(--brand-dark);
-    font: inherit;
-    font-size: 0.8rem;
-    font-weight: 900;
-  }
-
   .mobile-results-bar .mobile-sheet-handle {
     min-height: 4px;
     border: 0;
     padding: 0;
     box-shadow: none;
     font-size: 0;
-  }
-
-  .mobile-results-bar button[aria-pressed="true"] {
-    border-color: rgba(36, 119, 242, 0.28);
-    background: var(--brand);
-    color: #fff;
   }
 
   .map-page .result-count {

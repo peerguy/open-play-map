@@ -124,8 +124,6 @@ const elements = {
   courtList: document.querySelector('#courtList'),
   mobileSheetHandle: document.querySelector('.mobile-sheet-handle'),
   mobileResultsBar: document.querySelector('.mobile-results-bar'),
-  mobilePanelToggle: document.querySelector('#mobilePanelToggle'),
-  mobileListSizeToggle: document.querySelector('#mobileListSizeToggle'),
   submitDialog: document.querySelector('#submitDialog'),
   locationForm: document.querySelector('#locationForm'),
   submitEyebrow: document.querySelector('#submitDialog .form-header .eyebrow'),
@@ -1585,26 +1583,12 @@ function syncMobileHeaderHeight() {
   }
 }
 
-function updateMobileSheetControls() {
-  const isMapFocused = document.body.classList.contains('mobile-map-focus');
-  const isFullList = document.body.classList.contains('mobile-list-full');
-  if (elements.mobilePanelToggle) {
-    elements.mobilePanelToggle.textContent = isMapFocused ? 'Show list' : 'Map focus';
-    elements.mobilePanelToggle.setAttribute('aria-pressed', String(isMapFocused));
-  }
-  if (elements.mobileListSizeToggle) {
-    elements.mobileListSizeToggle.textContent = isFullList ? 'Half list' : 'Full list';
-    elements.mobileListSizeToggle.setAttribute('aria-pressed', String(isFullList));
-  }
-}
-
 function setMobileMapFocus(isMapFocused) {
   if (!isMobileLayout()) return;
   document.body.classList.toggle('mobile-map-focus', isMapFocused);
   if (isMapFocused) {
     document.body.classList.remove('mobile-list-full');
   }
-  updateMobileSheetControls();
   setTimeout(() => map.invalidateSize(), 180);
 }
 
@@ -1614,7 +1598,6 @@ function setMobileListFull(isFullList) {
   if (isFullList) {
     document.body.classList.remove('mobile-map-focus');
   }
-  updateMobileSheetControls();
   setTimeout(() => map.invalidateSize(), 180);
 }
 
@@ -1629,7 +1612,6 @@ function setMobileSheetMode(mode) {
   }
   document.body.classList.remove('mobile-map-focus');
   document.body.classList.remove('mobile-list-full');
-  updateMobileSheetControls();
   setTimeout(() => map.invalidateSize(), 180);
 }
 
@@ -2748,14 +2730,6 @@ document.querySelectorAll('[data-open-submit]').forEach(button => {
   button.addEventListener('click', openSubmitDialog);
 });
 
-elements.mobilePanelToggle?.addEventListener('click', () => {
-  setMobileMapFocus(!document.body.classList.contains('mobile-map-focus'));
-});
-
-elements.mobileListSizeToggle?.addEventListener('click', () => {
-  setMobileListFull(!document.body.classList.contains('mobile-list-full'));
-});
-
 setupMobileSheetDrag();
 preventPageZoomOverMap();
 
@@ -2764,7 +2738,6 @@ window.addEventListener('resize', () => {
   if (!isMobileLayout()) {
     document.body.classList.remove('mobile-map-focus');
     document.body.classList.remove('mobile-list-full');
-    updateMobileSheetControls();
   }
 });
 
