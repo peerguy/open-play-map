@@ -381,6 +381,38 @@ function formatLocationSkillLevel(skills) {
   return selected.length ? selected.join(', ') : 'unknown';
 }
 
+function normalizeOpenPlayFee(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  const fee = Number(value);
+  if (!Number.isFinite(fee) || fee <= 0) return null;
+  return Math.round(fee * 100) / 100;
+}
+
+function formatOpenPlayFee(value) {
+  const fee = normalizeOpenPlayFee(value);
+  if (fee === null) return '';
+  return `$${Number.isInteger(fee) ? fee : fee.toFixed(2)}`;
+}
+
+function accessLabel(court = {}) {
+  const feeLabel = formatOpenPlayFee(court.openPlayFee);
+  if (feeLabel) return `Public fee (${feeLabel})`;
+  if (court.access === 'paid' || court.isFree === false) return 'Paid/public fee';
+  return 'Free/public';
+}
+
+function updateAdminOpenPlayFeeField(form, { disabled = false } = {}) {
+  const feeField = form.querySelector('[data-open-play-fee-field]');
+  const feeInput = form.elements.openPlayFee;
+  const accessInput = form.elements.access;
+  if (!feeField || !feeInput || !accessInput) return;
+  const requiresFee = accessInput.value === 'paid';
+  feeField.hidden = !requiresFee;
+  feeInput.disabled = disabled || !requiresFee;
+  feeInput.required = requiresFee && !disabled;
+  if (!requiresFee && !disabled) feeInput.value = '';
+}
+
 function selectedLocationSkills(form) {
   return [...form.querySelectorAll('input[name="skillLevel"]:checked')]
     .map(input => input.value);
@@ -507,6 +539,8 @@ function setupAdminLocationForm(form, court, { disabled = false } = {}) {
     input.checked = selectedSkills.has(input.value);
   });
   updateAdminDaysSummary(form);
+  updateAdminOpenPlayFeeField(form, { disabled });
+  form.elements.access?.addEventListener('change', () => updateAdminOpenPlayFeeField(form, { disabled }));
   const timeWindows = form.querySelector('[data-time-windows]');
   timeWindows.replaceChildren();
   openPlaySlotsFromCourt(court).forEach(slot => addAdminTimeWindow(timeWindows, slot, disabled));
@@ -692,8 +726,12 @@ function renderLocationFields(court, { disabled = false } = {}) {
         <label class="field-access">Access
           <select name="access"${disabledAttr}>
             <option value="public"${court.access === 'public' || court.isFree === true ? ' selected' : ''}>Free/public</option>
-            <option value="paid"${court.access === 'paid' || court.isFree === false ? ' selected' : ''}>Paid/private</option>
+            <option value="paid"${court.access === 'paid' || court.isFree === false ? ' selected' : ''}>Public with fee</option>
           </select>
+        </label>
+        <label class="field-open-play-fee" data-open-play-fee-field hidden>Open play fee
+          <input name="openPlayFee" type="number" min="0.01" step="0.01" inputmode="decimal" value="${escapeHtml(normalizeOpenPlayFee(court.openPlayFee) ?? '')}"${disabledAttr} />
+          <span class="field-help">Required for public open play that costs money.</span>
         </label>
         <label class="field-court-count">Number of courts
           <input name="courtCount" type="number" min="0" step="1" inputmode="numeric" value="${escapeHtml(court.courts?.count ?? '')}"${disabledAttr} />
@@ -978,7 +1016,8 @@ function locationDisplayFields(court = {}) {
     ['State', court.state],
     ['Latitude', court.latitude],
     ['Longitude', court.longitude],
-    ['Access', court.access || (court.isFree === false ? 'paid' : 'public')],
+    ['Access', accessLabel(court)],
+    ['Open play fee', formatOpenPlayFee(court.openPlayFee)],
     ['Number of courts', court.courts?.count],
     ['Skill level', court.skillLevels?.length ? court.skillLevels : court.estimatedSkillLevel],
     ['Open play days', openPlayDaysText(court)],
@@ -1456,7 +1495,7 @@ async function saveUserEdit(event) {
 function locationCard(court) {
   const card = document.createElement('article');
   card.className = 'admin-card';
-  const accessLabel = court.access === 'paid' || court.isFree === false ? 'Paid/private' : 'Free/public';
+  const courtAccessLabel = accessLabel(court);
   const statusLabel = court.status || 'approved';
   const skillLabel = court.estimatedSkillLevel || 'unknown';
   const photoCount = court.photos?.length || 0;
@@ -1470,7 +1509,7 @@ function locationCard(court) {
         <h3>${escapeHtml(court.name)}</h3>
         <p>${escapeHtml(locationLabel)}</p>
       </div>
-      <span>${escapeHtml(accessLabel)}</span>
+      <span>${escapeHtml(courtAccessLabel)}</span>
       <span>${escapeHtml(statusLabel)}</span>
       <span>${escapeHtml(skillLabel)}</span>
       <span>${escapeHtml(court.openPlay?.[0]?.days || 'Days TBD')}</span>
@@ -2136,6 +2175,7 @@ async function saveLocationEdit(event) {
   if (!existing) return;
 
   const access = form.elements.access.value;
+  const openPlayFee = access === 'paid' ? normalizeOpenPlayFee(form.elements.openPlayFee.value) : null;
   const lat = Number(form.elements.latitude.value);
   const lng = Number(form.elements.longitude.value);
   const courtCountValue = form.elements.courtCount.value.trim();
@@ -2157,6 +2197,7 @@ async function saveLocationEdit(event) {
     longitude: lng,
     access,
     isFree: access === 'public',
+    openPlayFee,
     openPlay: getOpenPlaySlots(form),
     skillLevels,
     estimatedSkillLevel,
@@ -2185,6 +2226,12 @@ async function saveLocationEdit(event) {
 
   if (courtCount !== null && (!Number.isInteger(courtCount) || courtCount < 0)) {
     hint.textContent = 'Please enter a whole number of courts, or leave it blank.';
+    return;
+  }
+
+  if (access === 'paid' && openPlayFee === null) {
+    hint.textContent = 'Enter the open play fee for public paid open play.';
+    form.elements.openPlayFee.focus();
     return;
   }
 

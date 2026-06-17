@@ -284,6 +284,14 @@
     return null;
   }
 
+  function openPlayFee(record) {
+    const rawFee = record.open_play_fee ?? record.openPlayFee;
+    if (rawFee === null || rawFee === undefined || rawFee === '') return null;
+    const fee = Number(rawFee);
+    if (!Number.isFinite(fee) || fee <= 0) return null;
+    return Math.round(fee * 100) / 100;
+  }
+
   function mapLocation(record) {
     return {
       id: record.slug || record.id,
@@ -298,6 +306,7 @@
       icon: 'OP',
       access: record.access || 'unknown',
       isFree: freeStatus(record),
+      openPlayFee: openPlayFee(record),
       openPlay: (record.open_play_slots || []).map(slot => ({
         days: Array.isArray(slot.days) && slot.days.length ? slot.days.join(', ') : 'Days TBD',
         hours: slotHours(slot),
@@ -800,6 +809,7 @@
       longitude: court.longitude,
       access: court.access || 'unknown',
       is_free: court.isFree,
+      open_play_fee: openPlayFee(court),
       court_count: court.courts?.count ?? null,
       surface: court.courts?.surface || null,
       indoor_outdoor: court.courts?.indoorOutdoor || 'unknown',
@@ -857,6 +867,7 @@
       longitude: court.longitude,
       access: court.access || 'unknown',
       is_free: typeof court.isFree === 'boolean' ? court.isFree : court.access === 'public',
+      open_play_fee: openPlayFee(court),
       court_count: court.courts?.count ?? null,
       surface: court.courts?.surface || null,
       indoor_outdoor: court.courts?.indoorOutdoor || 'unknown',

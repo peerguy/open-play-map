@@ -139,6 +139,8 @@ const elements = {
   newLat: document.querySelector('#newLat'),
   newLng: document.querySelector('#newLng'),
   newAccess: document.querySelector('#newAccess'),
+  openPlayFeeField: document.querySelector('#openPlayFeeField'),
+  newOpenPlayFee: document.querySelector('#newOpenPlayFee'),
   newCourtCount: document.querySelector('#newCourtCount'),
   newSkill: document.querySelector('#newSkill'),
   newDays: document.querySelector('#newDays'),
@@ -609,6 +611,39 @@ function formatLocationSkillLevel(skills) {
   return selected.length ? selected.join(', ') : 'unknown';
 }
 
+function normalizeOpenPlayFee(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  const fee = Number(value);
+  if (!Number.isFinite(fee) || fee <= 0) return null;
+  return Math.round(fee * 100) / 100;
+}
+
+function formatOpenPlayFee(value) {
+  const fee = normalizeOpenPlayFee(value);
+  if (fee === null) return '';
+  return `$${Number.isInteger(fee) ? fee : fee.toFixed(2)}`;
+}
+
+function openPlayFeeLabel(court = {}) {
+  return formatOpenPlayFee(court.openPlayFee);
+}
+
+function accessLabel(court = {}) {
+  const feeLabel = openPlayFeeLabel(court);
+  if (feeLabel) return `Public fee (${feeLabel})`;
+  if (court.isFree === false || court.access === 'paid') return 'Paid/public fee';
+  return 'Free/public';
+}
+
+function updateOpenPlayFeeField() {
+  if (!elements.openPlayFeeField || !elements.newOpenPlayFee || !elements.newAccess) return;
+  const requiresFee = elements.newAccess.value === 'paid';
+  elements.openPlayFeeField.hidden = !requiresFee;
+  elements.newOpenPlayFee.disabled = !requiresFee;
+  elements.newOpenPlayFee.required = requiresFee;
+  if (!requiresFee) elements.newOpenPlayFee.value = '';
+}
+
 function selectedLocationSkills() {
   return [...elements.newSkill.querySelectorAll('input[name="skillLevel"]:checked')]
     .map(input => input.value);
@@ -754,6 +789,7 @@ function editableLocationSnapshot(court = {}) {
     latitude: Number.isFinite(Number(court.latitude)) ? Number(court.latitude) : '',
     longitude: Number.isFinite(Number(court.longitude)) ? Number(court.longitude) : '',
     access: court.access || (court.isFree === false ? 'paid' : 'public'),
+    openPlayFee: normalizeOpenPlayFee(court.openPlayFee) ?? '',
     courtCount: court.courts?.count ?? '',
     skillLevels: [...(Array.isArray(court.skillLevels) ? court.skillLevels : selectedSkillsFromText(court.estimatedSkillLevel))].sort(),
     openPlay: (court.openPlay || []).map(slot => ({
@@ -999,11 +1035,13 @@ function mergeSavedLocations(seedCourts, savedCourts) {
 }
 
 function createLocationIcon(court) {
+  const feeLabel = openPlayFeeLabel(court);
+  const isFeeMarker = Boolean(feeLabel);
   return L.divIcon({
-    className: 'location-marker op-marker',
-    html: `<span><b>${DEFAULT_ICON}</b></span>`,
-    iconSize: [38, 38],
-    iconAnchor: [19, 36],
+    className: `location-marker op-marker${isFeeMarker ? ' fee-marker' : ''}`,
+    html: `<span><b>${feeLabel || DEFAULT_ICON}</b></span>`,
+    iconSize: isFeeMarker ? [48, 38] : [38, 38],
+    iconAnchor: isFeeMarker ? [24, 36] : [19, 36],
     popupAnchor: [0, -32]
   });
 }
@@ -1015,6 +1053,7 @@ function courtSearchText(court) {
     court.city,
     court.state,
     court.access,
+    openPlayFeeLabel(court),
     court.estimatedSkillLevel,
     court.notes,
     court.openPlay?.map(slot => `${slot.days} ${slot.hours} ${slot.notes}`).join(' ')
@@ -1356,7 +1395,7 @@ function createPopup(court) {
   return `
     <div class="popup-title">${court.name}</div>
     <div>${court.city}, ${court.state}</div>
-    <div>${court.isFree ? 'Free/public' : 'Paid/private'}</div>
+    <div>${accessLabel(court)}</div>
     <div>Skill: ${court.estimatedSkillLevel}</div>
     <div>${formatOpenPlay(court)}</div>
     ${submitterLabel(court) ? `<div class="popup-submitter">${submitterLabel(court)}</div>` : ''}
@@ -1381,7 +1420,7 @@ function showMapInfoBox(court, options = {}) {
       </div>
       <div class="map-info-row">${court.address || `${court.city}, ${court.state}`}</div>
       <div class="map-info-detail-grid">
-        <div><span>Access</span><strong>${court.isFree ? 'Free/public' : 'Paid/private'}</strong></div>
+        <div><span>Access</span><strong>${accessLabel(court)}</strong></div>
         <div><span>Skill</span><strong>${court.estimatedSkillLevel}</strong></div>
         ${courtCount ? `<div><span>Courts</span><strong>${courtCount}</strong></div>` : ''}
         <div><span>Setting</span><strong>${court.courts?.indoorOutdoor || 'unknown'}</strong></div>
@@ -1502,7 +1541,7 @@ function createCourtCard(court) {
     </div>
     <p class="meta">${court.address || `${court.city}, ${court.state}`}</p>
     <div class="badges">
-      <span class="badge">${court.isFree ? 'Free/public' : 'Paid/private'}</span>
+      <span class="badge">${accessLabel(court)}</span>
       ${courtCount ? `<span class="badge">${courtCount}</span>` : ''}
       <span class="badge">${court.estimatedSkillLevel}</span>
       ${reviews.length ? `<span class="badge">${reviews.length} review${reviews.length === 1 ? '' : 's'}</span>` : ''}
@@ -1999,6 +2038,8 @@ function populateLocationForm(court) {
   elements.newLat.value = court.latitude ?? '';
   elements.newLng.value = court.longitude ?? '';
   elements.newAccess.value = court.access || (court.isFree ? 'public' : 'paid');
+  elements.newOpenPlayFee.value = normalizeOpenPlayFee(court.openPlayFee) ?? '';
+  updateOpenPlayFeeField();
   elements.newCourtCount.value = court.courts?.count ?? '';
   setSelectedLocationSkills(court.skillLevels || court.estimatedSkillLevel || '');
   setSelectedOpenPlayDays(court.openPlay?.[0]?.days || '');
@@ -2020,6 +2061,7 @@ function openSubmitDialog() {
   setSelectedOpenPlayDays('');
   elements.newDays.open = false;
   resetTimeWindows();
+  updateOpenPlayFeeField();
   setSuggestEditNoteVisible(false);
   setLocationPhotoUploadVisible(true);
   setLocationDialogCopy({
@@ -2483,6 +2525,12 @@ async function addSubmittedLocation(event) {
   }
 
   const access = elements.newAccess.value;
+  const openPlayFee = access === 'paid' ? normalizeOpenPlayFee(elements.newOpenPlayFee.value) : null;
+  if (access === 'paid' && openPlayFee === null) {
+    elements.formHint.textContent = 'Enter the open play fee for public paid open play.';
+    elements.newOpenPlayFee.focus();
+    return;
+  }
   const courtCountValue = elements.newCourtCount.value.trim();
   const courtCount = courtCountValue ? Number(courtCountValue) : null;
   if (courtCount !== null && (!Number.isInteger(courtCount) || courtCount < 0)) {
@@ -2520,6 +2568,7 @@ async function addSubmittedLocation(event) {
     icon: existing?.icon || DEFAULT_ICON,
     access,
     isFree: access === 'public',
+    openPlayFee,
     openPlay,
     skillLevels,
     estimatedSkillLevel,
@@ -2781,6 +2830,7 @@ document.querySelectorAll('[data-close-review]').forEach(button => {
 });
 
 elements.locationForm.addEventListener('submit', addSubmittedLocation);
+elements.newAccess.addEventListener('change', updateOpenPlayFeeField);
 elements.reviewForm.addEventListener('submit', submitReview);
 elements.reviewForm.addEventListener('input', updateReviewRequirement);
 elements.reviewForm.addEventListener('change', updateReviewRequirement);

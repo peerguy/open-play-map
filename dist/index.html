@@ -22,7 +22,7 @@
     <link rel="icon" type="image/svg+xml" href="assets/icons/open-play-favicon.svg" />
     <link rel="stylesheet" href="src/leaflet-fix.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ6C/DNF8D6qS3hC9cc1N02p2o6sX7k=" crossorigin="" />
-    <link rel="stylesheet" href="src/styles.css?v=account-settings-20260617" />
+    <link rel="stylesheet" href="src/styles.css?v=paid-open-play-fee-20260617" />
   </head>
   <body class="map-page">
     <header class="site-header">
@@ -62,7 +62,7 @@
                 <select id="accessFilter" aria-label="Access filter">
                   <option value="all">All access</option>
                   <option value="free">Free/public</option>
-                  <option value="paid">Paid/private</option>
+                  <option value="paid">Paid/public fee</option>
                 </select>
               </label>
               <label>Skill level
@@ -195,8 +195,12 @@
             <label class="field-access">Access
               <select id="newAccess">
                 <option value="public">Free/public</option>
-                <option value="paid">Paid/private</option>
+                <option value="paid">Public with fee</option>
               </select>
+            </label>
+            <label id="openPlayFeeField" class="field-open-play-fee" hidden>Open play fee
+              <input id="newOpenPlayFee" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="Ex: 5" disabled />
+              <span class="field-help">Required for public open play that costs money.</span>
             </label>
             <label class="field-court-count">Number of courts
               <input id="newCourtCount" type="number" min="0" step="1" inputmode="numeric" placeholder="Ex: 6" />
@@ -386,9 +390,9 @@
     <script src="src/analytics.js?v=seo-analytics-20260614"></script>
     <script src="src/supabase-config.js?v=supabase-read-20260614"></script>
     <script src="src/supabase-client.js?v=mobile-map-default-20260616"></script>
-    <script src="src/supabase-data.js?v=mobile-map-default-20260616"></script>
+    <script src="src/supabase-data.js?v=paid-open-play-fee-20260617"></script>
     <script src="src/supabase-auth.js?v=account-settings-20260617"></script>
     <script src="src/mobile-header.js?v=mobile-map-default-20260616"></script>
-    <script src="src/app.js?v=mobile-map-default-20260616"></script>
+    <script src="src/app.js?v=paid-open-play-fee-20260617"></script>
   </body>
 </html>
