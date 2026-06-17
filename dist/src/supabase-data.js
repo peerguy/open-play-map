@@ -752,6 +752,7 @@
     const { data, error } = await supabase
       .from('locations')
       .select(LOCATION_SELECT)
+      .neq('status', 'archived')
       .order('status', { ascending: true })
       .order('name', { ascending: true });
 

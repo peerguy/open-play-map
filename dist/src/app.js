@@ -2625,6 +2625,7 @@ async function init() {
   await loadCurrentUser();
   renderUserPanel();
   syncMobileHeaderHeight();
+  setMobileSheetMode('map');
 
   const savedStyle = localStorage.getItem(MAP_STYLE_KEY) || 'voyager';
   elements.mapStyle.value = tileStyles[savedStyle] ? savedStyle : 'voyager';

@@ -778,13 +778,14 @@ function syncUserAttribution(user) {
 
 function mergeSavedLocations(seedCourts, savedCourts) {
   const deletedIds = new Set(getDeletedLocationIds());
-  const savedById = new Map(savedCourts.map(court => [court.id, court]));
+  const visibleSavedCourts = savedCourts.filter(court => (court.status || 'approved') !== 'archived');
+  const savedById = new Map(visibleSavedCourts.map(court => [court.id, court]));
   const seedIds = new Set(seedCourts.map(court => court.id));
   return [
     ...seedCourts
       .filter(court => !deletedIds.has(court.id))
       .map(court => savedById.get(court.id) || court),
-    ...savedCourts.filter(court => !seedIds.has(court.id) && !deletedIds.has(court.id))
+    ...visibleSavedCourts.filter(court => !seedIds.has(court.id) && !deletedIds.has(court.id))
   ];
 }
 
