@@ -43,12 +43,16 @@
    - `http://127.0.0.1:8080`
    - `http://127.0.0.1:8080/account.html`
    - `http://127.0.0.1:8080/account-settings.html`
+   - `http://localhost:8080`
+   - `http://localhost:8080/account.html`
+   - `http://localhost:8080/account-settings.html`
    - Cloudflare preview URL
    - `https://play.scooppickleball.com`
    - `https://play.scooppickleball.com/account.html`
    - `https://play.scooppickleball.com/account-settings.html`
-6. Create storage buckets for location photos and profile avatars.
-7. Assign Alex/admin role server-side in the `profiles` table after first signup.
+6. Configure custom SMTP for production Auth emails.
+7. Create storage buckets for location photos and profile avatars.
+8. Assign Alex/admin role server-side in the `profiles` table after first signup.
 
 ### Current Supabase Project
 
@@ -62,10 +66,14 @@
 - Auth signup availability migration applied: `20260614190000_auth_signup_availability.sql`
 - Frontend map page now attempts to load approved locations from Supabase first and falls back to `data/courts.json` if Supabase is unavailable.
 - Account signup/login/logout now use Supabase Auth. New auth users get a `profiles` row automatically, and admin access is based on `profiles.role = 'admin'`.
-- Supabase Auth email autoconfirm is enabled for the prototype so a newly created account immediately lands on the profile page. Revisit this before a bigger public launch once production email/SMPP settings are ready.
+- Supabase Auth uses custom SMTP through Resend for production emails.
+- Verified Resend sender domain: `play.scooppickleball.com`.
+- Production Auth sender: `Open Play Map <no-reply@play.scooppickleball.com>`.
+- Email confirmation is enabled for new signups (`mailer_autoconfirm = false`).
+- Password reset emails redirect to `https://play.scooppickleball.com/account-settings.html`; signup confirmation redirects to `https://play.scooppickleball.com/account.html`.
 - Duplicate signup checks now reject existing profile emails and usernames before calling Supabase Auth; duplicate usernames are also rejected by the profile trigger and case-insensitive unique index.
 - Imported local data currently includes 4 approved public locations and 1 pending location from the original localhost app.
-- Submissions, reviews, reports, suggested edits, credits, and monthly winners are still browser-local prototype data until the next write-path migration.
+- Submissions, reviews, reports, suggested edits, photo uploads, credits, and monthly drawings now use Supabase-backed write/read paths. Production disables prototype localStorage contribution writes; localhost keeps the prototype fallback for development only.
 
 ## App Refactor Order
 
