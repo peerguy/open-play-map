@@ -1040,9 +1040,9 @@ function createLocationIcon(court) {
   return L.divIcon({
     className: `location-marker op-marker${isFeeMarker ? ' fee-marker' : ''}`,
     html: `<span><b>${feeLabel || DEFAULT_ICON}</b></span>`,
-    iconSize: isFeeMarker ? [48, 38] : [38, 38],
-    iconAnchor: isFeeMarker ? [24, 36] : [19, 36],
-    popupAnchor: [0, -32]
+    iconSize: isFeeMarker ? [42, 42] : [38, 38],
+    iconAnchor: isFeeMarker ? [21, 21] : [19, 36],
+    popupAnchor: isFeeMarker ? [0, -22] : [0, -32]
   });
 }
 

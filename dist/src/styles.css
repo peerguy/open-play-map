@@ -697,6 +697,19 @@ select {
   margin-top: 6px;
 }
 
+.location-fields .access-stack .field-open-play-fee,
+.location-fields .access-stack .field-court-count {
+  grid-template-columns: minmax(112px, max-content) minmax(0, 1fr);
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 4px;
+}
+
+.location-fields .access-stack .field-open-play-fee .field-help {
+  grid-column: 2;
+  margin-top: 0;
+}
+
 .location-fields .access-stack {
   display: grid;
   grid-column: span 3;
@@ -2230,17 +2243,25 @@ textarea::placeholder {
 }
 
 .location-marker.fee-marker span {
-  width: 46px;
-  border-radius: 24px 24px 24px 10px;
+  box-sizing: border-box;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
   background:
     radial-gradient(circle at 30% 28%, rgba(255, 255, 255, 0.3), transparent 28%),
     linear-gradient(135deg, #2f9e44, #187036);
   box-shadow: 0 8px 20px rgba(24, 112, 54, 0.32);
+  transform: none;
+}
+
+.location-marker.fee-marker span::before {
+  inset: 5px;
 }
 
 .location-marker.fee-marker b {
   font-size: 0.74rem;
   letter-spacing: 0;
+  transform: none;
 }
 
 .logo-mark {
