@@ -93,6 +93,12 @@ const state = {
   lastTrackedPlaceSearch: '',
   popupCloseTimer: null,
   hoveringPopup: false,
+  shareNotice: {
+    element: null,
+    anchor: null,
+    timer: null
+  },
+  reportRequest: null,
   photoLightbox: {
     element: null,
     image: null,
@@ -175,7 +181,11 @@ const elements = {
   reviewSchedulingApp: document.querySelector('#reviewSchedulingApp'),
   reviewBody: document.querySelector('#reviewBody'),
   reviewPhotos: document.querySelector('#reviewPhotos'),
-  reviewHint: document.querySelector('#reviewHint')
+  reviewHint: document.querySelector('#reviewHint'),
+  reportDialog: document.querySelector('#reportDialog'),
+  reportForm: document.querySelector('#reportForm'),
+  reportReason: document.querySelector('#reportReason'),
+  reportHint: document.querySelector('#reportHint')
 };
 
 function trackAnalyticsEvent(name, properties = {}) {
@@ -307,6 +317,78 @@ async function copyTextToClipboard(text) {
   const copied = document.execCommand('copy');
   textarea.remove();
   if (!copied) throw new Error('Clipboard copy failed');
+}
+
+function ensureShareNotice() {
+  if (state.shareNotice.element) return state.shareNotice.element;
+
+  const notice = document.createElement('div');
+  notice.className = 'share-copy-notice';
+  notice.setAttribute('role', 'status');
+  notice.hidden = true;
+  notice.innerHTML = `
+    <button class="share-copy-close" type="button" aria-label="Dismiss link copied message">×</button>
+    <span>Link copied to clipboard</span>
+  `;
+  notice.querySelector('.share-copy-close').addEventListener('click', hideShareNotice);
+  document.body.append(notice);
+  state.shareNotice.element = notice;
+  return notice;
+}
+
+function positionShareNotice() {
+  const notice = state.shareNotice.element;
+  const anchor = state.shareNotice.anchor;
+  if (!notice || !anchor || notice.hidden) return;
+
+  const anchorRect = anchor.getBoundingClientRect();
+  const noticeRect = notice.getBoundingClientRect();
+  const gap = 8;
+  const viewportGap = 8;
+  if (!anchor.isConnected || (anchorRect.width === 0 && anchorRect.height === 0)) {
+    notice.classList.remove('is-below-anchor');
+    notice.style.left = `${Math.max(viewportGap, (window.innerWidth - noticeRect.width) / 2)}px`;
+    notice.style.top = '18px';
+    return;
+  }
+
+  const left = Math.max(
+    viewportGap,
+    Math.min(
+      anchorRect.left + (anchorRect.width / 2) - (noticeRect.width / 2),
+      window.innerWidth - noticeRect.width - viewportGap
+    )
+  );
+  let top = anchorRect.top - noticeRect.height - gap;
+
+  if (top < viewportGap) {
+    top = anchorRect.bottom + gap;
+    notice.classList.add('is-below-anchor');
+  } else {
+    notice.classList.remove('is-below-anchor');
+  }
+
+  notice.style.left = `${left}px`;
+  notice.style.top = `${top}px`;
+}
+
+function hideShareNotice() {
+  clearTimeout(state.shareNotice.timer);
+  state.shareNotice.timer = null;
+  state.shareNotice.anchor = null;
+  if (state.shareNotice.element) {
+    state.shareNotice.element.hidden = true;
+  }
+}
+
+function showShareNotice(anchor, message = 'Link copied to clipboard') {
+  const notice = ensureShareNotice();
+  clearTimeout(state.shareNotice.timer);
+  state.shareNotice.anchor = anchor || document.activeElement;
+  notice.querySelector('span').textContent = message;
+  notice.hidden = false;
+  positionShareNotice();
+  state.shareNotice.timer = setTimeout(hideShareNotice, 4000);
 }
 
 function selectedPhotoFiles(input) {
@@ -486,13 +568,13 @@ function bindPhotoLightboxButtons(container) {
   });
 }
 
-async function shareLocation(court) {
+async function shareLocation(court, anchor = null) {
   try {
     await copyTextToClipboard(locationShareUrl(court));
-    window.alert('Share link copied.');
+    showShareNotice(anchor);
   } catch (error) {
     console.error(error);
-    window.prompt('Copy this location link:', locationShareUrl(court));
+    showShareNotice(anchor, 'Could not copy link');
   }
 }
 
@@ -1470,19 +1552,19 @@ function showMapInfoBox(court, options = {}) {
     openSuggestEditDialog(court.id);
   });
 
-  elements.mapInfoBox.querySelector('[data-report-location]')?.addEventListener('click', () => {
+  elements.mapInfoBox.querySelector('[data-report-location]')?.addEventListener('click', event => {
     closeLocationMenus();
-    reportLocation(court.id);
+    reportLocation(court.id, event.currentTarget);
   });
 
-  elements.mapInfoBox.querySelector('[data-share-location]')?.addEventListener('click', async () => {
-    closeLocationMenus();
-    await shareLocation(court);
+  elements.mapInfoBox.querySelector('[data-share-location]')?.addEventListener('click', async event => {
+    const anchor = event.currentTarget;
+    await shareLocation(court, anchor);
   });
 
   elements.mapInfoBox.querySelectorAll('[data-report-review]').forEach(button => {
-    button.addEventListener('click', () => {
-      reportReview(button.dataset.courtId, button.dataset.reportReview);
+    button.addEventListener('click', event => {
+      reportReview(button.dataset.courtId, button.dataset.reportReview, event.currentTarget);
     });
   });
 
@@ -1588,13 +1670,14 @@ function createCourtCard(court) {
   });
   card.querySelector('[data-share-location]').addEventListener('click', async event => {
     event.stopPropagation();
-    closeCardMenus();
-    await shareLocation(court);
+    const anchor = event.currentTarget;
+    await shareLocation(court, anchor);
   });
   card.querySelector('[data-report-location]').addEventListener('click', event => {
     event.stopPropagation();
+    const anchor = event.currentTarget;
     closeCardMenus();
-    reportLocation(court.id);
+    reportLocation(court.id, anchor);
   });
   card.addEventListener('keydown', event => {
     if (event.key === 'Escape') {
@@ -1813,23 +1896,23 @@ function focusSharedLocationFromUrl() {
   focusCourt(sharedLocationId, 'shared_url');
 }
 
-async function reportLocation(courtId) {
+async function reportLocation(courtId, anchor = null) {
   if (!requireCurrentUser('Sign in or create a profile before reporting an issue.')) return;
   const court = state.courts.find(item => item.id === courtId);
   if (!court) return;
+  const reason = await requestReportReason();
+  if (!reason) return;
   if (reportExists({ targetType: 'location', targetId: court.id })) {
-    window.alert('You already reported this location.');
+    showShareNotice(anchor, 'You already reported this location.');
     return;
   }
-  const reason = window.prompt('What is wrong with this location? Examples: wrong hours, closed facility, fake info, duplicate, inaccurate details.');
-  if (!reason?.trim()) return;
 
   if (court.remoteId && window.OpenPlaySupabase?.submitReport) {
     try {
       const report = await window.OpenPlaySupabase.submitReport({
         targetType: 'location',
         targetId: court.remoteId,
-        reason: reason.trim(),
+        reason,
         metadata: {
           target_name: court.name,
           location_slug: court.id
@@ -1840,15 +1923,15 @@ async function reportLocation(courtId) {
         targetId: court.id,
         targetName: court.name
       }];
-      window.alert('Report submitted. Thanks for helping keep the map accurate.');
+      showShareNotice(anchor, 'Report submitted.');
     } catch (error) {
-      window.alert(error.message.includes('duplicate') ? 'You already reported this location.' : error.message);
+      showShareNotice(anchor, error.message.includes('duplicate') ? 'You already reported this location.' : error.message);
     }
     return;
   }
 
   if (!allowPrototypeContributionStorage()) {
-    window.alert(PRODUCTION_DATABASE_UNAVAILABLE);
+    showShareNotice(anchor, PRODUCTION_DATABASE_UNAVAILABLE);
     return;
   }
 
@@ -1856,33 +1939,33 @@ async function reportLocation(courtId) {
     targetType: 'location',
     targetId: court.id,
     targetName: court.name,
-    reason: reason.trim()
+    reason
   });
-  window.alert('Report submitted. Thanks for helping keep the map accurate.');
+  showShareNotice(anchor, 'Report submitted.');
 }
 
-async function reportReview(courtId, reviewId) {
+async function reportReview(courtId, reviewId, anchor = null) {
   if (!requireCurrentUser('Sign in or create a profile before reporting an issue.')) return;
   const court = state.courts.find(item => item.id === courtId);
   const review = getCourtReviews(courtId).find(item => item.id === reviewId);
   if (!court || !review) return;
   if (review.userId === state.currentUser.id) {
-    window.alert('You can edit your own review instead of reporting it.');
+    showShareNotice(anchor, 'You can edit your own review instead of reporting it.');
     return;
   }
+  const reason = await requestReportReason();
+  if (!reason) return;
   if (reportExists({ targetType: 'review', targetId: court.id, reviewId })) {
-    window.alert('You already reported this review.');
+    showShareNotice(anchor, 'You already reported this review.');
     return;
   }
-  const reason = window.prompt('What is wrong with this review? Examples: fake review, inaccurate details, spam, wrong hours.');
-  if (!reason?.trim()) return;
 
   if (court.remoteId && review.remoteId && window.OpenPlaySupabase?.submitReport) {
     try {
       const report = await window.OpenPlaySupabase.submitReport({
         targetType: 'review',
         targetId: review.remoteId,
-        reason: reason.trim(),
+        reason,
         metadata: {
           target_name: court.name,
           location_slug: court.id,
@@ -1895,15 +1978,15 @@ async function reportReview(courtId, reviewId) {
         targetName: court.name,
         reviewId: review.remoteId
       }];
-      window.alert('Report submitted. Thanks for helping keep reviews accurate.');
+      showShareNotice(anchor, 'Report submitted.');
     } catch (error) {
-      window.alert(error.message.includes('duplicate') ? 'You already reported this review.' : error.message);
+      showShareNotice(anchor, error.message.includes('duplicate') ? 'You already reported this review.' : error.message);
     }
     return;
   }
 
   if (!allowPrototypeContributionStorage()) {
-    window.alert(PRODUCTION_DATABASE_UNAVAILABLE);
+    showShareNotice(anchor, PRODUCTION_DATABASE_UNAVAILABLE);
     return;
   }
 
@@ -1912,9 +1995,9 @@ async function reportReview(courtId, reviewId) {
     targetId: court.id,
     targetName: court.name,
     reviewId,
-    reason: reason.trim()
+    reason
   });
-  window.alert('Report submitted. Thanks for helping keep reviews accurate.');
+  showShareNotice(anchor, 'Report submitted.');
 }
 
 function schedulePopupClose(marker) {
@@ -1975,9 +2058,9 @@ function attachHoverPopup(marker, court) {
       });
     popupElement
       ?.querySelector('[data-report-location]')
-      ?.addEventListener('click', () => {
+      ?.addEventListener('click', event => {
         closeLocationMenus();
-        reportLocation(court.id);
+        reportLocation(court.id, event.currentTarget);
       });
 
     popupElement?.addEventListener('mouseenter', () => {
@@ -2195,6 +2278,44 @@ function openReviewDialog(id) {
 function closeReviewDialog() {
   state.reviewCourtId = null;
   closeDialog(elements.reviewDialog);
+}
+
+function setReportHint(message, isError = false) {
+  elements.reportHint.textContent = message;
+  elements.reportHint.classList.toggle('is-error', isError);
+}
+
+function closeReportDialog() {
+  if (state.reportRequest) {
+    state.reportRequest.resolve(null);
+    state.reportRequest = null;
+  }
+  closeDialog(elements.reportDialog);
+}
+
+function requestReportReason() {
+  closeDialog(elements.submitDialog);
+  closeDialog(elements.reviewDialog);
+  closeLocationMenus();
+  closeCardMenus();
+  hideShareNotice();
+
+  elements.reportForm.reset();
+  setReportHint('');
+  openDialog(elements.reportDialog);
+  resetDialogScroll(elements.reportDialog, elements.reportForm);
+  setTimeout(() => elements.reportReason.focus(), 0);
+
+  return new Promise(resolve => {
+    state.reportRequest = { resolve };
+  });
+}
+
+function finishReportDialog(reason) {
+  const request = state.reportRequest;
+  state.reportRequest = null;
+  closeDialog(elements.reportDialog);
+  request?.resolve(reason);
 }
 
 function reviewFormValues() {
@@ -2809,6 +2930,7 @@ preventPageZoomOverMap();
 
 window.addEventListener('resize', () => {
   syncMobileHeaderHeight();
+  positionShareNotice();
   if (!isMobileLayout()) {
     document.body.classList.remove('mobile-map-focus');
     document.body.classList.remove('mobile-list-full');
@@ -2853,11 +2975,31 @@ document.querySelectorAll('[data-close-review]').forEach(button => {
   button.addEventListener('click', closeReviewDialog);
 });
 
+document.querySelectorAll('[data-close-report]').forEach(button => {
+  button.addEventListener('click', closeReportDialog);
+});
+
 elements.locationForm.addEventListener('submit', addSubmittedLocation);
 elements.newAccess.addEventListener('change', updateOpenPlayFeeField);
 elements.reviewForm.addEventListener('submit', submitReview);
 elements.reviewForm.addEventListener('input', updateReviewRequirement);
 elements.reviewForm.addEventListener('change', updateReviewRequirement);
+elements.reportForm.addEventListener('submit', event => {
+  event.preventDefault();
+  const reason = elements.reportReason.value.trim();
+  if (!reason) {
+    setReportHint('Add a short reason before submitting.', true);
+    elements.reportReason.focus();
+    return;
+  }
+  finishReportDialog(reason);
+});
+elements.reportDialog.addEventListener('close', () => {
+  if (state.reportRequest) {
+    state.reportRequest.resolve(null);
+    state.reportRequest = null;
+  }
+});
 elements.placeSearchButton.addEventListener('click', searchPlaces);
 elements.addTimeWindow.addEventListener('click', () => addTimeWindow());
 elements.openDayAll.addEventListener('change', () => {
@@ -2896,6 +3038,7 @@ map.on('moveend', () => {
     const court = state.courts.find(item => item.id === state.activeInfoCourtId);
     if (court) positionMapInfoBox(court);
   }
+  positionShareNotice();
 });
 
 init().catch(error => {
