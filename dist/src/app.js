@@ -7,7 +7,7 @@ const REPORTS_KEY = 'open-play-map-reports';
 const EDITS_KEY = 'open-play-map-suggested-edits';
 const DEFAULT_ICON = 'OP';
 
-const DAILY_LOCATION_LIMIT = 3;
+const DAILY_LOCATION_LIMIT = 10;
 const DAILY_REVIEW_LIMIT = 10;
 const MIN_REVIEW_FIELDS = 3;
 const LOCAL_PROTOTYPE_HOSTS = new Set(['', 'localhost', '127.0.0.1']);

@@ -6,7 +6,7 @@ const DELETED_LOCATIONS_KEY = 'open-play-map-deleted-locations';
 const REPORTS_KEY = 'open-play-map-reports';
 const EDITS_KEY = 'open-play-map-suggested-edits';
 
-const DAILY_LOCATION_LIMIT = 3;
+const DAILY_LOCATION_LIMIT = 10;
 const DAILY_REVIEW_LIMIT = 10;
 const SUGGESTED_EDIT_CREDITS = 3;
 const LOCAL_PROTOTYPE_HOSTS = new Set(['', 'localhost', '127.0.0.1']);
