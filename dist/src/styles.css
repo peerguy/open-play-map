@@ -4721,6 +4721,47 @@ label:has(input:required:valid) > .field-label .is-required {
   padding: 18px;
 }
 
+.admin-delete-dialog {
+  width: min(440px, calc(100vw - 28px));
+  border: 0;
+  border-radius: 14px;
+  padding: 0;
+  background: transparent;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+}
+
+.admin-delete-dialog::backdrop {
+  background: rgba(18, 29, 16, 0.48);
+  backdrop-filter: blur(3px);
+}
+
+.admin-delete-form {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.admin-delete-form h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.admin-delete-form p:not(.eyebrow) {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.admin-delete-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .admin-view-header,
 .admin-card-header {
   display: flex;
@@ -4978,6 +5019,11 @@ label:has(input:required:valid) > .field-label .is-required {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel);
+}
+
+.admin-review-editor.is-report-focus {
+  border-color: rgba(36, 119, 242, 0.55);
+  box-shadow: 0 0 0 3px rgba(36, 119, 242, 0.12);
 }
 
 .admin-review-editor-header {

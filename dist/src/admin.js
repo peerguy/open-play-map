@@ -54,13 +54,17 @@ const elements = {
   drawingCount: document.querySelector('#drawingAdminCount'),
   navButtons: document.querySelectorAll('[data-admin-view]'),
   moderationSubnav: document.querySelector('#moderationSubnav'),
-  moderationNavButtons: document.querySelectorAll('[data-moderation-view]')
+  moderationNavButtons: document.querySelectorAll('[data-moderation-view]'),
+  deleteDialog: document.querySelector('#adminDeleteDialog'),
+  deleteForm: document.querySelector('#adminDeleteForm'),
+  deleteMessage: document.querySelector('#adminDeleteMessage')
 };
 
 let allCourts = [];
 let activeModerationView = 'pending';
 let authUsers = null;
 let currentAdminUser = null;
+let deleteConfirmationRequest = null;
 let backendCollections = {
   reviews: null,
   reports: null,
@@ -852,6 +856,41 @@ function showModerationView(viewName) {
   renderModeration();
 }
 
+function openAdminDialog(dialog) {
+  if (!dialog) return;
+  if (typeof dialog.showModal === 'function') {
+    dialog.showModal();
+  } else {
+    dialog.setAttribute('open', '');
+  }
+}
+
+function closeAdminDialog(dialog) {
+  if (!dialog) return;
+  if (typeof dialog.close === 'function') {
+    dialog.close();
+  } else {
+    dialog.removeAttribute('open');
+  }
+}
+
+function confirmAdminDelete(message) {
+  elements.deleteMessage.textContent = message || 'Are you sure you want to delete this contribution?';
+  openAdminDialog(elements.deleteDialog);
+
+  return new Promise(resolve => {
+    deleteConfirmationRequest = { resolve };
+    setTimeout(() => elements.deleteDialog.querySelector('[data-admin-delete-cancel]')?.focus(), 0);
+  });
+}
+
+function resolveAdminDeleteConfirmation(confirmed) {
+  const request = deleteConfirmationRequest;
+  deleteConfirmationRequest = null;
+  closeAdminDialog(elements.deleteDialog);
+  request?.resolve(Boolean(confirmed));
+}
+
 function expandAdminRow(card) {
   card.classList.add('is-editing');
   card.querySelector('.admin-row-summary').hidden = true;
@@ -970,6 +1009,74 @@ function pendingLocations() {
 
 function openReports() {
   return getSavedReports().filter(report => (report.status || 'open') === 'open');
+}
+
+function findCourtForReport(report) {
+  if (!report) return null;
+  const directIds = new Set([report.targetId, report.remoteTargetId].filter(Boolean));
+  const reportedReview = report.targetType === 'review'
+    ? findReviewById(report.reviewId || report.remoteTargetId || report.targetId)
+    : null;
+  if (reportedReview) {
+    directIds.add(reportedReview.courtId);
+    directIds.add(reportedReview.remoteLocationId);
+  }
+
+  return allCourts.find(court => (
+    directIds.has(court.id)
+    || directIds.has(court.remoteId)
+    || (report.targetType === 'location' && report.targetName && normalize(court.name) === normalize(report.targetName))
+  )) || null;
+}
+
+function findReviewForReport(report) {
+  if (!report || report.targetType !== 'review') return null;
+  return findReviewById(report.reviewId || report.remoteTargetId || report.targetId);
+}
+
+function expandLocationEditorForReport(court, review = null) {
+  renderLocations();
+  showView('locations');
+
+  const form = [...elements.locationsList.querySelectorAll('[data-location-id]')]
+    .find(candidate => candidate.dataset.locationId === court.id || candidate.dataset.locationId === court.remoteId);
+  const card = form?.closest('.admin-card');
+  if (!form || !card) {
+    window.alert('Could not open the editor for that contribution.');
+    return;
+  }
+
+  expandAdminRow(card);
+
+  if (review) {
+    const reviewDetails = form.querySelector('.admin-location-reviews');
+    if (reviewDetails) reviewDetails.open = true;
+    const editor = [...form.querySelectorAll('[data-admin-review-id]')]
+      .find(candidate => candidate.dataset.adminReviewId === review.id || candidate.dataset.adminReviewId === review.remoteId);
+    if (editor) {
+      editor.classList.add('is-report-focus');
+      editor.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      editor.querySelector('textarea, input, select, button')?.focus();
+      return;
+    }
+  }
+
+  card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  form.querySelector('input, select, textarea')?.focus();
+}
+
+function editReportedContribution(reportId) {
+  const report = getSavedReports().find(item => item.id === reportId);
+  if (!report) return;
+
+  const review = findReviewForReport(report);
+  const court = findCourtForReport(report);
+  if (!court) {
+    window.alert('Could not find that reported contribution.');
+    return;
+  }
+
+  expandLocationEditorForReport(court, review);
 }
 
 function pendingSuggestedEdits() {
@@ -1253,7 +1360,8 @@ function renderModeration() {
           </div>
           <div class="admin-row-actions moderation-actions">
             <button class="secondary-button admin-edit-button" type="button" data-dismiss-report="${escapeHtml(report.id)}">Dismiss</button>
-            ${report.targetType === 'review' ? `<button class="secondary-button admin-delete-button" type="button" data-delete-review="${escapeHtml(report.targetId)}" data-review-id="${escapeHtml(report.reviewId || '')}" data-report-id="${escapeHtml(report.id)}">Delete review</button>` : ''}
+            <button class="secondary-button admin-edit-button" type="button" data-edit-report="${escapeHtml(report.id)}">Edit</button>
+            <button class="secondary-button admin-delete-button" type="button" data-delete-report="${escapeHtml(report.id)}">Delete</button>
           </div>
         </article>
       `
@@ -1325,8 +1433,11 @@ function renderModeration() {
   elements.moderationList.querySelectorAll('[data-dismiss-report]').forEach(button => {
     button.addEventListener('click', () => dismissReport(button.dataset.dismissReport));
   });
-  elements.moderationList.querySelectorAll('[data-delete-review]').forEach(button => {
-    button.addEventListener('click', () => deleteReportedReview(button.dataset.deleteReview, button.dataset.reviewId, button.dataset.reportId));
+  elements.moderationList.querySelectorAll('[data-edit-report]').forEach(button => {
+    button.addEventListener('click', () => editReportedContribution(button.dataset.editReport));
+  });
+  elements.moderationList.querySelectorAll('[data-delete-report]').forEach(button => {
+    button.addEventListener('click', () => deleteReportedContribution(button.dataset.deleteReport));
   });
   elements.moderationList.querySelectorAll('[data-pending-location-id]').forEach(form => {
     const court = pending.find(item => item.id === form.dataset.pendingLocationId);
@@ -2113,23 +2224,31 @@ async function dismissReport(reportId) {
   renderModeration();
 }
 
-async function deleteReportedReview(courtId, reviewId, reportId) {
-  const confirmed = window.confirm('Delete this reported review?');
-  if (!confirmed) return;
+function markReportResolved(reportId) {
+  saveReports(getSavedReports().map(report => (
+    report.id === reportId ? { ...report, status: 'resolved', resolvedAt: todayIso() } : report
+  )));
+}
 
-  const report = getSavedReports().find(item => item.id === reportId);
-  if (report?.remoteId && reviewId && window.OpenPlaySupabase?.removeReviewForReport) {
+async function deleteReportedReview(report) {
+  const review = findReviewForReport(report);
+  const reviewId = report.reviewId || report.remoteTargetId || review?.remoteId || review?.id || '';
+  const courtId = review?.courtId || report.targetId;
+  if (!reviewId) {
+    window.alert('Could not find that reported review.');
+    return;
+  }
+
+  if (report?.remoteId && window.OpenPlaySupabase?.removeReviewForReport) {
     try {
       await window.OpenPlaySupabase.removeReviewForReport(reviewId, report.remoteId, currentAdminUser?.id);
       await loadBackendCollections();
       const reviews = getSavedReviews();
       Object.keys(reviews).forEach(key => {
-        reviews[key] = reviews[key].filter(review => review.id !== reviewId);
+        reviews[key] = reviews[key].filter(item => item.id !== reviewId && item.remoteId !== reviewId);
       });
       saveReviews(reviews);
-      saveReports(getSavedReports().map(item => (
-        item.id === reportId ? { ...item, status: 'resolved', resolvedAt: todayIso() } : item
-      )));
+      markReportResolved(report.id);
       renderModeration();
       renderUsers();
       renderDrawings();
@@ -2145,13 +2264,73 @@ async function deleteReportedReview(courtId, reviewId, reportId) {
   }
 
   const reviews = getSavedReviews();
-  reviews[courtId] = (reviews[courtId] || []).filter(review => review.id !== reviewId);
+  Object.keys(reviews).forEach(key => {
+    reviews[key] = reviews[key].filter(item => item.id !== reviewId && item.remoteId !== reviewId);
+  });
   saveReviews(reviews);
-  saveReports(getSavedReports().map(report => (
-    report.id === reportId ? { ...report, status: 'resolved', resolvedAt: todayIso() } : report
-  )));
+  markReportResolved(report.id);
   renderModeration();
   renderUsers();
+}
+
+async function deleteReportedLocation(report) {
+  const court = findCourtForReport(report);
+  if (!court) {
+    window.alert('Could not find that reported location.');
+    return;
+  }
+
+  if (court.remoteId && window.OpenPlaySupabase?.updateLocationStatus) {
+    try {
+      await window.OpenPlaySupabase.updateLocationStatus(court.remoteId, 'archived', currentAdminUser?.id);
+      if (report.remoteId && window.OpenPlaySupabase?.updateReportStatus) {
+        await window.OpenPlaySupabase.updateReportStatus(report.remoteId, 'resolved', currentAdminUser?.id);
+      }
+      await loadBackendCollections();
+      allCourts = allCourts.filter(item => item.id !== court.id && item.remoteId !== court.remoteId);
+      markReportResolved(report.id);
+      renderModeration();
+      renderLocations();
+      renderUsers();
+      renderDrawings();
+    } catch (error) {
+      window.alert(error.message || 'Could not delete that location.');
+    }
+    return;
+  }
+
+  if (!allowPrototypeContributionStorage()) {
+    window.alert(PRODUCTION_DATABASE_UNAVAILABLE);
+    return;
+  }
+
+  const deletedIds = new Set(getDeletedLocationIds());
+  deletedIds.add(court.id);
+  saveDeletedLocationIds([...deletedIds]);
+  saveSubmissions(getSavedSubmissions().filter(item => item.id !== court.id));
+  const reviews = getSavedReviews();
+  delete reviews[court.id];
+  if (court.remoteId) delete reviews[court.remoteId];
+  saveReviews(reviews);
+  markReportResolved(report.id);
+  allCourts = allCourts.filter(item => item.id !== court.id);
+  renderModeration();
+  renderLocations();
+}
+
+async function deleteReportedContribution(reportId) {
+  const report = getSavedReports().find(item => item.id === reportId);
+  if (!report) return;
+
+  const targetName = report.targetName || report.targetId || 'this contribution';
+  const confirmed = await confirmAdminDelete(`Are you sure you want to delete ${targetName}? This cannot be undone from the admin report queue.`);
+  if (!confirmed) return;
+
+  if (report.targetType === 'review') {
+    await deleteReportedReview(report);
+  } else {
+    await deleteReportedLocation(report);
+  }
 }
 
 async function deleteLocation(court) {
@@ -2364,6 +2543,21 @@ elements.navButtons.forEach(button => {
 
 elements.moderationNavButtons.forEach(button => {
   button.addEventListener('click', () => showModerationView(button.dataset.moderationView));
+});
+
+elements.deleteForm.addEventListener('submit', event => {
+  event.preventDefault();
+  resolveAdminDeleteConfirmation(true);
+});
+
+elements.deleteDialog.querySelector('[data-admin-delete-cancel]')?.addEventListener('click', () => {
+  resolveAdminDeleteConfirmation(false);
+});
+
+elements.deleteDialog.addEventListener('close', () => {
+  if (!deleteConfirmationRequest) return;
+  deleteConfirmationRequest.resolve(false);
+  deleteConfirmationRequest = null;
 });
 
 document.addEventListener('keydown', event => {
