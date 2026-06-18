@@ -185,7 +185,10 @@ const elements = {
   reportDialog: document.querySelector('#reportDialog'),
   reportForm: document.querySelector('#reportForm'),
   reportReason: document.querySelector('#reportReason'),
-  reportHint: document.querySelector('#reportHint')
+  reportHint: document.querySelector('#reportHint'),
+  submissionDialog: document.querySelector('#submissionDialog'),
+  submissionTitle: document.querySelector('#submissionTitle'),
+  submissionMessage: document.querySelector('#submissionMessage')
 };
 
 function trackAnalyticsEvent(name, properties = {}) {
@@ -2293,6 +2296,43 @@ function closeReportDialog() {
   closeDialog(elements.reportDialog);
 }
 
+function showSubmissionConfirmation({ title, message, showReviewNote = true }) {
+  elements.submissionTitle.textContent = title;
+  elements.submissionMessage.textContent = message;
+  elements.submissionDialog.querySelector('.submission-review-note').hidden = !showReviewNote;
+  openDialog(elements.submissionDialog);
+}
+
+function approvalReviewMessage(subject = 'Your submission') {
+  return `${subject} is pending approval. Most approved submissions appear within a few minutes, but review can take up to 24 hours.`;
+}
+
+function showReviewSavedConfirmation(hasPhotos) {
+  showSubmissionConfirmation({
+    title: hasPhotos ? 'Review posted. Pictures pending approval.' : 'Review posted.',
+    message: hasPhotos
+      ? `Your review is live. ${approvalReviewMessage('Your pictures')}`
+      : 'Thanks for sharing current open-play information with other players.',
+    showReviewNote: hasPhotos
+  });
+}
+
+function showLocationSubmittedConfirmation(hasPhotos) {
+  showSubmissionConfirmation({
+    title: 'Location submitted for approval.',
+    message: hasPhotos
+      ? approvalReviewMessage('Your location and pictures')
+      : approvalReviewMessage('Your location')
+  });
+}
+
+function showSuggestedEditSubmittedConfirmation() {
+  showSubmissionConfirmation({
+    title: 'Suggested edit submitted for approval.',
+    message: approvalReviewMessage('Your suggested edit')
+  });
+}
+
 function requestReportReason() {
   closeDialog(elements.submitDialog);
   closeDialog(elements.reviewDialog);
@@ -2430,6 +2470,7 @@ async function submitReview(event) {
       closeReviewDialog();
       render();
       focusCourt(court.id, 'review_saved');
+      showReviewSavedConfirmation(reviewPhotoFiles.length > 0);
     } catch (error) {
       console.error(error);
       setReviewHint(error.message || 'Could not save that review.', true);
@@ -2460,6 +2501,7 @@ async function submitReview(event) {
   closeReviewDialog();
   render();
   focusCourt(court.id, 'review_saved');
+  showReviewSavedConfirmation(reviewPhotoFiles.length > 0);
 }
 
 function setDraftLocation(lat, lng) {
@@ -2744,7 +2786,7 @@ async function addSubmittedLocation(event) {
       await saveSuggestedLocationEdit(existing, court, reason);
       elements.locationForm.reset();
       closeSubmitDialog();
-      window.alert('Thanks. Your suggested edit was sent to admin for approval.');
+      showSuggestedEditSubmittedConfirmation();
     } catch (error) {
       console.error(error);
       elements.formHint.textContent = error.message || 'Could not submit that suggested edit.';
@@ -2776,7 +2818,7 @@ async function addSubmittedLocation(event) {
       await window.OpenPlaySupabase.submitLocation(court, state.currentUser, photoFiles);
       elements.locationForm.reset();
       closeSubmitDialog();
-      window.alert('Thanks. Your location was submitted for admin approval before it appears on the map.');
+      showLocationSubmittedConfirmation(photoFiles.length > 0);
     } catch (error) {
       console.error(error);
       elements.formHint.textContent = error.message || 'Could not submit that location.';
@@ -2811,7 +2853,7 @@ async function addSubmittedLocation(event) {
   if (court.status === 'approved') {
     focusCourt(court.id, 'location_saved');
   } else {
-    window.alert('Thanks. Your location was submitted for admin approval before it appears on the map.');
+    showLocationSubmittedConfirmation(photoFiles.length > 0);
   }
 }
 
@@ -2977,6 +3019,10 @@ document.querySelectorAll('[data-close-review]').forEach(button => {
 
 document.querySelectorAll('[data-close-report]').forEach(button => {
   button.addEventListener('click', closeReportDialog);
+});
+
+document.querySelectorAll('[data-close-submission]').forEach(button => {
+  button.addEventListener('click', () => closeDialog(elements.submissionDialog));
 });
 
 elements.locationForm.addEventListener('submit', addSubmittedLocation);

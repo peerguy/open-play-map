@@ -25,7 +25,7 @@
     <link rel="icon" type="image/svg+xml" href="assets/icons/open-play-favicon.svg" />
     <link rel="stylesheet" href="src/leaflet-fix.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ6C/DNF8D6qS3hC9cc1N02p2o6sX7k=" crossorigin="" />
-    <link rel="stylesheet" href="src/styles.css?v=native-share-report-20260618" />
+    <link rel="stylesheet" href="src/styles.css?v=submission-approval-notice-20260618" />
   </head>
   <body class="map-page">
     <header class="site-header">
@@ -392,6 +392,26 @@
       </form>
     </dialog>
 
+    <dialog id="submissionDialog" class="submit-dialog submission-dialog">
+      <form class="location-form submission-confirmation-form" method="dialog">
+        <div class="form-header">
+          <div>
+            <p class="eyebrow">Submission received</p>
+            <h2 id="submissionTitle">Submission received</h2>
+            <p id="submissionMessage"></p>
+          </div>
+          <button class="icon-button" type="button" data-close-submission aria-label="Close">×</button>
+        </div>
+        <div class="submission-review-note">
+          <strong>Why review?</strong>
+          <p>Approval helps prevent spam and keeps open-play details accurate for players.</p>
+        </div>
+        <div class="form-actions">
+          <button class="primary-button" type="submit">Done</button>
+        </div>
+      </form>
+    </dialog>
+
     <footer class="site-footer">
       <div class="site-footer-inner">
         <a class="footer-brand" href="index.html">Open Play Map</a>
@@ -415,7 +435,7 @@
     <script src="src/supabase-data.js?v=production-guard-limits-20260617"></script>
     <script src="src/supabase-auth.js?v=account-settings-20260617"></script>
     <script src="src/mobile-header.js?v=mobile-map-default-20260616"></script>
-    <script src="src/app.js?v=native-share-report-20260618"></script>
+    <script src="src/app.js?v=submission-approval-notice-20260618"></script>
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"3fc55473a35e4ebab1d1f5d5f77db55d"}'></script>
   </body>
 </html>
