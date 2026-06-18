@@ -2754,7 +2754,7 @@ textarea::placeholder {
 
 .map-page .site-header {
   display: grid;
-  grid-template-columns: minmax(330px, auto) minmax(260px, 1fr) auto auto auto;
+  grid-template-columns: minmax(330px, auto) minmax(240px, 1fr) auto auto auto auto;
   gap: 12px;
 }
 
@@ -2783,7 +2783,7 @@ textarea::placeholder {
 
 @media (min-width: 761px) and (max-width: 1180px) {
   .map-page .site-header {
-    grid-template-columns: minmax(280px, auto) minmax(220px, 1fr) auto auto auto;
+    grid-template-columns: minmax(280px, auto) minmax(190px, 1fr) auto auto auto auto;
     gap: 10px;
     padding-inline: 18px;
   }

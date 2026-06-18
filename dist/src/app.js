@@ -164,6 +164,7 @@ const elements = {
   placeSearchButton: document.querySelector('#placeSearchButton'),
   placeResults: document.querySelector('#placeResults'),
   headerPlaceResults: document.querySelector('#headerPlaceResults'),
+  adminHeaderLink: document.querySelector('#adminHeaderLink'),
   userPanel: document.querySelector('#userPanel'),
   reviewDialog: document.querySelector('#reviewDialog'),
   reviewForm: document.querySelector('#reviewForm'),
@@ -1035,6 +1036,10 @@ function userAvatar(user) {
 }
 
 function renderUserPanel() {
+  if (elements.adminHeaderLink) {
+    elements.adminHeaderLink.hidden = !isAdminUser(state.currentUser);
+  }
+
   if (!state.currentUser) {
     elements.userPanel.innerHTML = '<a class="secondary-button auth-open-button" href="account.html">Sign in / Join</a>';
   } else {

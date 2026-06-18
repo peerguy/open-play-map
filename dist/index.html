@@ -25,7 +25,7 @@
     <link rel="icon" type="image/svg+xml" href="assets/icons/open-play-favicon.svg" />
     <link rel="stylesheet" href="src/leaflet-fix.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ6C/DNF8D6qS3hC9cc1N02p2o6sX7k=" crossorigin="" />
-    <link rel="stylesheet" href="src/styles.css?v=mobile-form-actions-20260618" />
+    <link rel="stylesheet" href="src/styles.css?v=admin-header-button-20260618" />
   </head>
   <body class="map-page">
     <header class="site-header">
@@ -119,6 +119,7 @@
       </div>
       <button class="header-action" type="button" data-open-submit>+ Add location</button>
       <a class="header-link" href="leaderboard.html">Leaderboard</a>
+      <a id="adminHeaderLink" class="header-link admin-header-link" href="admin.html" hidden>Admin Panel</a>
       <div id="userPanel" class="user-panel">
         <a class="secondary-button auth-open-button" href="account.html">Sign in / Join</a>
       </div>
@@ -441,7 +442,7 @@
     <script src="src/supabase-data.js?v=location-contact-fields-20260618"></script>
     <script src="src/supabase-auth.js?v=account-settings-20260617"></script>
     <script src="src/mobile-header.js?v=mobile-map-default-20260616"></script>
-    <script src="src/app.js?v=submission-limit-10-20260618"></script>
+    <script src="src/app.js?v=admin-header-button-20260618"></script>
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"3fc55473a35e4ebab1d1f5d5f77db55d"}'></script>
   </body>
 </html>
