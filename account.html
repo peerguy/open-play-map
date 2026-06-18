@@ -8,7 +8,7 @@
     <meta name="description" content="Create or manage an Open Play Map profile to contribute pickleball location reviews." />
     <meta name="theme-color" content="#266c3f" />
     <link rel="icon" type="image/svg+xml" href="assets/icons/open-play-favicon.svg" />
-    <link rel="stylesheet" href="src/styles.css?v=account-settings-20260617" />
+    <link rel="stylesheet" href="src/styles.css?v=turnstile-auth-20260617" />
   </head>
   <body class="account-page">
     <header class="site-header account-header">
@@ -98,6 +98,7 @@
               <input id="signupTerms" name="terms" type="checkbox" required />
               <span>I agree to the <a href="terms.html">Terms of Use</a> and <a href="privacy.html">Privacy Policy</a>.</span>
             </label>
+            <div class="turnstile-field" data-turnstile-widget="signup"></div>
             <p id="signupHint" class="form-hint"></p>
             <button class="primary-button" type="submit">Create account</button>
           </form>
@@ -113,6 +114,7 @@
                 <button class="password-toggle" type="button" data-toggle-password data-password-target="loginPassword">Show</button>
               </span>
             </label>
+            <div class="turnstile-field" data-turnstile-widget="login"></div>
             <p id="loginHint" class="form-hint"></p>
             <button class="primary-button" type="submit">Log in</button>
             <a class="auth-link-button" href="account-settings.html?mode=reset">Forgot password?</a>
@@ -138,12 +140,14 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="src/analytics.js?v=seo-analytics-20260614"></script>
-    <script src="src/supabase-config.js?v=supabase-read-20260614"></script>
+    <script src="src/supabase-config.js?v=turnstile-auth-20260617"></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" defer></script>
     <script src="src/supabase-client.js?v=mobile-map-default-20260616"></script>
     <script src="src/supabase-data.js?v=production-guard-limits-20260617"></script>
-    <script src="src/supabase-auth.js?v=account-settings-20260617"></script>
+    <script src="src/supabase-auth.js?v=turnstile-auth-20260617"></script>
+    <script src="src/turnstile.js?v=turnstile-auth-20260617"></script>
     <script src="src/mobile-header.js?v=mobile-map-default-20260616"></script>
-    <script src="src/account.js?v=production-guard-limits-20260617"></script>
+    <script src="src/account.js?v=turnstile-auth-20260617"></script>
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"3fc55473a35e4ebab1d1f5d5f77db55d"}'></script>
   </body>
 </html>

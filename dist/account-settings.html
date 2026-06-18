@@ -8,7 +8,7 @@
     <meta name="description" content="Manage your Open Play Map profile and password." />
     <meta name="theme-color" content="#266c3f" />
     <link rel="icon" type="image/svg+xml" href="assets/icons/open-play-favicon.svg" />
-    <link rel="stylesheet" href="src/styles.css?v=account-settings-20260617" />
+    <link rel="stylesheet" href="src/styles.css?v=turnstile-auth-20260617" />
   </head>
   <body class="account-page account-settings-page">
     <header class="site-header account-header">
@@ -103,6 +103,7 @@
             <label>Email
               <input id="resetEmail" name="email" type="email" required autocomplete="username" />
             </label>
+            <div class="turnstile-field" data-turnstile-widget="password-reset"></div>
             <p id="resetHint" class="form-hint"></p>
             <button class="primary-button" type="submit">Send reset link</button>
             <a class="auth-link-button" href="account.html">Back to log in</a>
@@ -148,11 +149,13 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="src/analytics.js?v=seo-analytics-20260614"></script>
-    <script src="src/supabase-config.js?v=supabase-read-20260614"></script>
+    <script src="src/supabase-config.js?v=turnstile-auth-20260617"></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" defer></script>
     <script src="src/supabase-client.js?v=mobile-map-default-20260616"></script>
-    <script src="src/supabase-auth.js?v=account-settings-20260617"></script>
+    <script src="src/supabase-auth.js?v=turnstile-auth-20260617"></script>
+    <script src="src/turnstile.js?v=turnstile-auth-20260617"></script>
     <script src="src/mobile-header.js?v=mobile-map-default-20260616"></script>
-    <script src="src/account-settings.js?v=account-settings-20260617"></script>
+    <script src="src/account-settings.js?v=turnstile-auth-20260617"></script>
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"3fc55473a35e4ebab1d1f5d5f77db55d"}'></script>
   </body>
 </html>

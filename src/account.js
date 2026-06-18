@@ -32,10 +32,12 @@ const elements = {
   signupSkillLevel: document.querySelector('#signupSkillLevel'),
   signupBio: document.querySelector('#signupBio'),
   signupTerms: document.querySelector('#signupTerms'),
+  signupTurnstile: document.querySelector('[data-turnstile-widget="signup"]'),
   signupHint: document.querySelector('#signupHint'),
   loginForm: document.querySelector('#loginForm'),
   loginEmail: document.querySelector('#loginEmail'),
   loginPassword: document.querySelector('#loginPassword'),
+  loginTurnstile: document.querySelector('[data-turnstile-widget="login"]'),
   loginHint: document.querySelector('#loginHint'),
   authTabs: document.querySelectorAll('[data-auth-tab]'),
   authPanels: document.querySelectorAll('[data-auth-panel]'),
@@ -480,6 +482,11 @@ function showAuthPanel(panelName) {
   elements.authPanels.forEach(panel => {
     panel.hidden = panel.dataset.authPanel !== panelName;
   });
+
+  const turnstileContainer = panelName === 'login'
+    ? elements.loginTurnstile
+    : elements.signupTurnstile;
+  window.OpenPlayTurnstile?.render?.(turnstileContainer);
 }
 
 async function createAccount(event) {
@@ -522,7 +529,10 @@ async function createAccount(event) {
   if (submitButton) submitButton.disabled = true;
 
   try {
-    const result = await window.OpenPlayAuth.signUp({ email, password, username, skillLevel, bio });
+    const captchaToken = await window.OpenPlayTurnstile?.ensureToken?.(elements.signupTurnstile, elements.signupHint);
+    if (window.OpenPlayTurnstile?.isConfigured?.() && !captchaToken) return;
+
+    const result = await window.OpenPlayAuth.signUp({ email, password, username, skillLevel, bio, captchaToken });
     if (result.needsEmailConfirmation) {
       elements.signupHint.textContent = 'Check your email to confirm your account, then log in. Your form was left filled in case you need to try again.';
       return;
@@ -534,17 +544,25 @@ async function createAccount(event) {
   } catch (error) {
     elements.signupHint.textContent = error.message;
   } finally {
+    window.OpenPlayTurnstile?.reset?.(elements.signupTurnstile);
     if (submitButton) submitButton.disabled = false;
   }
 }
 
 async function login(event) {
   event.preventDefault();
+  const submitButton = elements.loginForm.querySelector('button[type="submit"]');
+  elements.loginHint.textContent = 'Logging in...';
+  if (submitButton) submitButton.disabled = true;
 
   try {
+    const captchaToken = await window.OpenPlayTurnstile?.ensureToken?.(elements.loginTurnstile, elements.loginHint);
+    if (window.OpenPlayTurnstile?.isConfigured?.() && !captchaToken) return;
+
     const user = await window.OpenPlayAuth.signIn({
       email: elements.loginEmail.value.trim(),
-      password: elements.loginPassword.value
+      password: elements.loginPassword.value,
+      captchaToken
     });
     elements.loginForm.reset();
     elements.loginHint.textContent = 'Logged in.';
@@ -553,6 +571,9 @@ async function login(event) {
     window.dispatchEvent(new CustomEvent('open-play-session-changed'));
   } catch (error) {
     elements.loginHint.textContent = 'Email or password did not match.';
+  } finally {
+    window.OpenPlayTurnstile?.reset?.(elements.loginTurnstile);
+    if (submitButton) submitButton.disabled = false;
   }
 }
 
@@ -586,6 +607,8 @@ async function refreshAccount() {
 async function init() {
   const notice = params.get('notice');
   elements.notice.textContent = notice || '';
+  window.OpenPlayTurnstile?.render?.(elements.signupTurnstile);
+  window.OpenPlayTurnstile?.render?.(elements.loginTurnstile);
   await refreshAccount();
 }
 

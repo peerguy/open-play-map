@@ -3361,6 +3361,15 @@ textarea::placeholder {
   font-weight: 850;
 }
 
+.turnstile-field {
+  display: block;
+  min-height: 65px;
+}
+
+.turnstile-field iframe {
+  max-width: 100%;
+}
+
 .field-help {
   display: block;
   color: var(--muted);

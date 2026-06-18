@@ -26,6 +26,7 @@ const elements = {
   passwordHint: document.querySelector('#passwordSettingsHint'),
   resetForm: document.querySelector('#passwordResetForm'),
   resetEmail: document.querySelector('#resetEmail'),
+  resetTurnstile: document.querySelector('[data-turnstile-widget="password-reset"]'),
   resetHint: document.querySelector('#resetHint'),
   newPasswordForm: document.querySelector('#newPasswordForm'),
   newPassword: document.querySelector('#newPassword'),
@@ -118,7 +119,10 @@ function showResetRequestForm() {
     elements.resetEmail.value = currentUser.email;
   }
   setMode('reset');
-  requestAnimationFrame(() => elements.resetEmail?.focus());
+  requestAnimationFrame(() => {
+    window.OpenPlayTurnstile?.render?.(elements.resetTurnstile);
+    elements.resetEmail?.focus();
+  });
 }
 
 function showSettings(user) {
@@ -252,11 +256,15 @@ async function requestPasswordReset(event) {
   if (submitButton) submitButton.disabled = true;
 
   try {
-    await window.OpenPlayAuth.sendPasswordReset(email);
+    const captchaToken = await window.OpenPlayTurnstile?.ensureToken?.(elements.resetTurnstile, elements.resetHint);
+    if (window.OpenPlayTurnstile?.isConfigured?.() && !captchaToken) return;
+
+    await window.OpenPlayAuth.sendPasswordReset(email, { captchaToken });
     elements.resetHint.textContent = 'Check your email for a password reset link.';
   } catch (error) {
     elements.resetHint.textContent = error.message;
   } finally {
+    window.OpenPlayTurnstile?.reset?.(elements.resetTurnstile);
     if (submitButton) submitButton.disabled = false;
   }
 }

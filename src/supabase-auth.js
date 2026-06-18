@@ -109,7 +109,7 @@
     return normalizeProfile(profile, authUser);
   }
 
-  async function signUp({ email, password, username, skillLevel, bio }) {
+  async function signUp({ email, password, username, skillLevel, bio, captchaToken }) {
     const supabase = client();
     if (!supabase) throw new Error('Supabase is not configured.');
 
@@ -125,6 +125,7 @@
       email,
       password,
       options: {
+        captchaToken,
         emailRedirectTo: `${window.location.origin}/account.html`,
         data: {
           username,
@@ -156,23 +157,33 @@
     };
   }
 
-  async function signIn({ email, password }) {
+  async function signIn({ email, password, captchaToken }) {
     const supabase = client();
     if (!supabase) throw new Error('Supabase is not configured.');
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const credentials = { email, password };
+    if (captchaToken) {
+      credentials.options = { captchaToken };
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword(credentials);
     if (error) throw new Error(authErrorMessage(error));
 
     return normalizeProfile(await fetchProfile(data.user.id), data.user);
   }
 
-  async function sendPasswordReset(email) {
+  async function sendPasswordReset(email, { captchaToken } = {}) {
     const supabase = client();
     if (!supabase) throw new Error('Supabase is not configured.');
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    const options = {
       redirectTo: `${window.location.origin}/account-settings.html`
-    });
+    };
+    if (captchaToken) {
+      options.captchaToken = captchaToken;
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, options);
     if (error) throw new Error(authErrorMessage(error));
   }
 
