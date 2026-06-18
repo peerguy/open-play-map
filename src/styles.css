@@ -343,6 +343,7 @@ select {
 }
 
 .court-card .badges,
+.court-card .location-contact-links,
 .court-card .open-play,
 .court-card .open-play-summary {
   margin-top: 0;
@@ -856,6 +857,11 @@ select {
 
 .location-fields .field-notes textarea {
   min-height: 108px;
+}
+
+.location-fields .field-website,
+.location-fields .field-phone {
+  grid-column: span 6;
 }
 
 .location-fields .field-photos {
@@ -1402,6 +1408,8 @@ code {
   .location-fields .checkbox-fieldset,
   .location-fields .checkbox-dropdown-field,
   .location-fields .time-window-field,
+  .location-fields .field-website,
+  .location-fields .field-phone,
   .location-fields .field-notes,
   .location-fields .field-photos {
     grid-column: 1 / -1;
@@ -2076,6 +2084,52 @@ textarea::placeholder {
 
 .map-info-section {
   margin-top: 12px;
+}
+
+.location-contact-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.location-contact-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border: 1px solid rgba(38, 108, 63, 0.2);
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: #f3f8ef;
+  color: var(--brand-dark);
+  font-size: 0.8rem;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.location-contact-links a:hover,
+.location-contact-links a:focus-visible {
+  border-color: rgba(38, 108, 63, 0.45);
+  background: #e8f3df;
+  outline: none;
+}
+
+.location-contact-links span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.location-contact-links-popup {
+  margin-top: 8px;
+}
+
+.location-contact-links-card {
+  margin-top: 2px;
+}
+
+.location-contact-links-map-info {
+  margin-top: 10px;
 }
 
 .map-info-open-play .open-play-summary {
@@ -5651,6 +5705,8 @@ label:has(input:required:valid) > .field-label .is-required {
   .admin-location-fields.location-fields .checkbox-fieldset,
   .admin-location-fields.location-fields .checkbox-dropdown-field,
   .admin-location-fields.location-fields .time-window-field,
+  .admin-location-fields.location-fields .field-website,
+  .admin-location-fields.location-fields .field-phone,
   .admin-location-fields.location-fields .field-notes,
   .admin-location-fields.location-fields .field-photos {
     grid-column: 1 / -1;

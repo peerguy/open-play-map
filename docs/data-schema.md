@@ -33,6 +33,8 @@
   ],
   "notes": "Anything players should know before going.",
   "sourceUrl": "https://example.com/source",
+  "websiteUrl": "https://example.com/open-play",
+  "phoneNumber": "301-555-1234",
   "lastVerified": "YYYY-MM-DD"
 }
 ```

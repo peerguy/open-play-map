@@ -396,6 +396,22 @@ function formatOpenPlayFee(value) {
   return `$${Number.isInteger(fee) ? fee : fee.toFixed(2)}`;
 }
 
+function normalizeWebsiteUrl(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`;
+  try {
+    const url = new URL(withScheme);
+    return ['http:', 'https:'].includes(url.protocol) ? url.toString() : '';
+  } catch {
+    return '';
+  }
+}
+
+function normalizedPhoneNumber(value) {
+  return String(value || '').trim();
+}
+
 function accessLabel(court = {}) {
   const feeLabel = formatOpenPlayFee(court.openPlayFee);
   if (feeLabel) return `Public fee (${feeLabel})`;
@@ -764,6 +780,12 @@ function renderLocationFields(court, { disabled = false } = {}) {
         <div class="time-window-list" data-time-windows></div>
         ${disabled ? '' : '<button class="secondary-button compact-button" data-add-time-window type="button">Add time window</button>'}
       </div>
+      <label class="field-website">Website / registration link
+        <input name="websiteUrl" type="text" inputmode="url" value="${escapeHtml(court.websiteUrl || '')}"${disabledAttr} />
+      </label>
+      <label class="field-phone">Phone number
+        <input name="phoneNumber" type="tel" autocomplete="tel" value="${escapeHtml(court.phoneNumber || '')}"${disabledAttr} />
+      </label>
       <label class="field-photos">Photo URLs, comma separated
         <input name="photos" value="${escapeHtml(photoUrlList(court.photos).join(', '))}"${disabledAttr} />
       </label>
@@ -1122,6 +1144,8 @@ function locationDisplayFields(court = {}) {
     ['Longitude', court.longitude],
     ['Access', accessLabel(court)],
     ['Open play fee', formatOpenPlayFee(court.openPlayFee)],
+    ['Website / registration link', court.websiteUrl],
+    ['Phone number', court.phoneNumber],
     ['Number of courts', court.courts?.count],
     ['Skill level', court.skillLevels?.length ? court.skillLevels : court.estimatedSkillLevel],
     ['Open play days', openPlayDaysText(court)],
@@ -2414,6 +2438,8 @@ async function saveLocationEdit(event) {
     },
     photos: photoUrls,
     notes: form.elements.notes.value.trim(),
+    websiteUrl: normalizeWebsiteUrl(form.elements.websiteUrl.value),
+    phoneNumber: normalizedPhoneNumber(form.elements.phoneNumber.value),
     adminEdited: true,
     updatedAt: todayIso(),
     status: existing.status || 'approved',
@@ -2432,6 +2458,12 @@ async function saveLocationEdit(event) {
 
   if (courtCount !== null && (!Number.isInteger(courtCount) || courtCount < 0)) {
     hint.textContent = 'Please enter a whole number of courts, or leave it blank.';
+    return;
+  }
+
+  if (form.elements.websiteUrl.value.trim() && !nextCourt.websiteUrl) {
+    hint.textContent = 'Add a valid website link, or leave it blank.';
+    form.elements.websiteUrl.focus();
     return;
   }
 

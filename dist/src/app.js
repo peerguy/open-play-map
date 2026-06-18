@@ -150,6 +150,8 @@ const elements = {
   openPlayFeeField: document.querySelector('#openPlayFeeField'),
   newOpenPlayFee: document.querySelector('#newOpenPlayFee'),
   newCourtCount: document.querySelector('#newCourtCount'),
+  newWebsite: document.querySelector('#newWebsite'),
+  newPhone: document.querySelector('#newPhone'),
   newSkill: document.querySelector('#newSkill'),
   newDays: document.querySelector('#newDays'),
   newDaysSummary: document.querySelector('#newDaysSummary'),
@@ -717,6 +719,31 @@ function formatOpenPlayFee(value) {
   return `$${Number.isInteger(fee) ? fee : fee.toFixed(2)}`;
 }
 
+function normalizeWebsiteUrl(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`;
+  try {
+    const url = new URL(withScheme);
+    return ['http:', 'https:'].includes(url.protocol) ? url.toString() : '';
+  } catch {
+    return '';
+  }
+}
+
+function normalizedPhoneNumber(value) {
+  return String(value || '').trim();
+}
+
+function phoneHref(value) {
+  const stripped = normalizedPhoneNumber(value).replace(/[^\d+]/g, '');
+  const cleaned = stripped.startsWith('+')
+    ? `+${stripped.slice(1).replace(/\+/g, '')}`
+    : stripped.replace(/\+/g, '');
+  const digitCount = cleaned.replace(/\D/g, '').length;
+  return digitCount >= 7 ? `tel:${cleaned}` : '';
+}
+
 function openPlayFeeLabel(court = {}) {
   return formatOpenPlayFee(court.openPlayFee);
 }
@@ -882,6 +909,8 @@ function editableLocationSnapshot(court = {}) {
     longitude: Number.isFinite(Number(court.longitude)) ? Number(court.longitude) : '',
     access: court.access || (court.isFree === false ? 'paid' : 'public'),
     openPlayFee: normalizeOpenPlayFee(court.openPlayFee) ?? '',
+    websiteUrl: normalizeWebsiteUrl(court.websiteUrl),
+    phoneNumber: normalizedPhoneNumber(court.phoneNumber),
     courtCount: court.courts?.count ?? '',
     skillLevels: [...(Array.isArray(court.skillLevels) ? court.skillLevels : selectedSkillsFromText(court.estimatedSkillLevel))].sort(),
     openPlay: (court.openPlay || []).map(slot => ({
@@ -1480,6 +1509,22 @@ function locationActionButtons(court, className = 'popup-edit', { includeEdit = 
   `;
 }
 
+function renderLocationContactLinks(court, variant = '') {
+  const websiteUrl = normalizeWebsiteUrl(court.websiteUrl);
+  const phoneNumber = normalizedPhoneNumber(court.phoneNumber);
+  const phoneLink = phoneHref(phoneNumber);
+  if (!websiteUrl && !phoneLink) return '';
+  const classes = ['location-contact-links', variant ? `location-contact-links-${variant}` : ''].filter(Boolean).join(' ');
+  const isPaid = court.access === 'paid' || normalizeOpenPlayFee(court.openPlayFee) !== null;
+  return `
+    <div class="${classes}">
+      ${websiteUrl ? `<a href="${escapeHtml(websiteUrl)}" target="_blank" rel="noopener" aria-label="Open website for ${escapeHtml(court.name)}">Website</a>` : ''}
+      ${phoneLink ? `<a href="${escapeHtml(phoneLink)}" aria-label="Call ${escapeHtml(court.name)}">${escapeHtml(phoneNumber)}</a>` : ''}
+      ${variant === 'map-info' && isPaid ? '<span>Confirm fee before going.</span>' : ''}
+    </div>
+  `;
+}
+
 function createPopup(court) {
   return `
     <div class="popup-title">${court.name}</div>
@@ -1487,6 +1532,7 @@ function createPopup(court) {
     <div>${accessLabel(court)}</div>
     <div>Skill: ${court.estimatedSkillLevel}</div>
     <div>${formatOpenPlay(court)}</div>
+    ${renderLocationContactLinks(court, 'popup')}
     ${submitterLabel(court) ? `<div class="popup-submitter">${submitterLabel(court)}</div>` : ''}
     ${locationActionButtons(court)}
   `;
@@ -1519,6 +1565,7 @@ function showMapInfoBox(court, options = {}) {
         <h3>Open play</h3>
         <div class="map-info-open-play">${renderOpenPlaySummary(court)}</div>
       </div>
+      ${renderLocationContactLinks(court, 'map-info')}
       ${court.notes ? `<div class="map-info-notes">${court.notes}</div>` : ''}
       ${renderPhotoStrip(court, court.photos?.length || 3)}
       ${submitterLabel(court) ? `<div class="map-info-row">${submitterLabel(court)}</div>` : ''}
@@ -1635,6 +1682,7 @@ function createCourtCard(court) {
       <span class="badge">${court.estimatedSkillLevel}</span>
       ${reviews.length ? `<span class="badge">${reviews.length} review${reviews.length === 1 ? '' : 's'}</span>` : ''}
     </div>
+    ${renderLocationContactLinks(court, 'card')}
     ${renderOpenPlaySummary(court, {
       actionsHtml: `<button class="card-edit card-action-button card-review-inline" type="button" data-review-location="${court.id}" aria-label="Review ${escapeHtml(court.name)}">Review</button>`
     })}
@@ -1655,6 +1703,9 @@ function createCourtCard(court) {
   });
   card.querySelector('.card-menu').addEventListener('click', event => {
     event.stopPropagation();
+  });
+  card.querySelectorAll('.location-contact-links a').forEach(link => {
+    link.addEventListener('click', event => event.stopPropagation());
   });
   card.querySelector('[data-edit-location]')?.addEventListener('click', event => {
     event.stopPropagation();
@@ -2141,6 +2192,8 @@ function populateLocationForm(court) {
   elements.newOpenPlayFee.value = normalizeOpenPlayFee(court.openPlayFee) ?? '';
   updateOpenPlayFeeField();
   elements.newCourtCount.value = court.courts?.count ?? '';
+  elements.newWebsite.value = court.websiteUrl || '';
+  elements.newPhone.value = court.phoneNumber || '';
   setSelectedLocationSkills(court.skillLevels || court.estimatedSkillLevel || '');
   setSelectedOpenPlayDays(court.openPlay?.[0]?.days || '');
   elements.newDays.open = false;
@@ -2719,6 +2772,13 @@ async function addSubmittedLocation(event) {
     elements.formHint.textContent = 'Please enter a whole number of courts, or leave it blank.';
     return;
   }
+  const websiteUrl = normalizeWebsiteUrl(elements.newWebsite.value);
+  if (elements.newWebsite.value.trim() && !websiteUrl) {
+    elements.formHint.textContent = 'Add a valid website link, or leave it blank.';
+    elements.newWebsite.focus();
+    return;
+  }
+  const phoneNumber = normalizedPhoneNumber(elements.newPhone.value);
   const name = elements.newName.value.trim();
   const isSuggestingEdit = Boolean(state.suggestingEditId);
   const existingId = state.editingId || state.suggestingEditId || '';
@@ -2762,6 +2822,8 @@ async function addSubmittedLocation(event) {
     photos: existing?.photos || [],
     notes: elements.newNotes.value.trim(),
     sourceUrl: existing?.sourceUrl || '',
+    websiteUrl,
+    phoneNumber,
     lastVerified: todayIso(),
     userSubmitted: existing?.userSubmitted ?? true,
     submittedBy: existing?.submittedBy || state.currentUser.id,
