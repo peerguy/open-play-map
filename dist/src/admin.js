@@ -390,6 +390,14 @@ function normalizeOpenPlayFee(value) {
   return Math.round(fee * 100) / 100;
 }
 
+function isValidLatitude(value) {
+  return Number.isFinite(value) && value >= -90 && value <= 90;
+}
+
+function isValidLongitude(value) {
+  return Number.isFinite(value) && value >= -180 && value <= 180;
+}
+
 function formatOpenPlayFee(value) {
   const fee = normalizeOpenPlayFee(value);
   if (fee === null) return '';
@@ -2451,8 +2459,8 @@ async function saveLocationEdit(event) {
     return;
   }
 
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    hint.textContent = 'Please add valid latitude and longitude.';
+  if (!isValidLatitude(lat) || !isValidLongitude(lng)) {
+    hint.textContent = 'Latitude must be between -90 and 90, and longitude must be between -180 and 180.';
     return;
   }
 

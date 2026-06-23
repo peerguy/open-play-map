@@ -36,6 +36,18 @@ const LOCATION_SKILL_LEVELS = ['beginner', 'intermediate', 'advanced'];
 const initialMapZoom = window.matchMedia('(max-width: 760px)').matches ? 3 : 4;
 const map = L.map('map', { scrollWheelZoom: true }).setView([39.5, -98.35], initialMapZoom);
 
+function isValidLatitude(value) {
+  return Number.isFinite(value) && value >= -90 && value <= 90;
+}
+
+function isValidLongitude(value) {
+  return Number.isFinite(value) && value >= -180 && value <= 180;
+}
+
+function hasValidCoordinates(court = {}) {
+  return isValidLatitude(court.latitude) && isValidLongitude(court.longitude);
+}
+
 const tileStyles = {
   positron: {
     url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
@@ -1310,8 +1322,7 @@ function matchesControls(court) {
 }
 
 function isCourtInMapView(court) {
-  return typeof court.latitude === 'number'
-    && typeof court.longitude === 'number'
+  return hasValidCoordinates(court)
     && map.getBounds().contains([court.latitude, court.longitude]);
 }
 
@@ -1630,7 +1641,7 @@ function showMapInfoBox(court, options = {}) {
 }
 
 function positionMapInfoBox(court) {
-  if (elements.mapInfoBox.hidden || typeof court.latitude !== 'number' || typeof court.longitude !== 'number') return;
+  if (elements.mapInfoBox.hidden || !hasValidCoordinates(court)) return;
 
   if (isMobileLayout()) {
     elements.mapInfoBox.style.left = '';
@@ -1910,7 +1921,7 @@ function mobileOverlayVisibleBottom() {
 }
 
 function centerCourtInVisibleMap(court, zoom = map.getZoom()) {
-  if (!court || typeof court.latitude !== 'number' || typeof court.longitude !== 'number') return;
+  if (!court || !hasValidCoordinates(court)) return;
 
   if (!isMobileLayout()) {
     map.setView([court.latitude, court.longitude], zoom);
@@ -2152,7 +2163,7 @@ function render() {
   state.markers.clear();
 
   filtered.forEach(court => {
-    if (typeof court.latitude !== 'number' || typeof court.longitude !== 'number') return;
+    if (!hasValidCoordinates(court)) return;
     const marker = L.marker([court.latitude, court.longitude], { icon: createLocationIcon(court) }).bindPopup(createPopup(court), {
       closeButton: false,
       closeOnClick: false,
@@ -2255,7 +2266,7 @@ function openEditDialog(id) {
   });
   populateLocationForm(court);
 
-  if (Number.isFinite(court.latitude) && Number.isFinite(court.longitude)) {
+  if (hasValidCoordinates(court)) {
     setDraftLocation(court.latitude, court.longitude);
     map.setView([court.latitude, court.longitude], 14);
   }
@@ -2284,7 +2295,7 @@ function openSuggestEditDialog(id) {
     hint: 'Change the fields you believe are wrong. An admin will review your suggestion before it appears on the map.'
   });
 
-  if (Number.isFinite(court.latitude) && Number.isFinite(court.longitude)) {
+  if (hasValidCoordinates(court)) {
     setDraftLocation(court.latitude, court.longitude);
     map.setView([court.latitude, court.longitude], isMobileLayout() ? map.getZoom() : 14);
   }
@@ -2759,8 +2770,8 @@ async function addSubmittedLocation(event) {
 
   const lat = Number(elements.newLat.value);
   const lng = Number(elements.newLng.value);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    elements.formHint.textContent = 'Please add valid latitude and longitude. You can click the map to set them.';
+  if (!isValidLatitude(lat) || !isValidLongitude(lng)) {
+    elements.formHint.textContent = 'Latitude must be between -90 and 90, and longitude must be between -180 and 180. You can click the map to set them.';
     return;
   }
 
@@ -2975,7 +2986,7 @@ async function loadSeedCourts() {
 
 function fitMapToLoadedCourts() {
   const points = state.courts
-    .filter(court => typeof court.latitude === 'number' && typeof court.longitude === 'number')
+    .filter(hasValidCoordinates)
     .map(court => [court.latitude, court.longitude]);
 
   if (!points.length) return;

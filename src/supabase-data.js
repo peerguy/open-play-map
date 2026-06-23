@@ -47,6 +47,26 @@
     return value ? String(value).slice(0, 10) : '';
   }
 
+  function isValidLatitude(value) {
+    const coordinate = Number(value);
+    return Number.isFinite(coordinate) && coordinate >= -90 && coordinate <= 90;
+  }
+
+  function isValidLongitude(value) {
+    const coordinate = Number(value);
+    return Number.isFinite(coordinate) && coordinate >= -180 && coordinate <= 180;
+  }
+
+  function hasValidCoordinates(location = {}) {
+    return isValidLatitude(location.latitude) && isValidLongitude(location.longitude);
+  }
+
+  function assertValidCoordinates(location = {}) {
+    if (!hasValidCoordinates(location)) {
+      throw new Error('Latitude must be between -90 and 90, and longitude must be between -180 and 180.');
+    }
+  }
+
   function normalizeReliability(value) {
     if (!value) return null;
     return DB_RELIABILITY[value] || DB_RELIABILITY[String(value).trim()] || null;
@@ -753,7 +773,7 @@
     return rows.map(row => mapLocation({
       ...row,
       photos: photosByLocation?.get(row.id) || row.photos || []
-    }));
+    })).filter(hasValidCoordinates);
   }
 
   async function fetchAdminLocations() {
@@ -800,6 +820,7 @@
   async function saveAdminLocation(court) {
     const supabase = client();
     if (!supabase || !court?.remoteId) throw new Error('Supabase is not configured.');
+    assertValidCoordinates(court);
 
     const payload = {
       name: court.name,
@@ -860,6 +881,8 @@
   }
 
   function locationPayload(court, user, status = 'pending') {
+    assertValidCoordinates(court);
+
     return {
       slug: slugFromCourt(court),
       name: court.name,
