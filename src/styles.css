@@ -404,17 +404,26 @@ select {
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 50%;
-  background: #e5e7eb;
+  box-sizing: border-box;
+  border: 1px solid rgba(100, 116, 139, 0.16);
+  border-radius: 8px;
+  background: #f1f5f9;
   color: #64748b;
   font-size: 0.68rem;
   font-weight: 900;
   line-height: 1;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.86);
 }
 
 .day-chip.is-active {
+  border-color: rgba(38, 108, 63, 0.72);
   background: var(--brand);
   color: #fff;
+  box-shadow:
+    0 5px 12px rgba(38, 108, 63, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
 }
 
 .open-play-hours-list {
@@ -6374,6 +6383,7 @@ label:has(input:required:valid) > .field-label .is-required {
   .map-page .day-chip {
     width: 25px;
     height: 25px;
+    border-radius: 7px;
     font-size: 0.62rem;
   }
 
