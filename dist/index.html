@@ -215,30 +215,32 @@
             <label><input name="skillLevel" type="checkbox" value="intermediate" /> Intermediate: 3.0-4.0</label>
             <label><input name="skillLevel" type="checkbox" value="advanced" /> Advanced: 4.0+</label>
           </fieldset>
-          <div class="checkbox-dropdown-field">
-            <span class="field-label">Open play days <small class="form-subhint">select all that apply</small></span>
-            <details id="newDays" class="checkbox-dropdown">
-              <summary><span id="newDaysSummary">Select days</span></summary>
-              <div class="checkbox-dropdown-menu">
-                <label class="select-all-option"><input id="openDayAll" type="checkbox" /> All days</label>
-                <label><input name="openDay" type="checkbox" value="Monday" /> Monday</label>
-                <label><input name="openDay" type="checkbox" value="Tuesday" /> Tuesday</label>
-                <label><input name="openDay" type="checkbox" value="Wednesday" /> Wednesday</label>
-                <label><input name="openDay" type="checkbox" value="Thursday" /> Thursday</label>
-                <label><input name="openDay" type="checkbox" value="Friday" /> Friday</label>
-                <label><input name="openDay" type="checkbox" value="Saturday" /> Saturday</label>
-                <label><input name="openDay" type="checkbox" value="Sunday" /> Sunday</label>
-              </div>
-            </details>
+          <div class="schedule-stack">
+            <div class="checkbox-dropdown-field">
+              <span class="field-label">Open play days <small class="form-subhint">select all that apply</small></span>
+              <details id="newDays" class="checkbox-dropdown">
+                <summary><span id="newDaysSummary">Select days</span></summary>
+                <div class="checkbox-dropdown-menu">
+                  <label class="select-all-option"><input id="openDayAll" type="checkbox" /> All days</label>
+                  <label><input name="openDay" type="checkbox" value="Monday" /> Monday</label>
+                  <label><input name="openDay" type="checkbox" value="Tuesday" /> Tuesday</label>
+                  <label><input name="openDay" type="checkbox" value="Wednesday" /> Wednesday</label>
+                  <label><input name="openDay" type="checkbox" value="Thursday" /> Thursday</label>
+                  <label><input name="openDay" type="checkbox" value="Friday" /> Friday</label>
+                  <label><input name="openDay" type="checkbox" value="Saturday" /> Saturday</label>
+                  <label><input name="openDay" type="checkbox" value="Sunday" /> Sunday</label>
+                </div>
+              </details>
+            </div>
+            <div class="time-window-field">
+              <span class="field-label">Open play hours</span>
+              <div id="newTimeWindows" class="time-window-list"></div>
+              <button id="addTimeWindow" class="secondary-button compact-button" type="button">Add time window</button>
+            </div>
           </div>
           <label class="field-notes">Notes
             <textarea id="newNotes" rows="3" placeholder="Parking, nets, crowd, source, beginner-friendly notes..."></textarea>
           </label>
-          <div class="time-window-field">
-            <span class="field-label">Open play hours</span>
-            <div id="newTimeWindows" class="time-window-list"></div>
-            <button id="addTimeWindow" class="secondary-button compact-button" type="button">Add time window</button>
-          </div>
           <label class="field-website">Website / registration link
             <input id="newWebsite" type="text" inputmode="url" placeholder="https://example.com" />
           </label>

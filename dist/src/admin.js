@@ -55,6 +55,8 @@ const elements = {
   navButtons: document.querySelectorAll('[data-admin-view]'),
   moderationSubnav: document.querySelector('#moderationSubnav'),
   moderationNavButtons: document.querySelectorAll('[data-moderation-view]'),
+  locationsSubnav: document.querySelector('#locationsSubnav'),
+  locationNavButtons: document.querySelectorAll('[data-location-view]'),
   deleteDialog: document.querySelector('#adminDeleteDialog'),
   deleteForm: document.querySelector('#adminDeleteForm'),
   deleteMessage: document.querySelector('#adminDeleteMessage')
@@ -62,6 +64,7 @@ const elements = {
 
 let allCourts = [];
 let activeModerationView = 'pending';
+let activeLocationView = 'approved';
 let authUsers = null;
 let currentAdminUser = null;
 let deleteConfirmationRequest = null;
@@ -254,6 +257,17 @@ function adminReviewPhotosFromButton(button) {
       url: item.dataset.adminReviewPhotoUrl,
       alt: item.dataset.adminReviewPhotoAlt || '',
       caption: item.dataset.adminReviewPhotoCaption || 'Review photo',
+      index
+    }))
+    .filter(photo => photo.url);
+}
+
+function adminModerationPhotosFromButton(button) {
+  return [...elements.moderationList.querySelectorAll('[data-open-admin-moderation-photo]')]
+    .map((item, index) => ({
+      url: item.dataset.adminModerationPhotoUrl,
+      alt: item.dataset.adminModerationPhotoAlt || '',
+      caption: item.dataset.adminModerationPhotoCaption || 'Pending photo',
       index
     }))
     .filter(photo => photo.url);
@@ -847,14 +861,13 @@ function syncUserAttribution(user) {
 
 function mergeSavedLocations(seedCourts, savedCourts) {
   const deletedIds = new Set(getDeletedLocationIds());
-  const visibleSavedCourts = savedCourts.filter(court => (court.status || 'approved') !== 'archived');
-  const savedById = new Map(visibleSavedCourts.map(court => [court.id, court]));
+  const savedById = new Map(savedCourts.map(court => [court.id, court]));
   const seedIds = new Set(seedCourts.map(court => court.id));
   return [
     ...seedCourts
-      .filter(court => !deletedIds.has(court.id))
-      .map(court => savedById.get(court.id) || court),
-    ...visibleSavedCourts.filter(court => !seedIds.has(court.id) && !deletedIds.has(court.id))
+      .map(court => savedById.get(court.id) || court)
+      .filter(court => !deletedIds.has(court.id) || normalizedLocationStatus(court) === 'archived'),
+    ...savedCourts.filter(court => !seedIds.has(court.id))
   ];
 }
 
@@ -874,6 +887,7 @@ function showView(viewName) {
     button.classList.toggle('is-active', button.dataset.adminView === viewName);
   });
   elements.moderationSubnav.hidden = viewName !== 'moderation';
+  elements.locationsSubnav.hidden = viewName !== 'locations';
   elements.moderationView.hidden = viewName !== 'moderation';
   elements.usersView.hidden = viewName !== 'users';
   elements.locationsView.hidden = viewName !== 'locations';
@@ -884,6 +898,12 @@ function showModerationView(viewName) {
   activeModerationView = viewName;
   showView('moderation');
   renderModeration();
+}
+
+function showLocationView(viewName) {
+  activeLocationView = viewName;
+  showView('locations');
+  renderLocations();
 }
 
 function openAdminDialog(dialog) {
@@ -1065,6 +1085,7 @@ function findReviewForReport(report) {
 }
 
 function expandLocationEditorForReport(court, review = null) {
+  activeLocationView = locationViewForCourt(court);
   renderLocations();
   showView('locations');
 
@@ -1303,6 +1324,60 @@ function setModerationNavLabels(queues) {
   });
 }
 
+function normalizedLocationStatus(court = {}) {
+  return court.status || 'approved';
+}
+
+function locationViewForCourt(court = {}) {
+  return normalizedLocationStatus(court) === 'archived' ? 'deleted' : normalizedLocationStatus(court);
+}
+
+function locationStatusLabel(court = {}) {
+  const status = normalizedLocationStatus(court);
+  return status === 'archived' ? 'deleted' : status;
+}
+
+function locationViewQueues() {
+  const approved = allCourts.filter(court => normalizedLocationStatus(court) === 'approved');
+  const pending = allCourts.filter(court => normalizedLocationStatus(court) === 'pending');
+  const rejected = allCourts.filter(court => normalizedLocationStatus(court) === 'rejected');
+  const deleted = allCourts.filter(court => normalizedLocationStatus(court) === 'archived');
+
+  return {
+    approved: {
+      title: 'Approved locations',
+      countText: `${approved.length} approved location${approved.length === 1 ? '' : 's'}`,
+      items: approved,
+      emptyText: 'No approved locations.'
+    },
+    pending: {
+      title: 'Pending locations',
+      countText: `${pending.length} pending location${pending.length === 1 ? '' : 's'}`,
+      items: pending,
+      emptyText: 'No pending locations.'
+    },
+    rejected: {
+      title: 'Rejected locations',
+      countText: `${rejected.length} rejected location${rejected.length === 1 ? '' : 's'}`,
+      items: rejected,
+      emptyText: 'No rejected locations.'
+    },
+    deleted: {
+      title: 'Deleted locations',
+      countText: `${deleted.length} deleted location${deleted.length === 1 ? '' : 's'}`,
+      items: deleted,
+      emptyText: 'No deleted locations.'
+    }
+  };
+}
+
+function setLocationNavLabels(queues) {
+  elements.locationNavButtons.forEach(button => {
+    const queue = queues[button.dataset.locationView];
+    if (queue) button.textContent = titleWithCount(queue.title, queue.items.length);
+  });
+}
+
 function moderationSection(title, items, emptyText, renderItem, description = '') {
   return `
     <section class="moderation-section">
@@ -1360,7 +1435,9 @@ function renderModeration() {
       description: 'Approve useful court photos before they appear publicly on the map.',
       renderItem: photo => `
         <article class="moderation-item moderation-photo-item">
-          <img class="moderation-photo-preview" src="${escapeHtml(photo.url)}" alt="${escapeHtml(`${photo.locationName} submitted photo`)}" loading="lazy" />
+          <button class="moderation-photo-preview-button" type="button" data-open-admin-moderation-photo data-admin-moderation-photo-url="${escapeHtml(photo.url)}" data-admin-moderation-photo-alt="${escapeHtml(`${photo.locationName || 'Location'} submitted photo`)}" data-admin-moderation-photo-caption="${escapeHtml(photo.locationName || 'Location photo')}" aria-label="Open ${escapeHtml(photo.locationName || 'location')} submitted photo">
+            <img class="moderation-photo-preview" src="${escapeHtml(photo.url)}" alt="${escapeHtml(`${photo.locationName || 'Location'} submitted photo`)}" loading="lazy" />
+          </button>
           <div class="moderation-item-main">
             <div class="moderation-item-title-row">
               <strong>${escapeHtml(photo.locationName || 'Location photo')}</strong>
@@ -1455,6 +1532,13 @@ function renderModeration() {
   });
   elements.moderationList.querySelectorAll('[data-reject-photo]').forEach(button => {
     button.addEventListener('click', () => rejectPhoto(button.dataset.rejectPhoto));
+  });
+  elements.moderationList.querySelectorAll('[data-open-admin-moderation-photo]').forEach(button => {
+    button.addEventListener('click', () => {
+      const lightboxPhotos = adminModerationPhotosFromButton(button);
+      const index = lightboxPhotos.findIndex(photo => photo.url === button.dataset.adminModerationPhotoUrl);
+      openAdminPhotoLightbox(lightboxPhotos, index >= 0 ? index : 0, button);
+    });
   });
   elements.moderationList.querySelectorAll('[data-approve-suggested-edit]').forEach(button => {
     button.addEventListener('click', () => approveSuggestedEdit(button.dataset.approveSuggestedEdit));
@@ -1632,11 +1716,33 @@ async function saveUserEdit(event) {
   }
 }
 
+function locationActionHtml(court) {
+  const status = normalizedLocationStatus(court);
+  const approveLabel = status === 'pending' ? 'Approve' : 'Re-approve';
+  const actions = [
+    '<button class="secondary-button admin-edit-button" type="button" data-edit-row>Edit</button>'
+  ];
+
+  if (status === 'pending' || status === 'rejected' || status === 'archived') {
+    actions.push(`<button class="secondary-button admin-edit-button admin-approve-button" type="button" data-approve-location="${escapeHtml(court.id)}">${approveLabel}</button>`);
+  }
+
+  if (status === 'pending') {
+    actions.push(`<button class="secondary-button admin-delete-button" type="button" data-reject-location="${escapeHtml(court.id)}">Reject</button>`);
+  }
+
+  if (status !== 'archived') {
+    actions.push('<button class="secondary-button admin-delete-button" type="button" data-delete-location>Delete</button>');
+  }
+
+  return actions.join('');
+}
+
 function locationCard(court) {
   const card = document.createElement('article');
   card.className = 'admin-card';
   const courtAccessLabel = accessLabel(court);
-  const statusLabel = court.status || 'approved';
+  const statusLabel = locationStatusLabel(court);
   const skillLabel = court.estimatedSkillLevel || 'unknown';
   const photoCount = court.photos?.length || 0;
   const areaLabel = [court.city, court.state].filter(Boolean).join(', ');
@@ -1655,8 +1761,7 @@ function locationCard(court) {
       <span>${escapeHtml(court.openPlay?.[0]?.days || 'Days TBD')}</span>
       <span>${escapeHtml(photoCount)}</span>
       <div class="admin-row-actions">
-        <button class="secondary-button admin-edit-button" type="button" data-edit-row>Edit</button>
-        <button class="secondary-button admin-delete-button" type="button" data-delete-location>Delete</button>
+        ${locationActionHtml(court)}
       </div>
     </div>
     <form class="admin-edit-form" data-location-id="${escapeHtml(court.id)}" hidden>
@@ -1678,7 +1783,9 @@ function locationCard(court) {
 
   card.querySelector('[data-edit-row]').addEventListener('click', () => expandAdminRow(card));
   card.querySelector('[data-cancel-edit]').addEventListener('click', () => collapseAdminRow(card));
-  card.querySelector('[data-delete-location]').addEventListener('click', () => deleteLocation(court));
+  card.querySelector('[data-approve-location]')?.addEventListener('click', () => approveLocation(court.id));
+  card.querySelector('[data-reject-location]')?.addEventListener('click', () => rejectLocation(court.id));
+  card.querySelector('[data-delete-location]')?.addEventListener('click', () => deleteLocation(court));
   const form = card.querySelector('form');
   setupAdminLocationForm(form, court);
   setupAdminReviewEditors(form, court);
@@ -1687,10 +1794,27 @@ function locationCard(court) {
 }
 
 function renderLocations() {
-  setAdminNavLabel('locations', 'Locations', allCourts.length);
-  elements.locationsTitle.textContent = titleWithCount('Open-play locations', allCourts.length);
-  elements.locationCount.textContent = `${allCourts.length} location${allCourts.length === 1 ? '' : 's'}`;
-  elements.locationsList.replaceChildren(adminListHeader('location'), ...allCourts.map(locationCard));
+  const queues = locationViewQueues();
+  const activeQueue = queues[activeLocationView] || queues.approved;
+  const total = Object.values(queues).reduce((sum, queue) => sum + queue.items.length, 0);
+
+  setAdminNavLabel('locations', 'Locations', total);
+  setLocationNavLabels(queues);
+  elements.locationsTitle.textContent = titleWithCount(activeQueue.title, activeQueue.items.length);
+  elements.locationCount.textContent = activeQueue.countText;
+  elements.locationNavButtons.forEach(button => {
+    button.classList.toggle('is-active', button.dataset.locationView === activeLocationView);
+  });
+
+  if (!activeQueue.items.length) {
+    const empty = document.createElement('p');
+    empty.className = 'empty-profile-list';
+    empty.textContent = activeQueue.emptyText;
+    elements.locationsList.replaceChildren(empty);
+    return;
+  }
+
+  elements.locationsList.replaceChildren(adminListHeader('location'), ...activeQueue.items.map(locationCard));
 }
 
 function drawingStatusLabel(period) {
@@ -1864,7 +1988,13 @@ async function approveLocation(locationId) {
       renderUsers();
       renderDrawings();
     } catch (error) {
-      elements.moderationList.querySelector(`[data-approve-location="${CSS.escape(locationId)}"]`)?.closest('.moderation-item')?.querySelector('.moderation-meta')?.insertAdjacentHTML('afterend', `<p class="form-hint">${escapeHtml(error.message)}</p>`);
+      const moderationTarget = elements.moderationList.querySelector(`[data-approve-location="${CSS.escape(locationId)}"]`);
+      const moderationMeta = moderationTarget?.closest('.moderation-item')?.querySelector('.moderation-meta');
+      if (moderationMeta) {
+        moderationMeta.insertAdjacentHTML('afterend', `<p class="form-hint">${escapeHtml(error.message)}</p>`);
+      } else {
+        window.alert(error.message || 'Could not approve that location.');
+      }
     }
     return;
   }
@@ -1875,9 +2005,10 @@ async function approveLocation(locationId) {
       ? { ...court, status: 'approved', approvedAt: todayIso(), updatedAt: court.updatedAt || todayIso() }
       : court
   ));
+  saveDeletedLocationIds(getDeletedLocationIds().filter(id => id !== locationId));
   saveSubmissions(nextSubmissions);
   saveCredits(getSavedCredits().map(credit => (
-    credit.targetType === 'location' && credit.targetId === locationId && credit.status === 'pending'
+    credit.targetType === 'location' && credit.targetId === locationId && credit.status !== 'approved'
       ? { ...credit, status: 'approved' }
       : credit
   )));
@@ -1889,6 +2020,8 @@ async function approveLocation(locationId) {
   }
   renderModeration();
   renderLocations();
+  renderUsers();
+  renderDrawings();
 }
 
 async function rejectLocation(locationId) {
@@ -1907,20 +2040,33 @@ async function rejectLocation(locationId) {
       renderUsers();
       renderDrawings();
     } catch (error) {
-      elements.moderationList.querySelector(`[data-reject-location="${CSS.escape(locationId)}"]`)?.closest('.moderation-item')?.querySelector('.moderation-meta')?.insertAdjacentHTML('afterend', `<p class="form-hint">${escapeHtml(error.message)}</p>`);
+      const moderationTarget = elements.moderationList.querySelector(`[data-reject-location="${CSS.escape(locationId)}"]`);
+      const moderationMeta = moderationTarget?.closest('.moderation-item')?.querySelector('.moderation-meta');
+      if (moderationMeta) {
+        moderationMeta.insertAdjacentHTML('afterend', `<p class="form-hint">${escapeHtml(error.message)}</p>`);
+      } else {
+        window.alert(error.message || 'Could not reject that location.');
+      }
     }
     return;
   }
 
-  saveSubmissions(getSavedSubmissions().filter(item => item.id !== locationId));
+  const rejected = {
+    ...court,
+    status: 'rejected',
+    updatedAt: todayIso()
+  };
+  upsertSavedLocation(rejected);
   saveCredits(getSavedCredits().map(credit => (
     credit.targetType === 'location' && credit.targetId === locationId && credit.status === 'pending'
       ? { ...credit, status: 'rejected' }
       : credit
   )));
-  allCourts = allCourts.filter(item => item.id !== locationId);
+  allCourts = allCourts.map(item => item.id === locationId ? rejected : item);
   renderModeration();
   renderLocations();
+  renderUsers();
+  renderDrawings();
 }
 
 async function updatePhotoModerationStatus(photoId, status) {
@@ -2314,12 +2460,14 @@ async function deleteReportedLocation(report) {
 
   if (court.remoteId && window.OpenPlaySupabase?.updateLocationStatus) {
     try {
-      await window.OpenPlaySupabase.updateLocationStatus(court.remoteId, 'archived', currentAdminUser?.id);
+      const archived = await window.OpenPlaySupabase.updateLocationStatus(court.remoteId, 'archived', currentAdminUser?.id);
       if (report.remoteId && window.OpenPlaySupabase?.updateReportStatus) {
         await window.OpenPlaySupabase.updateReportStatus(report.remoteId, 'resolved', currentAdminUser?.id);
       }
       await loadBackendCollections();
-      allCourts = allCourts.filter(item => item.id !== court.id && item.remoteId !== court.remoteId);
+      allCourts = allCourts.map(item => (
+        item.id === court.id || item.remoteId === court.remoteId ? archived : item
+      ));
       markReportResolved(report.id);
       renderModeration();
       renderLocations();
@@ -2339,15 +2487,14 @@ async function deleteReportedLocation(report) {
   const deletedIds = new Set(getDeletedLocationIds());
   deletedIds.add(court.id);
   saveDeletedLocationIds([...deletedIds]);
-  saveSubmissions(getSavedSubmissions().filter(item => item.id !== court.id));
-  const reviews = getSavedReviews();
-  delete reviews[court.id];
-  if (court.remoteId) delete reviews[court.remoteId];
-  saveReviews(reviews);
+  const archived = { ...court, status: 'archived', updatedAt: todayIso() };
+  upsertSavedLocation(archived);
   markReportResolved(report.id);
-  allCourts = allCourts.filter(item => item.id !== court.id);
+  allCourts = allCourts.map(item => item.id === court.id ? archived : item);
   renderModeration();
   renderLocations();
+  renderUsers();
+  renderDrawings();
 }
 
 async function deleteReportedContribution(reportId) {
@@ -2371,9 +2518,9 @@ async function deleteLocation(court) {
 
   if (court.remoteId) {
     try {
-      await window.OpenPlaySupabase.updateLocationStatus(court.remoteId, 'archived', currentAdminUser?.id);
+      const archived = await window.OpenPlaySupabase.updateLocationStatus(court.remoteId, 'archived', currentAdminUser?.id);
       await loadBackendCollections();
-      allCourts = allCourts.filter(item => item.id !== court.id);
+      allCourts = allCourts.map(item => item.id === court.id ? archived : item);
       renderModeration();
       renderLocations();
       renderUsers();
@@ -2392,16 +2539,16 @@ async function deleteLocation(court) {
   const deletedIds = new Set(getDeletedLocationIds());
   deletedIds.add(court.id);
   saveDeletedLocationIds([...deletedIds]);
-  saveSubmissions(getSavedSubmissions().filter(item => item.id !== court.id));
-  const reviews = getSavedReviews();
-  delete reviews[court.id];
-  saveReviews(reviews);
+  const archived = { ...court, status: 'archived', updatedAt: todayIso() };
+  upsertSavedLocation(archived);
   saveReports(getSavedReports().map(report => (
     report.targetId === court.id ? { ...report, status: 'resolved', resolvedAt: todayIso() } : report
   )));
-  allCourts = allCourts.filter(item => item.id !== court.id);
+  allCourts = allCourts.map(item => item.id === court.id ? archived : item);
   renderModeration();
   renderLocations();
+  renderUsers();
+  renderDrawings();
 }
 
 async function saveLocationEdit(event) {
@@ -2561,6 +2708,7 @@ async function init() {
   if (!isAdmin(currentAdminUser)) {
     elements.guard.hidden = false;
     elements.moderationSubnav.hidden = true;
+    elements.locationsSubnav.hidden = true;
     elements.moderationView.hidden = true;
     elements.usersView.hidden = true;
     elements.locationsView.hidden = true;
@@ -2583,6 +2731,10 @@ elements.navButtons.forEach(button => {
 
 elements.moderationNavButtons.forEach(button => {
   button.addEventListener('click', () => showModerationView(button.dataset.moderationView));
+});
+
+elements.locationNavButtons.forEach(button => {
+  button.addEventListener('click', () => showLocationView(button.dataset.locationView));
 });
 
 elements.deleteForm.addEventListener('submit', event => {

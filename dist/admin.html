@@ -42,6 +42,12 @@
         </div>
         <button class="admin-nav-button" type="button" data-admin-view="users">Users</button>
         <button class="admin-nav-button" type="button" data-admin-view="locations">Locations</button>
+        <div id="locationsSubnav" class="admin-subnav" aria-label="Location status queues" hidden>
+          <button class="admin-subnav-button is-active" type="button" data-location-view="approved">Approved locations</button>
+          <button class="admin-subnav-button" type="button" data-location-view="pending">Pending locations</button>
+          <button class="admin-subnav-button" type="button" data-location-view="rejected">Rejected locations</button>
+          <button class="admin-subnav-button" type="button" data-location-view="deleted">Deleted locations</button>
+        </div>
         <button class="admin-nav-button" type="button" data-admin-view="drawings">Drawings</button>
         <a class="secondary-button admin-map-link" href="index.html">Back to map</a>
       </aside>

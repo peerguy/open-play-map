@@ -12,6 +12,12 @@ const DAILY_REVIEW_LIMIT = 10;
 const MIN_REVIEW_FIELDS = 3;
 const LOCAL_PROTOTYPE_HOSTS = new Set(['', 'localhost', '127.0.0.1']);
 const PRODUCTION_DATABASE_UNAVAILABLE = 'The production database is unavailable, so this was not saved. Please try again in a few minutes.';
+const TIME_OPTION_START_MINUTES = 6 * 60;
+const TIME_OPTION_INTERVAL_MINUTES = 30;
+const TIME_OPTION_COUNT = (24 * 60) / TIME_OPTION_INTERVAL_MINUTES;
+const TIME_WHEEL_CYCLES = 7;
+const TIME_WHEEL_MIDDLE_CYCLE = Math.floor(TIME_WHEEL_CYCLES / 2);
+const TIME_WHEEL_SCROLL_DEBOUNCE_MS = 80;
 
 const CREDIT_VALUES = {
   'add-review': 1,
@@ -843,14 +849,141 @@ function formatTimeOption(minutes) {
   return `${hour12}:${String(minute).padStart(2, '0')} ${period}`;
 }
 
+function timeOptions() {
+  return Array.from({ length: TIME_OPTION_COUNT }, (_, index) => {
+    const minutes = (TIME_OPTION_START_MINUTES + (index * TIME_OPTION_INTERVAL_MINUTES)) % (24 * 60);
+    const label = formatTimeOption(minutes);
+    return { value: label, label };
+  });
+}
+
+function timeWheelValues() {
+  return [{ value: '', label: 'Select' }, ...timeOptions()];
+}
+
 function timeSelectOptions(selected = '') {
   const options = ['<option value="">Select time</option>'];
-  for (let offset = 0; offset < 24 * 60; offset += 30) {
-    const minutes = (6 * 60 + offset) % (24 * 60);
-    const label = formatTimeOption(minutes);
-    options.push(`<option value="${label}"${selected === label ? ' selected' : ''}>${label}</option>`);
-  }
+  timeOptions().forEach(({ value, label }) => {
+    options.push(`<option value="${escapeHtml(value)}"${selected === value ? ' selected' : ''}>${escapeHtml(label)}</option>`);
+  });
   return options.join('');
+}
+
+function timeWheelOptions(selected = '') {
+  const values = timeWheelValues();
+  return Array.from({ length: TIME_WHEEL_CYCLES }, (_, cycle) => values.map((option, index) => {
+    const isSelected = selected === option.value && cycle === TIME_WHEEL_MIDDLE_CYCLE;
+    return `
+      <div
+        class="time-wheel-option${isSelected ? ' is-selected' : ''}"
+        role="option"
+        data-time-value="${escapeHtml(option.value)}"
+        data-time-index="${index}"
+        data-time-cycle="${cycle}"
+        aria-selected="${isSelected ? 'true' : 'false'}"
+      >${escapeHtml(option.label)}</div>
+    `;
+  }).join('')).join('');
+}
+
+function timeWheelSelect(wheel) {
+  return wheel.closest('label')?.querySelector('[data-time-start], [data-time-end]') || null;
+}
+
+function nearestTimeWheelOption(wheel) {
+  const options = [...wheel.querySelectorAll('.time-wheel-option')];
+  const center = wheel.scrollTop + (wheel.clientHeight / 2);
+  return options.reduce((nearest, option) => {
+    const optionCenter = option.offsetTop + (option.offsetHeight / 2);
+    const distance = Math.abs(optionCenter - center);
+    return !nearest || distance < nearest.distance ? { option, distance } : nearest;
+  }, null)?.option || null;
+}
+
+function setTimeWheelSelection(wheel, value, activeOption = null) {
+  const select = timeWheelSelect(wheel);
+  if (select) select.value = value;
+  wheel.dataset.timeValue = value;
+  wheel.querySelectorAll('.time-wheel-option').forEach(option => {
+    const isSelectedValue = option.dataset.timeValue === value;
+    const isActive = activeOption ? option === activeOption : isSelectedValue && Number(option.dataset.timeCycle) === TIME_WHEEL_MIDDLE_CYCLE;
+    option.classList.toggle('is-selected', isSelectedValue);
+    option.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+}
+
+function centerTimeWheelOption(wheel, value) {
+  const fallbackValue = value || '';
+  const option = [...wheel.querySelectorAll('.time-wheel-option')]
+    .find(item => item.dataset.timeValue === fallbackValue && Number(item.dataset.timeCycle) === TIME_WHEEL_MIDDLE_CYCLE);
+  if (!option) return;
+  wheel.scrollTop = option.offsetTop - ((wheel.clientHeight - option.offsetHeight) / 2);
+  setTimeWheelSelection(wheel, fallbackValue, option);
+}
+
+function syncTimeWheelFromScroll(wheel) {
+  const option = nearestTimeWheelOption(wheel);
+  if (!option) return;
+
+  const value = option.dataset.timeValue || '';
+  const cycle = Number(option.dataset.timeCycle);
+  setTimeWheelSelection(wheel, value, option);
+
+  if (cycle <= 1 || cycle >= TIME_WHEEL_CYCLES - 2) {
+    centerTimeWheelOption(wheel, value);
+  }
+}
+
+function stepTimeWheel(wheel, delta) {
+  const values = timeWheelValues();
+  const currentIndex = Math.max(0, values.findIndex(option => option.value === (wheel.dataset.timeValue || '')));
+  const nextIndex = (currentIndex + delta + values.length) % values.length;
+  centerTimeWheelOption(wheel, values[nextIndex].value);
+}
+
+function setupTimeWheel(wheel) {
+  const select = timeWheelSelect(wheel);
+  let scrollTimer = null;
+  let scrollFrame = null;
+
+  wheel.addEventListener('scroll', () => {
+    if (!scrollFrame) {
+      scrollFrame = requestAnimationFrame(() => {
+        scrollFrame = null;
+        const option = nearestTimeWheelOption(wheel);
+        if (option) setTimeWheelSelection(wheel, option.dataset.timeValue || '', option);
+      });
+    }
+    window.clearTimeout(scrollTimer);
+    scrollTimer = window.setTimeout(() => syncTimeWheelFromScroll(wheel), TIME_WHEEL_SCROLL_DEBOUNCE_MS);
+  }, { passive: true });
+
+  wheel.addEventListener('click', event => {
+    const option = event.target.closest('.time-wheel-option');
+    if (!option) return;
+    centerTimeWheelOption(wheel, option.dataset.timeValue || '');
+  });
+
+  wheel.addEventListener('keydown', event => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      stepTimeWheel(wheel, 1);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      stepTimeWheel(wheel, -1);
+    }
+  });
+
+  select?.addEventListener('change', () => centerTimeWheelOption(wheel, select.value));
+  requestAnimationFrame(() => centerTimeWheelOption(wheel, select?.value || ''));
+}
+
+function refreshTimeWheels() {
+  requestAnimationFrame(() => {
+    elements.newTimeWindows.querySelectorAll('[data-time-wheel]').forEach(wheel => {
+      centerTimeWheelOption(wheel, timeWheelSelect(wheel)?.value || '');
+    });
+  });
 }
 
 function addTimeWindow(slot = {}) {
@@ -858,10 +991,12 @@ function addTimeWindow(slot = {}) {
   row.className = 'time-window-row';
   row.innerHTML = `
     <label>Start
-      <select data-time-start size="6">${timeSelectOptions(slot.start || '')}</select>
+      <select data-time-start class="time-select" size="6">${timeSelectOptions(slot.start || '')}</select>
+      <div class="time-wheel" data-time-wheel role="listbox" tabindex="0" aria-label="Start time">${timeWheelOptions(slot.start || '')}</div>
     </label>
     <label>End
-      <select data-time-end size="6">${timeSelectOptions(slot.end || '')}</select>
+      <select data-time-end class="time-select" size="6">${timeSelectOptions(slot.end || '')}</select>
+      <div class="time-wheel" data-time-wheel role="listbox" tabindex="0" aria-label="End time">${timeWheelOptions(slot.end || '')}</div>
     </label>
     <button class="icon-button time-window-remove" type="button" aria-label="Remove time window">×</button>
   `;
@@ -871,9 +1006,11 @@ function addTimeWindow(slot = {}) {
     } else {
       row.querySelector('[data-time-start]').value = '';
       row.querySelector('[data-time-end]').value = '';
+      row.querySelectorAll('[data-time-wheel]').forEach(wheel => centerTimeWheelOption(wheel, ''));
     }
   });
   elements.newTimeWindows.append(row);
+  row.querySelectorAll('[data-time-wheel]').forEach(setupTimeWheel);
 }
 
 function resetTimeWindows(slots = [{}]) {
@@ -2242,6 +2379,7 @@ function openSubmitDialog() {
   document.body.classList.add('is-submitting-location');
   elements.submitDialog.show();
   resetDialogScroll(elements.submitDialog, elements.locationForm, { focusCloseButton: true });
+  refreshTimeWheels();
   if (!isMobileLayout()) {
     elements.placeSearch.focus();
   }
@@ -2274,6 +2412,7 @@ function openEditDialog(id) {
   document.body.classList.add('is-submitting-location');
   elements.submitDialog.show();
   resetDialogScroll(elements.submitDialog, elements.locationForm, { focusCloseButton: true });
+  refreshTimeWheels();
   setTimeout(() => map.invalidateSize(), 50);
 }
 
@@ -2303,6 +2442,7 @@ function openSuggestEditDialog(id) {
   document.body.classList.add('is-submitting-location');
   elements.submitDialog.show();
   resetDialogScroll(elements.submitDialog, elements.locationForm, { focusCloseButton: true });
+  refreshTimeWheels();
   if (!isMobileLayout()) {
     elements.suggestEditReason.focus();
   }
