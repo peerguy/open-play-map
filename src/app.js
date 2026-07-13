@@ -5,6 +5,7 @@ const CREDITS_KEY = 'open-play-map-credits';
 const DELETED_LOCATIONS_KEY = 'open-play-map-deleted-locations';
 const REPORTS_KEY = 'open-play-map-reports';
 const EDITS_KEY = 'open-play-map-suggested-edits';
+const INTRO_SEEN_KEY = 'open-play-map-intro-seen-v1';
 const DEFAULT_ICON = 'OP';
 
 const DAILY_LOCATION_LIMIT = 10;
@@ -150,6 +151,7 @@ const elements = {
   courtList: document.querySelector('#courtList'),
   mobileSheetHandle: document.querySelector('.mobile-sheet-handle'),
   mobileResultsBar: document.querySelector('.mobile-results-bar'),
+  introDialog: document.querySelector('#introDialog'),
   submitDialog: document.querySelector('#submitDialog'),
   locationForm: document.querySelector('#locationForm'),
   submitEyebrow: document.querySelector('#submitDialog .form-header .eyebrow'),
@@ -1238,6 +1240,41 @@ function closeDialog(dialog) {
   } else {
     dialog.removeAttribute('open');
   }
+}
+
+function hasSeenIntroDialog() {
+  try {
+    return localStorage.getItem(INTRO_SEEN_KEY) === 'true';
+  } catch {
+    return true;
+  }
+}
+
+function markIntroDialogSeen(action = 'dismiss') {
+  try {
+    localStorage.setItem(INTRO_SEEN_KEY, 'true');
+  } catch {
+    // Storage can be unavailable in private or restricted browser contexts.
+  }
+  trackAnalyticsEvent('intro_dialog_dismissed', { action });
+}
+
+function openIntroDialog({ automatic = false } = {}) {
+  if (!elements.introDialog) return;
+  if (automatic && hasSeenIntroDialog()) return;
+
+  trackAnalyticsEvent('intro_dialog_opened', {
+    source: automatic ? 'first_visit' : 'manual'
+  });
+  openDialog(elements.introDialog);
+}
+
+function closeIntroDialog(action = 'dismiss') {
+  if (!elements.introDialog) return;
+  if (!hasSeenIntroDialog()) {
+    markIntroDialogSeen(action);
+  }
+  closeDialog(elements.introDialog);
 }
 
 function resetDialogScroll(dialog, form, { focusCloseButton = false } = {}) {
@@ -3096,6 +3133,8 @@ async function init() {
     fitMapToLoadedCourts();
     render();
   }
+
+  setTimeout(() => openIntroDialog({ automatic: true }), 450);
 }
 
 async function loadSeedCourts() {
@@ -3185,6 +3224,10 @@ document.querySelectorAll('[data-open-submit]').forEach(button => {
   button.addEventListener('click', openSubmitDialog);
 });
 
+document.querySelectorAll('[data-open-intro]').forEach(button => {
+  button.addEventListener('click', () => openIntroDialog());
+});
+
 setupMobileSheetDrag();
 preventPageZoomOverMap();
 
@@ -3241,6 +3284,25 @@ document.querySelectorAll('[data-close-report]').forEach(button => {
 
 document.querySelectorAll('[data-close-submission]').forEach(button => {
   button.addEventListener('click', () => closeDialog(elements.submissionDialog));
+});
+
+document.querySelectorAll('[data-close-intro]').forEach(button => {
+  button.addEventListener('click', () => closeIntroDialog('dismiss'));
+});
+
+document.querySelectorAll('[data-intro-explore]').forEach(button => {
+  button.addEventListener('click', () => closeIntroDialog('explore'));
+});
+
+document.querySelector('[data-intro-add]')?.addEventListener('click', () => {
+  closeIntroDialog('add_spot');
+  openSubmitDialog();
+});
+
+elements.introDialog?.addEventListener('close', () => {
+  if (!hasSeenIntroDialog()) {
+    markIntroDialogSeen('native_close');
+  }
 });
 
 elements.locationForm.addEventListener('submit', addSubmittedLocation);

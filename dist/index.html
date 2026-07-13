@@ -25,7 +25,7 @@
     <link rel="icon" type="image/svg+xml" href="assets/icons/open-play-favicon.svg" />
     <link rel="stylesheet" href="src/leaflet-fix.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-    <link rel="stylesheet" href="src/styles.css?v=day-chip-square-20260623" />
+    <link rel="stylesheet" href="src/styles.css?v=first-visit-intro-20260713" />
   </head>
   <body class="map-page">
     <header class="site-header">
@@ -37,6 +37,7 @@
           <div class="brand-title-row">
             <h1>Open Play Map</h1>
             <a class="brand-about-link" href="about.html">About <span class="about-question" aria-hidden="true">?</span></a>
+            <button class="brand-intro-button" type="button" data-open-intro aria-label="How the Open Play Map works">?</button>
             <span class="brand-link-divider" aria-hidden="true">|</span>
             <a class="brand-store-link" href="https://scooppickleball.com/">Scoop Store</a>
           </div>
@@ -154,6 +155,44 @@
         <div id="map"></div>
       </section>
     </main>
+
+    <dialog id="introDialog" class="submit-dialog intro-dialog">
+      <form class="location-form intro-form" method="dialog">
+        <div class="form-header">
+          <div>
+            <p class="eyebrow">Welcome</p>
+            <h2>Welcome to the Scoop Open Play Map</h2>
+            <p>Find pickleball open play near you and help other players keep the map accurate.</p>
+          </div>
+          <button class="icon-button" type="button" data-close-intro aria-label="Close">×</button>
+        </div>
+
+        <div class="intro-steps" aria-label="How to use the Open Play Map">
+          <div class="intro-step">
+            <span aria-hidden="true">1</span>
+            <p>Tap any pin to see open play times, skill levels, fees, photos, and player notes.</p>
+          </div>
+          <div class="intro-step">
+            <span aria-hidden="true">2</span>
+            <p>Use search and filters to find the right place to play today.</p>
+          </div>
+          <div class="intro-step">
+            <span aria-hidden="true">3</span>
+            <p>Add missing locations or suggest updates so the pickleball community gets better info.</p>
+          </div>
+        </div>
+
+        <div class="intro-contribute-note">
+          <strong>Know a local open play spot?</strong>
+          <p>Your updates help players find good games faster.</p>
+        </div>
+
+        <div class="form-actions intro-actions">
+          <button class="secondary-button" type="button" data-intro-add>Add a Spot</button>
+          <button class="primary-button" type="button" data-intro-explore>Explore Map</button>
+        </div>
+      </form>
+    </dialog>
 
     <dialog id="submitDialog" class="submit-dialog">
       <form id="locationForm" class="location-form" method="dialog">
@@ -444,7 +483,7 @@
     <script src="src/supabase-data.js?v=coordinate-guard-20260623"></script>
     <script src="src/supabase-auth.js?v=account-settings-20260617"></script>
     <script src="src/mobile-header.js?v=mobile-map-default-20260616"></script>
-    <script src="src/app.js?v=coordinate-guard-20260623"></script>
+    <script src="src/app.js?v=first-visit-intro-20260713"></script>
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"3fc55473a35e4ebab1d1f5d5f77db55d"}'></script>
   </body>
 </html>
