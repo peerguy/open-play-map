@@ -54,6 +54,27 @@ function avatarInitials(user) {
   return (user.username || user.email || '?').slice(0, 2).toUpperCase();
 }
 
+function formatLeaderboardMonth(value) {
+  if (!value) return 'Drawing month';
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString([], {
+    month: 'long',
+    year: 'numeric'
+  });
+}
+
+function formatLeaderboardDate(value) {
+  if (!value) return '';
+  const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+}
+
 function userAvatar(user) {
   if (user?.photo) {
     return `<img src="${escapeHtml(user.photo)}" alt="" />`;
@@ -177,19 +198,31 @@ function renderMonthlyWinners() {
     return;
   }
 
-  elements.winnersList.innerHTML = winners.map(winner => `
-    <article class="monthly-winner-card">
-      <span class="leaderboard-avatar" aria-hidden="true">${escapeHtml((winner.username || winner.email || 'W').slice(0, 2).toUpperCase())}</span>
-      <div>
-        <strong>${escapeHtml(winner.username || 'Monthly winner')}</strong>
-        <span>${escapeHtml(winner.month || winner.drawnAt || 'Drawing month')}</span>
-      </div>
-      <div class="monthly-winner-prize">
-        <strong>${escapeHtml(winner.prize || 'Free Scoop paddle')}</strong>
-        <span>${escapeHtml(winner.activeCreditsAtDraw ?? winner.winningCredits ?? '')}${winner.activeCreditsAtDraw || winner.winningCredits ? ' active credits at drawing' : 'Monthly drawing winner'}</span>
-      </div>
+  elements.winnersList.innerHTML = winners.map(winner => {
+    const credits = winner.activeCreditsAtDraw ?? winner.winningCredits;
+    const month = winner.month || winner.drawnAt || '';
+    const drawnAt = winner.drawnAt || '';
+    return `
+    <article class="leaderboard-row monthly-winner-row" role="row">
+      <span class="monthly-winner-month" role="cell">
+        <strong>${escapeHtml(formatLeaderboardMonth(month))}</strong>
+        ${drawnAt ? `<small>Drawn ${escapeHtml(formatLeaderboardDate(drawnAt))}</small>` : ''}
+      </span>
+      <span class="leaderboard-player monthly-winner-player" role="cell">
+        <span class="leaderboard-avatar" aria-hidden="true">${escapeHtml((winner.username || winner.email || 'W').slice(0, 2).toUpperCase())}</span>
+        <span>
+          <strong>${escapeHtml(winner.username || 'Monthly winner')}</strong>
+          <small>Monthly drawing winner</small>
+        </span>
+      </span>
+      <span class="monthly-winner-prize" role="cell">
+        <strong title="${escapeHtml(winner.prize || 'Free Scoop paddle')}">${escapeHtml(winner.prize || 'Free Scoop paddle')}</strong>
+        <small>Prize</small>
+      </span>
+      <strong class="leaderboard-score monthly-winner-score" role="cell">${credits === null || credits === undefined || credits === '' ? '0' : escapeHtml(credits)}</strong>
     </article>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function showLeaderboardTab(tabName) {

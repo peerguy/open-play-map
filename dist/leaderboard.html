@@ -23,7 +23,7 @@
     <meta name="twitter:image" content="https://play.scooppickleball.com/assets/images/about-open-play-background.jpg" />
     <meta name="twitter:image:alt" content="Pickleball players using a paddle rack and rotation board at outdoor open play courts." />
     <link rel="icon" type="image/svg+xml" href="assets/icons/open-play-favicon.svg" />
-    <link rel="stylesheet" href="src/styles.css?v=account-settings-20260617" />
+    <link rel="stylesheet" href="src/styles.css?v=winner-table-20260807" />
   </head>
   <body class="leaderboard-page">
     <header class="site-header account-header">
@@ -96,7 +96,15 @@
         </section>
 
         <section id="winnersPanel" class="leaderboard-tab-panel" role="tabpanel" aria-labelledby="winnersTab" hidden>
-          <div id="monthlyWinnersList" class="monthly-winners-list"></div>
+          <div class="leaderboard-table monthly-winners-table" role="table" aria-label="Monthly drawing winners">
+            <div class="leaderboard-row leaderboard-head monthly-winner-head" role="row">
+              <span role="columnheader">Month</span>
+              <span role="columnheader">Winner</span>
+              <span role="columnheader">Prize</span>
+              <span role="columnheader">Winning active</span>
+            </div>
+            <div id="monthlyWinnersList" class="leaderboard-list monthly-winners-list"></div>
+          </div>
         </section>
       </section>
     </main>
@@ -123,7 +131,7 @@
     <script src="src/supabase-data.js?v=production-guard-limits-20260617"></script>
     <script src="src/supabase-auth.js?v=account-settings-20260617"></script>
     <script src="src/mobile-header.js?v=mobile-map-default-20260616"></script>
-    <script src="src/leaderboard.js?v=leaderboard-reset-20260807"></script>
+    <script src="src/leaderboard.js?v=winner-table-20260807"></script>
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"3fc55473a35e4ebab1d1f5d5f77db55d"}'></script>
   </body>
 </html>
