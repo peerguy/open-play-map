@@ -5569,7 +5569,7 @@ label:has(input:required:valid) > .field-label .is-required {
 }
 
 .admin-drawing-row {
-  grid-template-columns: minmax(150px, 1.35fr) 94px 104px minmax(112px, 1fr) 126px 112px;
+  grid-template-columns: minmax(150px, 1.35fr) 94px 104px minmax(112px, 1fr) 126px minmax(132px, 140px);
 }
 
 .admin-row-main {
@@ -5619,9 +5619,19 @@ label:has(input:required:valid) > .field-label .is-required {
 }
 
 .admin-drawing-row .admin-row-actions {
+  display: grid;
+  gap: 6px;
   width: 100%;
-  justify-content: center;
-  justify-self: center;
+  min-width: 0;
+  justify-content: stretch;
+  justify-self: stretch;
+}
+
+.admin-drawing-row .admin-row-actions .secondary-button {
+  width: 100%;
+  min-width: 0;
+  padding-right: 8px;
+  padding-left: 8px;
 }
 
 .admin-edit-button,
