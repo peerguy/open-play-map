@@ -120,6 +120,12 @@ function formatAdminMonth(value) {
   });
 }
 
+function formatAdminNumber(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '0';
+  return number.toLocaleString();
+}
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -1749,11 +1755,15 @@ function locationCard(court) {
   const locationLabel = court.address && court.address !== areaLabel
     ? `${court.address}${areaLabel ? ` · ${areaLabel}` : ''}`
     : (areaLabel || court.address || 'Location');
+  const submitterLabel = court.submittedByUsername || 'Unknown';
+  const locationSummary = normalizedLocationStatus(court) === 'pending'
+    ? `${locationLabel} · Submitted by ${submitterLabel}`
+    : locationLabel;
   card.innerHTML = `
     <div class="admin-row-summary admin-location-row">
       <div class="admin-row-main">
         <h3>${escapeHtml(court.name)}</h3>
-        <p>${escapeHtml(locationLabel)}</p>
+        <p>${escapeHtml(locationSummary)}</p>
       </div>
       <span>${escapeHtml(courtAccessLabel)}</span>
       <span>${escapeHtml(statusLabel)}</span>
@@ -1819,7 +1829,7 @@ function renderLocations() {
 
 function drawingStatusLabel(period) {
   if (period.drawingStatus === 'claimed') return 'Claimed';
-  if (period.drawingStatus === 'drawn') return 'Awaiting claim';
+  if (period.drawingStatus === 'drawn') return period.winnerNotifiedAt ? 'Awaiting claim' : 'Awaiting email';
   if (period.periodStatus === 'drawn') return 'Drawn';
   if (period.periodStatus === 'cancelled') return 'Cancelled';
   return 'Scheduled';
@@ -1827,15 +1837,122 @@ function drawingStatusLabel(period) {
 
 function drawingEntryText(period) {
   if (period.totalEntries !== null && period.totalEntries !== undefined) {
-    return `${period.totalEntries} snapshotted`;
+    const userCount = period.eligibleUserCount === null || period.eligibleUserCount === undefined
+      ? ''
+      : ` / ${formatAdminNumber(period.eligibleUserCount)} users`;
+    return `${formatAdminNumber(period.totalEntries)} entries${userCount}`;
   }
-  return `${period.estimatedEntries || 0} estimated`;
+  return `${formatAdminNumber(period.estimatedEntries || 0)} estimated`;
+}
+
+function drawingPeriodByDrawingId(drawingId) {
+  return (backendCollections.rewardPeriods || [])
+    .find(period => period.drawingId === drawingId);
+}
+
+function compactHash(value) {
+  const hash = String(value || '');
+  if (!hash) return 'Not recorded';
+  if (hash.length <= 28) return hash;
+  return `${hash.slice(0, 14)}...${hash.slice(-14)}`;
+}
+
+function drawingReceiptJson(period = {}) {
+  if (!period.auditReceipt) return '';
+  try {
+    return JSON.stringify(period.auditReceipt, null, 2);
+  } catch {
+    return '';
+  }
+}
+
+function drawingReceiptHtml(period = {}) {
+  const receiptJson = drawingReceiptJson(period);
+  const receipt = period.auditReceipt || {};
+  const random = receipt.random || {};
+  const eligibility = receipt.eligibility || {};
+  const excludedUsernames = Array.isArray(eligibility.excluded_usernames)
+    ? eligibility.excluded_usernames.join(', ')
+    : 'scoop, osprey, tinascoop';
+  const hasReceipt = receiptJson || period.auditReceiptHash || period.entrySnapshotHash || period.snapshotCutoffAt;
+
+  if (!hasReceipt) return '';
+
+  return `
+    <details class="admin-drawing-receipt">
+      <summary><span>Audit receipt</span></summary>
+      <div class="admin-drawing-receipt-grid">
+        <div>
+          <span>Receipt hash</span>
+          <strong title="${escapeHtml(period.auditReceiptHash || '')}">${escapeHtml(compactHash(period.auditReceiptHash))}</strong>
+        </div>
+        <div>
+          <span>Entry snapshot hash</span>
+          <strong title="${escapeHtml(period.entrySnapshotHash || '')}">${escapeHtml(compactHash(period.entrySnapshotHash))}</strong>
+        </div>
+        <div>
+          <span>Random method</span>
+          <strong>${escapeHtml([random.source, random.method].filter(Boolean).join(' / ') || 'pgcrypto / rejection sampling')}</strong>
+        </div>
+        <div>
+          <span>Excluded profiles</span>
+          <strong>${escapeHtml(excludedUsernames)}</strong>
+        </div>
+      </div>
+      ${receiptJson ? `<pre class="admin-drawing-receipt-json">${escapeHtml(receiptJson)}</pre>` : ''}
+    </details>
+  `;
+}
+
+function winnerEmailSubject(period = {}) {
+  return `Open Play Map ${formatAdminMonth(period.drawingMonth)} drawing`;
+}
+
+function winnerEmailBody(period = {}) {
+  const month = formatAdminMonth(period.drawingMonth);
+  const username = period.winnerUsername || 'there';
+  const prize = period.prize || 'a Scoop Pickleball paddle or up to $100 in gear';
+  const credits = period.activeCreditsAtDraw ?? 'your winning';
+  const rulesUrl = new URL(period.officialRulesUrl || 'official-rules.html', window.location.origin).href;
+
+  return [
+    `Hi ${username},`,
+    '',
+    `You were selected as the potential winner for the ${month} Open Play Map monthly Scoop Pickleball drawing.`,
+    '',
+    `Prize: ${prize}`,
+    `Winning active credits: ${credits}`,
+    '',
+    'To claim, please reply within 14 calendar days and confirm:',
+    '- Your preferred prize',
+    '- Your shipping name and address',
+    '- That you are at least 18 and a legal resident of the 50 United States or DC',
+    '',
+    `Official Rules: ${rulesUrl}`,
+    '',
+    'Thanks,',
+    'Scoop Pickleball'
+  ].join('\n');
+}
+
+function winnerMailtoHref(period = {}) {
+  return [
+    `mailto:${encodeURIComponent(period.winnerEmail || '')}`,
+    `?subject=${encodeURIComponent(winnerEmailSubject(period))}`,
+    `&body=${encodeURIComponent(winnerEmailBody(period))}`
+  ].join('');
 }
 
 function drawingActionHtml(period) {
   const actions = [];
   if (period.canRun) {
     actions.push(`<button class="secondary-button admin-edit-button admin-approve-button" type="button" data-run-drawing="${escapeHtml(period.drawingMonth)}">Run drawing</button>`);
+  }
+  if (period.canNotify && period.drawingId) {
+    actions.push(`<button class="secondary-button admin-edit-button" type="button" data-email-drawing="${escapeHtml(period.drawingId)}">Email winner</button>`);
+    actions.push(`<button class="secondary-button admin-edit-button admin-approve-button" type="button" data-notify-drawing="${escapeHtml(period.drawingId)}">Mark emailed</button>`);
+  } else if (period.drawingStatus === 'drawn' && !period.winnerNotifiedAt && period.drawingId && !period.winnerEmail) {
+    actions.push('<button class="secondary-button admin-edit-button" type="button" disabled>No email</button>');
   }
   if (period.canClaim && period.drawingId) {
     actions.push(`<button class="secondary-button admin-edit-button admin-approve-button" type="button" data-claim-drawing="${escapeHtml(period.drawingId)}">Mark claimed</button>`);
@@ -1855,13 +1972,18 @@ function drawingCard(period) {
   const winnerLabel = period.winnerUsername
     ? `${period.winnerUsername}${period.drawingStatus === 'claimed' ? '' : ' (potential)'}`
     : 'No winner yet';
-  const deadlineLabel = period.winnerClaimDeadline ? formatAdminDateTime(period.winnerClaimDeadline) : 'None';
+  const deadlineLabel = period.winnerClaimDeadline
+    ? formatAdminDateTime(period.winnerClaimDeadline)
+    : (period.drawingStatus === 'drawn' ? 'Awaiting email' : 'None');
   const drawLabel = formatAdminDateTime(period.drawingAt);
+  const snapshotCutoffLabel = period.snapshotCutoffAt
+    ? formatAdminDateTime(period.snapshotCutoffAt)
+    : formatAdminDateTime(period.drawingAt);
   card.innerHTML = `
     <div class="admin-row-summary admin-drawing-row">
       <div class="admin-row-main">
         <h3>${escapeHtml(formatAdminMonth(period.drawingMonth))}</h3>
-        <p>Draws ${escapeHtml(drawLabel)}</p>
+        <p>Cutoff ${escapeHtml(snapshotCutoffLabel)}</p>
       </div>
       <span>${escapeHtml(drawingStatusLabel(period))}</span>
       <span>${escapeHtml(drawingEntryText(period))}</span>
@@ -1878,7 +2000,7 @@ function drawingCard(period) {
       </div>
       <div>
         <span>Rules</span>
-        <strong>${escapeHtml(period.rulesVersion || '2026-08-01')}</strong>
+        <strong>${escapeHtml(period.rulesVersion || '2026-08-07')}</strong>
       </div>
       <div>
         <span>Potential winner entries</span>
@@ -1886,14 +2008,37 @@ function drawingCard(period) {
       </div>
       <div>
         <span>Notification</span>
-        <strong>${escapeHtml(period.winnerNotifiedAt ? formatAdminDateTime(period.winnerNotifiedAt) : 'Not sent')}</strong>
+        <strong>${escapeHtml(period.winnerNotifiedAt ? formatAdminDateTime(period.winnerNotifiedAt) : 'Not emailed')}</strong>
+      </div>
+      <div>
+        <span>Scheduled draw</span>
+        <strong>${escapeHtml(drawLabel)}</strong>
+      </div>
+      <div>
+        <span>Eligible users</span>
+        <strong>${escapeHtml(period.eligibleUserCount ?? 'Not drawn')}</strong>
+      </div>
+      <div>
+        <span>Entry snapshot hash</span>
+        <strong title="${escapeHtml(period.entrySnapshotHash || '')}">${escapeHtml(compactHash(period.entrySnapshotHash))}</strong>
+      </div>
+      <div>
+        <span>Winner email</span>
+        <strong>${escapeHtml(period.winnerEmail || 'Not available')}</strong>
       </div>
     </div>
+    ${drawingReceiptHtml(period)}
     <p class="form-hint" data-drawing-hint></p>
   `;
 
   card.querySelectorAll('[data-run-drawing]').forEach(button => {
     button.addEventListener('click', () => runDrawing(button.dataset.runDrawing, button));
+  });
+  card.querySelectorAll('[data-email-drawing]').forEach(button => {
+    button.addEventListener('click', () => emailDrawing(button.dataset.emailDrawing, button));
+  });
+  card.querySelectorAll('[data-notify-drawing]').forEach(button => {
+    button.addEventListener('click', () => markDrawingNotified(button.dataset.notifyDrawing, button));
   });
   card.querySelectorAll('[data-claim-drawing]').forEach(button => {
     button.addEventListener('click', () => claimDrawing(button.dataset.claimDrawing, button));
@@ -1941,6 +2086,31 @@ async function runDrawing(drawingMonth, button) {
 
   try {
     await window.OpenPlaySupabase.runMonthlyDrawing(drawingMonth);
+    await refreshDrawingAdmin();
+  } catch (error) {
+    button.disabled = false;
+    setDrawingHint(button, error.message, true);
+  }
+}
+
+function emailDrawing(drawingId, button) {
+  const period = drawingPeriodByDrawingId(drawingId);
+  if (!period?.winnerEmail) {
+    setDrawingHint(button, 'Winner email is not available.', true);
+    return;
+  }
+
+  window.location.href = winnerMailtoHref(period);
+  setDrawingHint(button, 'Email draft opened. After sending it, click Mark emailed.');
+}
+
+async function markDrawingNotified(drawingId, button) {
+  if (!window.confirm('Mark this winner as emailed and start the 14-day claim deadline now?')) return;
+  button.disabled = true;
+  setDrawingHint(button, 'Marking emailed...');
+
+  try {
+    await window.OpenPlaySupabase.markMonthlyDrawingNotified(drawingId);
     await refreshDrawingAdmin();
   } catch (error) {
     button.disabled = false;

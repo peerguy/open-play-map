@@ -1731,10 +1731,12 @@ function createPopup(court) {
 function showMapInfoBox(court, options = {}) {
   state.activeInfoCourtId = court.id;
   setMobileMapFocus(true);
+  setMobileInfoFull(false);
   document.body.classList.add('has-map-info-open');
   const courtCount = courtCountLabel(court);
   elements.mapInfoBox.hidden = false;
   elements.mapInfoBox.innerHTML = `
+    <button class="map-info-sheet-handle" type="button" aria-label="Expand location details" aria-expanded="false"></button>
     <button class="icon-button map-info-close" type="button" aria-label="Close location info">×</button>
     <div class="map-info-content">
       <div class="map-info-header">
@@ -1770,10 +1772,12 @@ function showMapInfoBox(court, options = {}) {
   elements.mapInfoBox.querySelector('.map-info-close').addEventListener('click', () => {
     elements.mapInfoBox.hidden = true;
     state.activeInfoCourtId = null;
+    setMobileInfoFull(false);
     document.body.classList.remove('has-map-info-open');
     closeLocationMenus();
   });
 
+  bindMapInfoSheetDrag();
   bindLocationMenu(elements.mapInfoBox);
   bindPhotoLightboxButtons(elements.mapInfoBox);
 
@@ -1985,6 +1989,20 @@ function setMobileSheetMode(mode) {
   setTimeout(() => map.invalidateSize(), 180);
 }
 
+function setMobileInfoFull(isFull) {
+  if (!isMobileLayout()) {
+    document.body.classList.remove('mobile-info-full');
+    return;
+  }
+
+  document.body.classList.toggle('mobile-info-full', isFull);
+  const handle = elements.mapInfoBox?.querySelector('.map-info-sheet-handle');
+  if (handle) {
+    handle.setAttribute('aria-expanded', String(isFull));
+    handle.setAttribute('aria-label', isFull ? 'Collapse location details' : 'Expand location details');
+  }
+}
+
 function setupMobileSheetDrag() {
   const dragSurface = elements.mobileResultsBar;
   const sheet = dragSurface?.closest('.sidebar');
@@ -2054,6 +2072,81 @@ function setupMobileSheetDrag() {
 
   dragSurface.addEventListener('pointerup', finishDrag);
   dragSurface.addEventListener('pointercancel', finishDrag);
+}
+
+function bindMapInfoSheetDrag() {
+  const handle = elements.mapInfoBox?.querySelector('.map-info-sheet-handle');
+  const sheet = elements.mapInfoBox;
+  if (!handle || !sheet) return;
+
+  let dragState = null;
+  let suppressClick = false;
+
+  const isInfoFull = () => document.body.classList.contains('mobile-info-full');
+
+  const previewDrag = deltaY => {
+    const offset = dragState.wasFull
+      ? Math.max(0, Math.min(deltaY, 190))
+      : Math.min(0, Math.max(deltaY, -190));
+    sheet.style.setProperty('--map-info-sheet-drag-offset', `${Math.round(offset)}px`);
+  };
+
+  const finishDrag = event => {
+    if (!dragState) return;
+    const deltaY = (event.clientY ?? dragState.startY) - dragState.startY;
+    const wasFull = dragState.wasFull;
+    const wasDragged = dragState.wasDragged;
+
+    sheet.classList.remove('is-dragging');
+    sheet.style.removeProperty('--map-info-sheet-drag-offset');
+    handle.releasePointerCapture?.(event.pointerId);
+    dragState = null;
+
+    if (wasDragged) {
+      suppressClick = true;
+      window.setTimeout(() => {
+        suppressClick = false;
+      }, 0);
+    }
+
+    if (Math.abs(deltaY) > 44) {
+      setMobileInfoFull(deltaY < 0 ? true : false);
+    } else {
+      setMobileInfoFull(wasFull);
+    }
+  };
+
+  handle.addEventListener('pointerdown', event => {
+    if (!isMobileLayout() || event.button !== 0) return;
+    dragState = {
+      startY: event.clientY,
+      wasFull: isInfoFull(),
+      wasDragged: false
+    };
+    sheet.classList.add('is-dragging');
+    handle.setPointerCapture?.(event.pointerId);
+  });
+
+  handle.addEventListener('pointermove', event => {
+    if (!dragState) return;
+    event.preventDefault();
+    const deltaY = event.clientY - dragState.startY;
+    if (Math.abs(deltaY) > 5) {
+      dragState.wasDragged = true;
+    }
+    previewDrag(deltaY);
+  }, { passive: false });
+
+  handle.addEventListener('pointerup', finishDrag);
+  handle.addEventListener('pointercancel', finishDrag);
+
+  handle.addEventListener('click', event => {
+    if (suppressClick) {
+      event.preventDefault();
+      return;
+    }
+    setMobileInfoFull(!isInfoFull());
+  });
 }
 
 function preventPageZoomOverMap() {
@@ -3237,6 +3330,7 @@ window.addEventListener('resize', () => {
   if (!isMobileLayout()) {
     document.body.classList.remove('mobile-map-focus');
     document.body.classList.remove('mobile-list-full');
+    document.body.classList.remove('mobile-info-full');
   }
 });
 

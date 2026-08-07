@@ -27,6 +27,7 @@
   };
   const LOCATION_PHOTO_SELECT = 'id,location_id,review_id,uploaded_by,storage_path,caption,status,created_at';
   const LOCATION_SELECT = `*,open_play_slots(*),photos(${LOCATION_PHOTO_SELECT})`;
+  const ADMIN_LOCATION_SELECT = `${LOCATION_SELECT},submitted_profile:profiles!locations_submitted_by_fkey(username)`;
   const CONTRIBUTION_CREDITS = {
     'add-location': 5,
     'add-review': 1,
@@ -312,6 +313,13 @@
     return Math.round(fee * 100) / 100;
   }
 
+  function submittedByUsername(record = {}) {
+    const profile = Array.isArray(record.submitted_profile)
+      ? record.submitted_profile[0]
+      : record.submitted_profile;
+    return profile?.username || record.submitted_by_username || record.submittedByUsername || '';
+  }
+
   function mapLocation(record) {
     return {
       id: record.slug || record.id,
@@ -350,7 +358,7 @@
       status: record.status || 'approved',
       userSubmitted: Boolean(record.submitted_by),
       submittedBy: record.submitted_by || '',
-      submittedByUsername: record.submitted_by ? 'Community member' : '',
+      submittedByUsername: submittedByUsername(record),
       createdAt: dateOnly(record.created_at),
       updatedAt: dateOnly(record.updated_at),
       approvedAt: dateOnly(record.approved_at)
@@ -430,14 +438,21 @@
       officialRulesUrl: record.official_rules_url || 'official-rules.html',
       estimatedEntries: Number(record.estimated_entries || 0),
       totalEntries: record.total_entries === null || record.total_entries === undefined ? null : Number(record.total_entries),
+      eligibleUserCount: record.eligible_user_count === null || record.eligible_user_count === undefined ? null : Number(record.eligible_user_count),
+      snapshotCutoffAt: record.snapshot_cutoff_at || '',
+      entrySnapshotHash: record.entry_snapshot_hash || '',
+      auditReceiptHash: record.audit_receipt_hash || '',
+      auditReceipt: record.audit_receipt || null,
       winnerUserId: record.winner_user_id || '',
       winnerUsername: record.winner_username || '',
+      winnerEmail: record.winner_email || '',
       prize: record.prize || '',
       activeCreditsAtDraw: record.active_credits_at_draw === null || record.active_credits_at_draw === undefined ? null : Number(record.active_credits_at_draw),
       drawnAt: record.drawn_at || '',
       winnerNotifiedAt: record.winner_notified_at || '',
       winnerClaimDeadline: record.winner_claim_deadline || '',
       canRun: Boolean(record.can_run),
+      canNotify: Boolean(record.can_notify),
       canClaim: Boolean(record.can_claim),
       canRedraw: Boolean(record.can_redraw)
     };
@@ -782,7 +797,7 @@
 
     const { data, error } = await supabase
       .from('locations')
-      .select(LOCATION_SELECT)
+      .select(ADMIN_LOCATION_SELECT)
       .order('status', { ascending: true })
       .order('name', { ascending: true });
 
@@ -1699,6 +1714,17 @@
     return data;
   }
 
+  async function markMonthlyDrawingNotified(drawingId) {
+    const supabase = client();
+    if (!supabase) throw new Error('Supabase is not configured.');
+
+    const { data, error } = await supabase.rpc('mark_monthly_drawing_notified', {
+      p_drawing_id: drawingId
+    });
+    if (error) throw error;
+    return data;
+  }
+
   async function runMonthlyRedraw(drawingId) {
     const supabase = client();
     if (!supabase) throw new Error('Supabase is not configured.');
@@ -1736,6 +1762,7 @@
     fetchAdminCollections,
     runMonthlyDrawing,
     claimMonthlyDrawing,
+    markMonthlyDrawingNotified,
     runMonthlyRedraw
   };
 })();
