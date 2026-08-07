@@ -2119,7 +2119,7 @@ async function markDrawingNotified(drawingId, button) {
 }
 
 async function claimDrawing(drawingId, button) {
-  if (!window.confirm('Mark this winner as claimed and reset their active drawing credits back to the baseline entry?')) return;
+  if (!window.confirm('Mark this winner as claimed? Their active drawing credits were already reset to credits earned after the drawing snapshot.')) return;
   button.disabled = true;
   setDrawingHint(button, 'Marking claimed...');
 
