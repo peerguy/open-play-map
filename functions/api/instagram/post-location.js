@@ -117,6 +117,23 @@ function captionForLocation(env, location) {
   ].filter(line => line !== undefined && line !== null).join('\n').trim();
 }
 
+function normalizeImageUrls(values = []) {
+  return [...new Set((Array.isArray(values) ? values : [values])
+    .flatMap(value => String(value || '').split(/\r?\n|,/))
+    .map(value => value.trim())
+    .filter(Boolean))]
+    .slice(0, 10);
+}
+
+function isPublishableJpegUrl(url) {
+  return /^https:\/\//i.test(url) && /\.(jpe?g)(?:$|\?)/i.test(url);
+}
+
+function instagramLocationId(value) {
+  const text = String(value || '').trim();
+  return /^\d+$/.test(text) ? text : '';
+}
+
 async function findExistingPost(env, locationId) {
   const rows = await supabaseRequest(
     env,
@@ -210,11 +227,40 @@ async function waitForContainer(env, containerId) {
   throw new Error('Instagram media container did not finish processing in time.');
 }
 
-async function publishLocation(env, location, photo, actorId, existingPost = null) {
-  const imageUrl = publicStorageUrl(env, photo.storage_path);
-  const caption = captionForLocation(env, location);
+async function createSingleImageContainer(env, imageUrl, caption, locationId = '') {
+  const params = { image_url: imageUrl, caption };
+  if (locationId) params.location_id = locationId;
+  return await instagramRequest(env, `${requiredEnv(env, 'INSTAGRAM_IG_USER_ID')}/media`, params);
+}
+
+async function createCarouselContainer(env, imageUrls, caption, locationId = '') {
+  const children = [];
+
+  for (const imageUrl of imageUrls) {
+    const child = await instagramRequest(env, `${requiredEnv(env, 'INSTAGRAM_IG_USER_ID')}/media`, {
+      image_url: imageUrl,
+      is_carousel_item: 'true'
+    });
+    children.push(child.id);
+  }
+
+  const params = {
+    media_type: 'CAROUSEL',
+    children: children.join(','),
+    caption
+  };
+  if (locationId) params.location_id = locationId;
+
+  return await instagramRequest(env, `${requiredEnv(env, 'INSTAGRAM_IG_USER_ID')}/media`, params);
+}
+
+async function publishLocation(env, location, options, actorId, existingPost = null) {
+  const imageUrls = options.imageUrls;
+  const imageUrl = imageUrls[0];
+  const caption = options.caption || captionForLocation(env, location);
+  const locationId = instagramLocationId(options.instagramLocationId);
   const payload = {
-    photo_id: photo.id,
+    photo_id: options.photoId || null,
     status: 'pending',
     caption,
     image_url: imageUrl,
@@ -229,10 +275,9 @@ async function publishLocation(env, location, photo, actorId, existingPost = nul
     });
 
   try {
-    const container = await instagramRequest(env, `${requiredEnv(env, 'INSTAGRAM_IG_USER_ID')}/media`, {
-      image_url: imageUrl,
-      caption
-    });
+    const container = imageUrls.length > 1
+      ? await createCarouselContainer(env, imageUrls, caption, locationId)
+      : await createSingleImageContainer(env, imageUrl, caption, locationId);
     await updatePostRecord(env, postRecord.id, { instagram_container_id: container.id });
     await waitForContainer(env, container.id);
     const published = await instagramRequest(env, `${requiredEnv(env, 'INSTAGRAM_IG_USER_ID')}/media_publish`, {
@@ -268,24 +313,29 @@ export async function onRequestPost({ request, env }) {
     if (existing?.status === 'published') {
       return json({ ok: true, skipped: true, reason: 'Location was already posted to Instagram.', post: existing });
     }
-    if (existing?.status === 'pending') {
-      return json({ ok: true, skipped: true, reason: 'An Instagram post is already pending for this location.', post: existing });
-    }
 
     const location = await fetchLocation(env, locationId);
     if (!location) return json({ ok: false, error: 'Location not found.' }, 404);
     if (location.status !== 'approved') return json({ ok: false, error: 'Location must be approved before posting to Instagram.' }, 409);
 
-    const photo = await fetchLocationPhoto(env, location.id);
-    if (!photo) {
-      return json({
-        ok: true,
-        skipped: true,
-        reason: 'No approved JPEG location photo is available yet.'
-      }, 409);
+    const fallbackPhoto = await fetchLocationPhoto(env, location.id);
+    const requestedImageUrls = normalizeImageUrls(body.imageUrls || body.imageUrl);
+    const imageUrls = requestedImageUrls.length
+      ? requestedImageUrls
+      : (fallbackPhoto ? [publicStorageUrl(env, fallbackPhoto.storage_path)] : []);
+    if (!imageUrls.length) {
+      return json({ ok: false, error: 'Add at least one public JPEG image URL before posting.' }, 400);
+    }
+    if (imageUrls.some(url => !isPublishableJpegUrl(url))) {
+      return json({ ok: false, error: 'Instagram publishing needs public HTTPS JPEG URLs.' }, 400);
     }
 
-    const post = await publishLocation(env, location, photo, admin.id, existing);
+    const post = await publishLocation(env, location, {
+      caption: String(body.caption || '').trim() || captionForLocation(env, location),
+      imageUrls,
+      instagramLocationId: body.instagramLocationId,
+      photoId: fallbackPhoto?.id || null
+    }, admin.id, existing);
     return json({ ok: true, post });
   } catch (error) {
     return json({ ok: false, error: error.message || 'Instagram publish failed.' }, 500);

@@ -5524,6 +5524,192 @@ label:has(input:required:valid) > .field-label .is-required {
   box-shadow: 0 8px 20px rgba(31, 83, 140, 0.16);
 }
 
+.pending-post-list {
+  display: grid;
+  gap: 16px;
+}
+
+.pending-post-card {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+
+.pending-post-preview,
+.pending-post-editor {
+  min-width: 0;
+}
+
+.pending-post-phone {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 14px 30px rgba(22, 45, 33, 0.08);
+}
+
+.pending-post-account {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pending-post-avatar {
+  display: grid;
+  width: 38px;
+  aspect-ratio: 1;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 950;
+}
+
+.pending-post-account strong,
+.pending-post-caption strong {
+  display: block;
+  color: var(--ink);
+  font-size: 0.86rem;
+  line-height: 1.2;
+}
+
+.pending-post-account span {
+  display: block;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pending-post-image-stage {
+  background: #f8fafc;
+}
+
+.pending-post-main-image {
+  position: relative;
+  background: #eef3ef;
+}
+
+.pending-post-main-image img,
+.pending-post-empty-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
+.pending-post-main-image span {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: rgba(12, 23, 17, 0.74);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.pending-post-empty-image {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.pending-post-thumbnails {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  padding: 6px;
+  background: #fff;
+}
+
+.pending-post-thumbnails img {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.pending-post-caption {
+  display: grid;
+  gap: 5px;
+  padding: 11px 12px 13px;
+  color: var(--ink);
+  font-size: 0.84rem;
+  line-height: 1.42;
+  white-space: pre-wrap;
+}
+
+.pending-post-editor {
+  display: grid;
+  gap: 11px;
+}
+
+.pending-post-editor-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pending-post-editor-header h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 1.02rem;
+  line-height: 1.25;
+}
+
+.pending-post-editor-header p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.pending-post-editor label {
+  display: grid;
+  gap: 5px;
+  color: var(--brand-dark);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.pending-post-editor input,
+.pending-post-editor textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 9px 10px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.pending-post-editor textarea {
+  resize: vertical;
+}
+
+.pending-post-actions {
+  align-items: center;
+}
+
+.pending-post-actions .form-hint {
+  margin: 0;
+}
+
 .admin-approve-button {
   border-color: #bbd8b7;
   color: #216222;
@@ -5835,6 +6021,14 @@ label:has(input:required:valid) > .field-label .is-required {
     grid-template-columns: 1fr;
   }
 
+  .pending-post-card {
+    grid-template-columns: 1fr;
+  }
+
+  .pending-post-preview {
+    max-width: 420px;
+  }
+
   .moderation-actions {
     justify-self: start;
   }
@@ -6047,6 +6241,21 @@ label:has(input:required:valid) > .field-label .is-required {
   .moderation-item {
     min-width: 0;
     padding: 12px;
+  }
+
+  .pending-post-card {
+    padding: 12px;
+  }
+
+  .pending-post-preview {
+    max-width: none;
+  }
+
+  .pending-post-editor-header,
+  .pending-post-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 
   .pending-location-details summary {

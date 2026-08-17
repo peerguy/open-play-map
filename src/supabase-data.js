@@ -555,6 +555,24 @@
     };
   }
 
+  function mapInstagramPost(record = {}) {
+    return {
+      id: record.id,
+      locationId: record.location_id,
+      photoId: record.photo_id || '',
+      instagramContainerId: record.instagram_container_id || '',
+      instagramMediaId: record.instagram_media_id || '',
+      status: record.status || 'pending',
+      caption: record.caption || '',
+      imageUrl: record.image_url || '',
+      errorMessage: record.error_message || '',
+      requestedBy: record.requested_by || '',
+      publishedAt: record.published_at || '',
+      createdAt: record.created_at || '',
+      updatedAt: record.updated_at || ''
+    };
+  }
+
   function contributionCreditValue(action) {
     return CONTRIBUTION_CREDITS[action] || 0;
   }
@@ -1661,7 +1679,7 @@
     const supabase = client();
     if (!supabase) return null;
 
-    const [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult, photosResult, rewardPeriodsResult] = await Promise.all([
+    const [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult, photosResult, rewardPeriodsResult, instagramPostsResult] = await Promise.all([
       supabase.from('profiles').select('id,email,username,role,skill_level,bio,avatar_url,created_at'),
       supabase.from('locations').select('id,slug,name,status,submitted_by,approved_by'),
       supabase.from('reviews').select('*').order('created_at', { ascending: false }),
@@ -1669,10 +1687,11 @@
       supabase.from('suggested_edits').select('*').order('created_at', { ascending: false }),
       supabase.rpc('admin_contribution_credits'),
       supabase.from('photos').select('*').order('created_at', { ascending: false }),
-      supabase.rpc('admin_reward_periods')
+      supabase.rpc('admin_reward_periods'),
+      supabase.from('instagram_posts').select('*').order('updated_at', { ascending: false })
     ]);
 
-    [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult, photosResult, rewardPeriodsResult]
+    [profilesResult, locationsResult, reviewsResult, reportsResult, editsResult, creditsResult, photosResult, rewardPeriodsResult, instagramPostsResult]
       .forEach(result => {
         if (result.error) throw result.error;
       });
@@ -1688,7 +1707,8 @@
       suggestedEdits: (editsResult.data || []).map(edit => mapSuggestedEdit(edit, { profiles, locations })),
       credits: (creditsResult.data || []).map(credit => mapCredit(credit, profiles)),
       photos: (photosResult.data || []).map(photo => mapPhoto(photo, { profiles, locations })),
-      rewardPeriods: (rewardPeriodsResult.data || []).map(mapRewardPeriod)
+      rewardPeriods: (rewardPeriodsResult.data || []).map(mapRewardPeriod),
+      instagramPosts: (instagramPostsResult.data || []).map(mapInstagramPost)
     };
   }
 

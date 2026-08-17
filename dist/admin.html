@@ -40,6 +40,7 @@
           <button class="admin-subnav-button" type="button" data-moderation-view="edits">Recent edits</button>
           <button class="admin-subnav-button" type="button" data-moderation-view="volume">High-volume users today</button>
         </div>
+        <button class="admin-nav-button" type="button" data-admin-view="posts">Pending posts</button>
         <button class="admin-nav-button" type="button" data-admin-view="users">Users</button>
         <button class="admin-nav-button" type="button" data-admin-view="locations">Locations</button>
         <div id="locationsSubnav" class="admin-subnav" aria-label="Location status queues" hidden>
@@ -79,6 +80,17 @@
             <p id="userAdminCount" class="admin-count"></p>
           </div>
           <div id="adminUsersList" class="admin-list"></div>
+        </section>
+
+        <section id="postsAdminView" class="admin-view" hidden>
+          <div class="admin-view-header">
+            <div>
+              <p class="eyebrow">Instagram</p>
+              <h2 id="postsAdminTitle">Pending posts</h2>
+            </div>
+            <p id="postAdminCount" class="admin-count"></p>
+          </div>
+          <div id="adminPostsList" class="pending-post-list"></div>
         </section>
 
         <section id="locationsAdminView" class="admin-view" hidden>

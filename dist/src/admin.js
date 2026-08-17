@@ -37,18 +37,22 @@ const REVIEW_LIGHTING_OPTIONS = ['', 'Good for night play', 'Limited', 'None'];
 const elements = {
   guard: document.querySelector('#adminGuard'),
   moderationView: document.querySelector('#moderationAdminView'),
+  postsView: document.querySelector('#postsAdminView'),
   usersView: document.querySelector('#usersAdminView'),
   locationsView: document.querySelector('#locationsAdminView'),
   drawingsView: document.querySelector('#drawingsAdminView'),
   moderationList: document.querySelector('#adminModerationList'),
+  postsList: document.querySelector('#adminPostsList'),
   usersList: document.querySelector('#adminUsersList'),
   locationsList: document.querySelector('#adminLocationsList'),
   drawingsList: document.querySelector('#adminDrawingsList'),
   moderationTitle: document.querySelector('#moderationAdminTitle'),
+  postsTitle: document.querySelector('#postsAdminTitle'),
   usersTitle: document.querySelector('#usersAdminTitle'),
   locationsTitle: document.querySelector('#locationsAdminTitle'),
   drawingsTitle: document.querySelector('#drawingsAdminTitle'),
   moderationCount: document.querySelector('#moderationAdminCount'),
+  postsCount: document.querySelector('#postAdminCount'),
   userCount: document.querySelector('#userAdminCount'),
   locationCount: document.querySelector('#locationAdminCount'),
   drawingCount: document.querySelector('#drawingAdminCount'),
@@ -74,6 +78,7 @@ let backendCollections = {
   suggestedEdits: null,
   credits: null,
   photos: null,
+  instagramPosts: null,
   rewardPeriods: null
 };
 const adminPhotoLightbox = {
@@ -848,8 +853,8 @@ function isAdmin(user) {
   return user?.role === 'admin';
 }
 
-async function postLocationToInstagram(court) {
-  if (!court?.remoteId) return null;
+async function publishPendingInstagramPost(court, values) {
+  if (!court?.remoteId) throw new Error('A saved location is required before posting.');
   const accessToken = await currentAccessToken();
   if (!accessToken) throw new Error('Sign in again before posting to Instagram.');
 
@@ -859,10 +864,16 @@ async function postLocationToInstagram(court) {
       authorization: `Bearer ${accessToken}`,
       'content-type': 'application/json'
     },
-    body: JSON.stringify({ locationId: court.remoteId })
+    body: JSON.stringify({
+      locationId: court.remoteId,
+      caption: values.caption,
+      imageUrls: values.imageUrls,
+      locationTag: values.locationTag,
+      instagramLocationId: values.instagramLocationId
+    })
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok && !result.skipped) {
+  if (!response.ok || result.ok === false) {
     throw new Error(result.error || `Instagram post failed: ${response.status}`);
   }
   return result;
@@ -923,6 +934,7 @@ function showView(viewName) {
   elements.moderationSubnav.hidden = viewName !== 'moderation';
   elements.locationsSubnav.hidden = viewName !== 'locations';
   elements.moderationView.hidden = viewName !== 'moderation';
+  elements.postsView.hidden = viewName !== 'posts';
   elements.usersView.hidden = viewName !== 'users';
   elements.locationsView.hidden = viewName !== 'locations';
   elements.drawingsView.hidden = viewName !== 'drawings';
@@ -1176,6 +1188,154 @@ function pendingPhotos() {
     .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
 }
 
+function instagramPostsByLocation() {
+  return new Map((backendCollections.instagramPosts || [])
+    .filter(post => post.locationId)
+    .map(post => [post.locationId, post]));
+}
+
+function approvedInstagramPhotosForLocation(court = {}) {
+  const locationIds = new Set([court.id, court.remoteId].filter(Boolean));
+  const photos = [
+    ...(backendCollections.photos || []).filter(photo => (
+      locationIds.has(photo.locationId)
+      || locationIds.has(photo.remoteLocationId)
+    )),
+    ...(court.photos || [])
+  ];
+  const seen = new Set();
+  return photos
+    .filter(photo => !photo.status || photo.status === 'approved')
+    .map(photoUrl)
+    .filter(url => /^https:\/\//i.test(url) && /\.(jpe?g)(?:$|\?)/i.test(url))
+    .filter(url => {
+      if (seen.has(url)) return false;
+      seen.add(url);
+      return true;
+    });
+}
+
+function pendingPostLocations() {
+  const postsByLocation = instagramPostsByLocation();
+  return allCourts
+    .filter(court => court.remoteId && normalizedLocationStatus(court) === 'approved')
+    .filter(court => postsByLocation.get(court.remoteId)?.status !== 'published')
+    .sort((a, b) => String(b.approvedAt || b.updatedAt || b.createdAt || '').localeCompare(String(a.approvedAt || a.updatedAt || a.createdAt || '')));
+}
+
+function defaultInstagramCaption(court = {}) {
+  const area = [court.city, court.state].filter(Boolean).join(', ');
+  const url = new URL(window.location.origin);
+  url.searchParams.set('location', court.id || court.remoteId);
+  return [
+    `New open play spot added: ${court.name || 'Open play location'}`,
+    area,
+    '',
+    'Find details, hours, and player updates on the Scoop Open Play Map:',
+    url.toString(),
+    '',
+    '#pickleball #openplay #scooppickleball'
+  ].filter(line => line !== undefined && line !== null).join('\n').trim();
+}
+
+function defaultLocationTag(court = {}) {
+  return [court.name, court.city, court.state].filter(Boolean).join(' · ');
+}
+
+function parseImageUrlLines(value) {
+  return String(value || '')
+    .split(/\r?\n|,/)
+    .map(url => url.trim())
+    .filter(Boolean);
+}
+
+function pendingPostValues(form) {
+  return {
+    caption: form.elements.caption.value.trim(),
+    locationTag: form.elements.locationTag.value.trim(),
+    instagramLocationId: form.elements.instagramLocationId.value.trim(),
+    imageUrls: parseImageUrlLines(form.elements.imageUrls.value)
+  };
+}
+
+function renderPendingPostImages(urls = []) {
+  if (!urls.length) {
+    return '<div class="pending-post-empty-image">No photo selected</div>';
+  }
+
+  return `
+    <div class="pending-post-main-image">
+      <img src="${escapeHtml(urls[0])}" alt="Instagram post preview" loading="lazy" />
+      ${urls.length > 1 ? `<span>${escapeHtml(urls.length)} photos</span>` : ''}
+    </div>
+    ${urls.length > 1 ? `
+      <div class="pending-post-thumbnails">
+        ${urls.slice(0, 6).map(url => `<img src="${escapeHtml(url)}" alt="" loading="lazy" />`).join('')}
+      </div>
+    ` : ''}
+  `;
+}
+
+function renderPendingPostCard(court) {
+  const post = instagramPostsByLocation().get(court.remoteId) || {};
+  const imageUrls = post.imageUrl ? [post.imageUrl] : approvedInstagramPhotosForLocation(court);
+  const caption = post.caption || defaultInstagramCaption(court);
+  const locationTag = defaultLocationTag(court);
+  const hasFailure = post.status === 'failed';
+
+  return `
+    <article class="pending-post-card" data-pending-post-card="${escapeHtml(court.id)}">
+      <div class="pending-post-preview" data-post-preview>
+        <div class="pending-post-phone">
+          <div class="pending-post-account">
+            <div class="pending-post-avatar">OP</div>
+            <div>
+              <strong>openplaymap</strong>
+              <span data-preview-location-tag>${escapeHtml(locationTag)}</span>
+            </div>
+          </div>
+          <div class="pending-post-image-stage" data-preview-images>
+            ${renderPendingPostImages(imageUrls)}
+          </div>
+          <div class="pending-post-caption">
+            <strong>openplaymap</strong>
+            <span data-preview-caption>${escapeHtml(caption)}</span>
+          </div>
+        </div>
+      </div>
+      <form class="pending-post-editor" data-pending-post-location="${escapeHtml(court.id)}">
+        <div class="pending-post-editor-header">
+          <div>
+            <h3>${escapeHtml(court.name || 'Open play location')}</h3>
+            <p>${escapeHtml([court.city, court.state].filter(Boolean).join(', ')) || 'Location'}${hasFailure ? ` · Last failed: ${escapeHtml(post.errorMessage || 'Instagram publish failed')}` : ''}</p>
+          </div>
+          <span class="moderation-badge${hasFailure ? ' moderation-badge-alert' : ''}">${hasFailure ? 'Retry' : 'Pending'}</span>
+        </div>
+        <label>
+          Caption
+          <textarea name="caption" rows="7">${escapeHtml(caption)}</textarea>
+        </label>
+        <label>
+          Location tag
+          <input name="locationTag" value="${escapeHtml(locationTag)}" />
+        </label>
+        <label>
+          Instagram location ID
+          <input name="instagramLocationId" inputmode="numeric" placeholder="Optional Meta place ID" />
+        </label>
+        <label>
+          Image URLs
+          <textarea name="imageUrls" rows="5" placeholder="One public JPEG URL per line">${escapeHtml(imageUrls.join('\n'))}</textarea>
+        </label>
+        <div class="admin-edit-actions pending-post-actions">
+          <button class="secondary-button admin-edit-button admin-approve-button" type="submit">Post to Instagram</button>
+          <p class="form-hint" data-pending-post-hint></p>
+        </div>
+      </form>
+    </article>
+  `;
+}
+
 function liveLocationForSuggestedEdit(edit) {
   return allCourts.find(court => court.id === edit.locationId)
     || edit.currentLocation
@@ -1424,6 +1584,75 @@ function moderationSection(title, items, emptyText, renderItem, description = ''
       ${items.length ? `<div class="moderation-list">${items.map(renderItem).join('')}</div>` : `<p class="empty-profile-list">${escapeHtml(emptyText)}</p>`}
     </section>
   `;
+}
+
+function updatePendingPostPreview(form) {
+  const card = form.closest('[data-pending-post-card]');
+  const values = pendingPostValues(form);
+  const locationTag = card?.querySelector('[data-preview-location-tag]');
+  const caption = card?.querySelector('[data-preview-caption]');
+  const images = card?.querySelector('[data-preview-images]');
+  if (locationTag) locationTag.textContent = values.locationTag || 'Location';
+  if (caption) caption.textContent = values.caption || '';
+  if (images) images.innerHTML = renderPendingPostImages(values.imageUrls);
+}
+
+function setupPendingPostForm(form) {
+  const court = allCourts.find(item => item.id === form.dataset.pendingPostLocation);
+  if (!court) return;
+  const hint = form.querySelector('[data-pending-post-hint]');
+
+  form.querySelectorAll('input, textarea').forEach(field => {
+    field.addEventListener('input', () => updatePendingPostPreview(form));
+  });
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const values = pendingPostValues(form);
+    if (!values.caption) {
+      hint.textContent = 'Caption is required.';
+      return;
+    }
+    if (!values.imageUrls.length) {
+      hint.textContent = 'Add at least one public JPEG image URL.';
+      return;
+    }
+    if (values.imageUrls.some(url => !/^https:\/\//i.test(url) || !/\.(jpe?g)(?:$|\?)/i.test(url))) {
+      hint.textContent = 'Instagram publishing needs public HTTPS JPEG URLs.';
+      return;
+    }
+
+    const button = form.querySelector('[type="submit"]');
+    button.disabled = true;
+    hint.textContent = 'Posting...';
+
+    try {
+      await publishPendingInstagramPost(court, values);
+      hint.textContent = 'Posted to Instagram.';
+      await loadBackendCollections();
+      renderPendingPosts();
+      renderModeration();
+    } catch (error) {
+      button.disabled = false;
+      hint.textContent = error.message || 'Could not post to Instagram.';
+      await loadBackendCollections();
+    }
+  });
+}
+
+function renderPendingPosts() {
+  const posts = pendingPostLocations();
+  setAdminNavLabel('posts', 'Pending posts', posts.length);
+  elements.postsTitle.textContent = titleWithCount('Pending posts', posts.length);
+  elements.postsCount.textContent = `${posts.length} pending post${posts.length === 1 ? '' : 's'}`;
+
+  if (!posts.length) {
+    elements.postsList.innerHTML = '<p class="empty-profile-list">No pending Instagram posts.</p>';
+    return;
+  }
+
+  elements.postsList.innerHTML = posts.map(renderPendingPostCard).join('');
+  elements.postsList.querySelectorAll('[data-pending-post-location]').forEach(setupPendingPostForm);
 }
 
 function renderModeration() {
@@ -2180,16 +2409,9 @@ async function approveLocation(locationId) {
     try {
       const approved = await window.OpenPlaySupabase.updateLocationStatus(remoteCourt.remoteId, 'approved', currentAdminUser?.id);
       allCourts = allCourts.map(court => court.id === locationId ? approved : court);
-      try {
-        const instagramResult = await postLocationToInstagram(approved);
-        if (instagramResult?.skipped) {
-          console.info('Instagram auto-post skipped:', instagramResult.reason);
-        }
-      } catch (instagramError) {
-        console.warn('Instagram auto-post failed.', instagramError);
-      }
       await loadBackendCollections();
       renderModeration();
+      renderPendingPosts();
       renderLocations();
       renderUsers();
       renderDrawings();
@@ -2225,6 +2447,7 @@ async function approveLocation(locationId) {
     allCourts = allCourts.map(court => court.id === locationId ? approved : court);
   }
   renderModeration();
+  renderPendingPosts();
   renderLocations();
   renderUsers();
   renderDrawings();
@@ -2242,6 +2465,7 @@ async function rejectLocation(locationId) {
       allCourts = allCourts.map(item => item.id === locationId ? rejected : item);
       await loadBackendCollections();
       renderModeration();
+      renderPendingPosts();
       renderLocations();
       renderUsers();
       renderDrawings();
@@ -2270,6 +2494,7 @@ async function rejectLocation(locationId) {
   )));
   allCourts = allCourts.map(item => item.id === locationId ? rejected : item);
   renderModeration();
+  renderPendingPosts();
   renderLocations();
   renderUsers();
   renderDrawings();
@@ -2282,24 +2507,8 @@ async function updatePhotoModerationStatus(photoId, status) {
   try {
     await window.OpenPlaySupabase.updatePhotoStatus(photo.remoteId || photo.id, status, currentAdminUser?.id);
     await loadBackendCollections();
-    if (status === 'approved') {
-      const location = allCourts.find(court => (
-        court.remoteId === photo.remoteLocationId
-        || court.remoteId === photo.locationId
-        || court.id === photo.locationId
-      ));
-      if (location?.status === 'approved') {
-        try {
-          const instagramResult = await postLocationToInstagram(location);
-          if (instagramResult?.skipped) {
-            console.info('Instagram auto-post skipped:', instagramResult.reason);
-          }
-        } catch (instagramError) {
-          console.warn('Instagram auto-post failed.', instagramError);
-        }
-      }
-    }
     renderModeration();
+    renderPendingPosts();
     renderUsers();
     renderDrawings();
   } catch (error) {
@@ -2857,6 +3066,7 @@ async function saveLocationEdit(event) {
       allCourts = allCourts.map(court => court.id === locationId ? savedCourt : court);
       hint.textContent = 'Saved.';
       renderModeration();
+      renderPendingPosts();
       renderLocations();
     } catch (error) {
       hint.textContent = error.message;
@@ -2873,6 +3083,7 @@ async function saveLocationEdit(event) {
   allCourts = allCourts.map(court => court.id === locationId ? nextCourt : court);
   hint.textContent = 'Saved.';
   renderModeration();
+  renderPendingPosts();
   renderLocations();
 }
 
@@ -2911,6 +3122,7 @@ async function loadBackendCollections() {
       suggestedEdits: collections.suggestedEdits || [],
       credits: collections.credits || [],
       photos: collections.photos || [],
+      instagramPosts: collections.instagramPosts || [],
       rewardPeriods: collections.rewardPeriods || []
     };
   } catch (error) {
@@ -2921,6 +3133,7 @@ async function loadBackendCollections() {
       suggestedEdits: null,
       credits: null,
       photos: null,
+      instagramPosts: null,
       rewardPeriods: null
     };
   }
@@ -2933,6 +3146,7 @@ async function init() {
     elements.moderationSubnav.hidden = true;
     elements.locationsSubnav.hidden = true;
     elements.moderationView.hidden = true;
+    elements.postsView.hidden = true;
     elements.usersView.hidden = true;
     elements.locationsView.hidden = true;
     elements.drawingsView.hidden = true;
@@ -2943,6 +3157,7 @@ async function init() {
   await loadUsers();
   await loadBackendCollections();
   renderModeration();
+  renderPendingPosts();
   renderUsers();
   renderLocations();
   renderDrawings();
