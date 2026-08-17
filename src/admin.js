@@ -836,8 +836,36 @@ async function currentUser() {
   return await window.OpenPlayAuth?.currentUser?.() || null;
 }
 
+async function currentAccessToken() {
+  const supabase = window.OpenPlaySupabaseClient?.getClient?.();
+  if (!supabase) return '';
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  return data.session?.access_token || '';
+}
+
 function isAdmin(user) {
   return user?.role === 'admin';
+}
+
+async function postLocationToInstagram(court) {
+  if (!court?.remoteId) return null;
+  const accessToken = await currentAccessToken();
+  if (!accessToken) throw new Error('Sign in again before posting to Instagram.');
+
+  const response = await fetch('/api/instagram/post-location', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({ locationId: court.remoteId })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok && !result.skipped) {
+    throw new Error(result.error || `Instagram post failed: ${response.status}`);
+  }
+  return result;
 }
 
 function syncUserAttribution(user) {
@@ -2152,6 +2180,14 @@ async function approveLocation(locationId) {
     try {
       const approved = await window.OpenPlaySupabase.updateLocationStatus(remoteCourt.remoteId, 'approved', currentAdminUser?.id);
       allCourts = allCourts.map(court => court.id === locationId ? approved : court);
+      try {
+        const instagramResult = await postLocationToInstagram(approved);
+        if (instagramResult?.skipped) {
+          console.info('Instagram auto-post skipped:', instagramResult.reason);
+        }
+      } catch (instagramError) {
+        console.warn('Instagram auto-post failed.', instagramError);
+      }
       await loadBackendCollections();
       renderModeration();
       renderLocations();
@@ -2246,6 +2282,23 @@ async function updatePhotoModerationStatus(photoId, status) {
   try {
     await window.OpenPlaySupabase.updatePhotoStatus(photo.remoteId || photo.id, status, currentAdminUser?.id);
     await loadBackendCollections();
+    if (status === 'approved') {
+      const location = allCourts.find(court => (
+        court.remoteId === photo.remoteLocationId
+        || court.remoteId === photo.locationId
+        || court.id === photo.locationId
+      ));
+      if (location?.status === 'approved') {
+        try {
+          const instagramResult = await postLocationToInstagram(location);
+          if (instagramResult?.skipped) {
+            console.info('Instagram auto-post skipped:', instagramResult.reason);
+          }
+        } catch (instagramError) {
+          console.warn('Instagram auto-post failed.', instagramError);
+        }
+      }
+    }
     renderModeration();
     renderUsers();
     renderDrawings();
