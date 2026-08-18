@@ -1,4 +1,5 @@
 const PHOTO_BUCKET = 'open-play-photos';
+const INSTAGRAM_MAX_IMAGES = 10;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -49,7 +50,10 @@ async function supabaseRequest(env, path, options = {}) {
   const data = await readJson(response);
   if (!response.ok) {
     const message = data?.message || data?.error_description || data?.hint || `Supabase request failed: ${response.status}`;
-    throw new Error(message);
+    const error = new Error(message);
+    error.code = data?.code || '';
+    error.details = data;
+    throw error;
   }
   return data;
 }
@@ -122,7 +126,7 @@ function normalizeImageUrls(values = []) {
     .flatMap(value => String(value || '').split(/\r?\n|,/))
     .map(value => value.trim())
     .filter(Boolean))]
-    .slice(0, 10);
+    .slice(0, INSTAGRAM_MAX_IMAGES);
 }
 
 function isPublishableJpegUrl(url) {
@@ -149,6 +153,42 @@ async function createPostRecord(env, payload) {
     body: JSON.stringify(payload)
   });
   return rows?.[0] || null;
+}
+
+function isMissingDraftColumnError(error) {
+  return ['42703', 'PGRST204'].includes(error?.code)
+    && /(image_urls|location_tag|instagram_location_id)|column .* does not exist/i.test(error.message || '');
+}
+
+function legacyPostPayload(payload) {
+  const {
+    image_urls: _imageUrls,
+    location_tag: _locationTag,
+    instagram_location_id: _instagramLocationId,
+    ...legacyPayload
+  } = payload;
+  return legacyPayload;
+}
+
+async function savePostRecord(env, locationId, payload, existingPost = null) {
+  try {
+    return existingPost?.id
+      ? await updatePostRecord(env, existingPost.id, payload)
+      : await createPostRecord(env, {
+        location_id: locationId,
+        ...payload
+      });
+  } catch (error) {
+    if (!isMissingDraftColumnError(error)) throw error;
+
+    const legacyPayload = legacyPostPayload(payload);
+    return existingPost?.id
+      ? await updatePostRecord(env, existingPost.id, legacyPayload)
+      : await createPostRecord(env, {
+        location_id: locationId,
+        ...legacyPayload
+      });
+  }
 }
 
 async function updatePostRecord(env, id, payload) {
@@ -264,15 +304,13 @@ async function publishLocation(env, location, options, actorId, existingPost = n
     status: 'pending',
     caption,
     image_url: imageUrl,
+    image_urls: imageUrls,
+    location_tag: String(options.locationTag || '').trim() || null,
+    instagram_location_id: locationId || null,
     error_message: null,
     requested_by: actorId
   };
-  let postRecord = existingPost?.id
-    ? await updatePostRecord(env, existingPost.id, payload)
-    : await createPostRecord(env, {
-      location_id: location.id,
-      ...payload
-    });
+  let postRecord = await savePostRecord(env, location.id, payload, existingPost);
 
   try {
     const container = imageUrls.length > 1
@@ -333,6 +371,7 @@ export async function onRequestPost({ request, env }) {
     const post = await publishLocation(env, location, {
       caption: String(body.caption || '').trim() || captionForLocation(env, location),
       imageUrls,
+      locationTag: body.locationTag,
       instagramLocationId: body.instagramLocationId,
       photoId: fallbackPhoto?.id || null
     }, admin.id, existing);

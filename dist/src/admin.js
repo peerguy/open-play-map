@@ -9,6 +9,7 @@ const EDITS_KEY = 'open-play-map-suggested-edits';
 const DAILY_LOCATION_LIMIT = 10;
 const DAILY_REVIEW_LIMIT = 10;
 const SUGGESTED_EDIT_CREDITS = 3;
+const INSTAGRAM_MAX_IMAGES = 10;
 const LOCAL_PROTOTYPE_HOSTS = new Set(['', 'localhost', '127.0.0.1']);
 const PRODUCTION_DATABASE_UNAVAILABLE = 'The production database is unavailable, so this was not saved. Please try again in a few minutes.';
 
@@ -1242,11 +1243,17 @@ function defaultLocationTag(court = {}) {
   return [court.name, court.city, court.state].filter(Boolean).join(' · ');
 }
 
-function parseImageUrlLines(value) {
-  return String(value || '')
-    .split(/\r?\n|,/)
-    .map(url => url.trim())
-    .filter(Boolean);
+function pendingPostImageUrls(form) {
+  return [...form.querySelectorAll('[data-pending-image-url]')]
+    .map(input => input.value.trim())
+    .filter(Boolean)
+    .slice(0, INSTAGRAM_MAX_IMAGES);
+}
+
+function pendingPostImageRowValues(form) {
+  return [...form.querySelectorAll('[data-pending-image-url]')]
+    .map(input => input.value.trim())
+    .slice(0, INSTAGRAM_MAX_IMAGES);
 }
 
 function pendingPostValues(form) {
@@ -1254,7 +1261,7 @@ function pendingPostValues(form) {
     caption: form.elements.caption.value.trim(),
     locationTag: form.elements.locationTag.value.trim(),
     instagramLocationId: form.elements.instagramLocationId.value.trim(),
-    imageUrls: parseImageUrlLines(form.elements.imageUrls.value)
+    imageUrls: pendingPostImageUrls(form)
   };
 }
 
@@ -1276,11 +1283,58 @@ function renderPendingPostImages(urls = []) {
   `;
 }
 
+function pendingPostImageRow(url = '', index = 0, count = 1) {
+  const removeDisabled = count === 1 && !url;
+
+  return `
+    <div class="pending-post-image-row" data-pending-image-row>
+      <div class="pending-post-image-thumb">
+        ${url ? `<img src="${escapeHtml(url)}" alt="" loading="lazy" />` : '<span>Image</span>'}
+      </div>
+      <input data-pending-image-url value="${escapeHtml(url)}" placeholder="Public JPEG image URL" />
+      <div class="pending-post-image-controls">
+        <button class="secondary-button" type="button" data-move-image="up" aria-label="Move image up"${index === 0 ? ' disabled' : ''}>^</button>
+        <button class="secondary-button" type="button" data-move-image="down" aria-label="Move image down"${index >= count - 1 ? ' disabled' : ''}>v</button>
+        <button class="secondary-button admin-delete-button" type="button" data-remove-image aria-label="Remove image"${removeDisabled ? ' disabled' : ''}>x</button>
+      </div>
+    </div>
+  `;
+}
+
+function pendingPostImageRows(urls = []) {
+  const imageUrls = urls.slice(0, INSTAGRAM_MAX_IMAGES);
+  if (!imageUrls.length) imageUrls.push('');
+  return imageUrls.map((url, index) => pendingPostImageRow(url, index, imageUrls.length)).join('');
+}
+
+function setPendingPostImageRows(form, urls = []) {
+  const list = form.querySelector('[data-pending-image-list]');
+  if (!list) return;
+  list.innerHTML = pendingPostImageRows(urls);
+  updatePendingPostPreview(form);
+}
+
+function updatePendingPostImageThumb(input) {
+  const thumb = input.closest('[data-pending-image-row]')?.querySelector('.pending-post-image-thumb');
+  if (!thumb) return;
+  const url = input.value.trim();
+  thumb.innerHTML = url ? `<img src="${escapeHtml(url)}" alt="" loading="lazy" />` : '<span>Image</span>';
+}
+
+function addPendingPostImageUrls(form, urls = []) {
+  const existingUrls = pendingPostImageUrls(form);
+  const nextUrls = [
+    ...existingUrls,
+    ...urls.map(url => String(url || '').trim()).filter(Boolean)
+  ].slice(0, INSTAGRAM_MAX_IMAGES);
+  setPendingPostImageRows(form, nextUrls);
+}
+
 function renderPendingPostCard(court) {
   const post = instagramPostsByLocation().get(court.remoteId) || {};
-  const imageUrls = post.imageUrl ? [post.imageUrl] : approvedInstagramPhotosForLocation(court);
+  const imageUrls = post.imageUrls?.length ? post.imageUrls : (post.imageUrl ? [post.imageUrl] : approvedInstagramPhotosForLocation(court));
   const caption = post.caption || defaultInstagramCaption(court);
-  const locationTag = defaultLocationTag(court);
+  const locationTag = post.locationTag || defaultLocationTag(court);
   const hasFailure = post.status === 'failed';
 
   return `
@@ -1321,12 +1375,22 @@ function renderPendingPostCard(court) {
         </label>
         <label>
           Instagram location ID
-          <input name="instagramLocationId" inputmode="numeric" placeholder="Optional Meta place ID" />
+          <input name="instagramLocationId" inputmode="numeric" placeholder="Optional Meta place ID" value="${escapeHtml(post.instagramLocationId || '')}" />
         </label>
-        <label>
-          Image URLs
-          <textarea name="imageUrls" rows="5" placeholder="One public JPEG URL per line">${escapeHtml(imageUrls.join('\n'))}</textarea>
-        </label>
+        <div class="pending-post-image-editor">
+          <div class="pending-post-image-editor-header">
+            <span>Images</span>
+            <small>Order up to ${INSTAGRAM_MAX_IMAGES} carousel images before publishing.</small>
+          </div>
+          <div class="pending-post-image-list" data-pending-image-list>
+            ${pendingPostImageRows(imageUrls)}
+          </div>
+          <div class="pending-post-upload-row">
+            <button class="secondary-button admin-edit-button" type="button" data-add-image-url>Add image URL</button>
+            <button class="secondary-button admin-edit-button" type="button" data-upload-image>Upload image</button>
+            <input type="file" accept="image/jpeg,image/png,image/webp" multiple data-upload-image-input hidden />
+          </div>
+        </div>
         <div class="admin-edit-actions pending-post-actions">
           <button class="secondary-button admin-edit-button admin-approve-button" type="submit">Post to Instagram</button>
           <p class="form-hint" data-pending-post-hint></p>
@@ -1597,14 +1661,116 @@ function updatePendingPostPreview(form) {
   if (images) images.innerHTML = renderPendingPostImages(values.imageUrls);
 }
 
+function movePendingPostImageRow(form, direction, button) {
+  const rows = pendingPostImageRowValues(form);
+  const row = button.closest('[data-pending-image-row]');
+  const list = row?.closest('[data-pending-image-list]');
+  const index = [...list?.children || []].indexOf(row);
+  const nextIndex = direction === 'up' ? index - 1 : index + 1;
+  if (index < 0 || nextIndex < 0 || nextIndex >= rows.length) return;
+  [rows[index], rows[nextIndex]] = [rows[nextIndex], rows[index]];
+  setPendingPostImageRows(form, rows);
+  form.querySelectorAll('[data-pending-image-url]')[nextIndex]?.focus();
+}
+
+function removePendingPostImageRow(form, button) {
+  const rows = pendingPostImageRowValues(form);
+  const row = button.closest('[data-pending-image-row]');
+  const list = row?.closest('[data-pending-image-list]');
+  const index = [...list?.children || []].indexOf(row);
+  if (index < 0) return;
+  rows.splice(index, 1);
+  setPendingPostImageRows(form, rows);
+  const nextInput = form.querySelectorAll('[data-pending-image-url]')[Math.min(index, rows.length - 1)] || form.querySelector('[data-pending-image-url]');
+  nextInput?.focus();
+}
+
+async function uploadPendingPostImages(form, court, input, hint) {
+  const files = Array.from(input.files || []);
+  input.value = '';
+  if (!files.length) return;
+
+  const remainingSlots = INSTAGRAM_MAX_IMAGES - pendingPostImageUrls(form).length;
+  if (remainingSlots <= 0) {
+    hint.textContent = `Instagram accepts up to ${INSTAGRAM_MAX_IMAGES} images. Remove one before uploading more.`;
+    return;
+  }
+  if (files.length > remainingSlots) {
+    hint.textContent = `Choose up to ${remainingSlots} more image${remainingSlots === 1 ? '' : 's'} for this post.`;
+    return;
+  }
+  if (!window.OpenPlaySupabase?.uploadInstagramDraftImages) {
+    hint.textContent = 'Image upload is unavailable right now.';
+    return;
+  }
+
+  const uploadButton = form.querySelector('[data-upload-image]');
+  const previousText = uploadButton?.textContent || '';
+  if (uploadButton) {
+    uploadButton.disabled = true;
+    uploadButton.textContent = files.length === 1 ? 'Uploading...' : 'Uploading images...';
+  }
+  hint.textContent = files.length === 1 ? 'Preparing image...' : 'Preparing images...';
+
+  try {
+    const user = await currentUser();
+    const urls = await window.OpenPlaySupabase.uploadInstagramDraftImages(court, user, files);
+    addPendingPostImageUrls(form, urls);
+    hint.textContent = `${urls.length} image${urls.length === 1 ? '' : 's'} added.`;
+  } catch (error) {
+    hint.textContent = error.message || 'Could not upload that image.';
+  } finally {
+    if (uploadButton) {
+      uploadButton.disabled = false;
+      uploadButton.textContent = previousText;
+    }
+  }
+}
+
 function setupPendingPostForm(form) {
   const court = allCourts.find(item => item.id === form.dataset.pendingPostLocation);
   if (!court) return;
   const hint = form.querySelector('[data-pending-post-hint]');
+  const uploadInput = form.querySelector('[data-upload-image-input]');
 
-  form.querySelectorAll('input, textarea').forEach(field => {
-    field.addEventListener('input', () => updatePendingPostPreview(form));
+  form.addEventListener('input', event => {
+    if (!event.target?.matches) return;
+    if (!event.target.matches('input, textarea')) return;
+    if (event.target.matches('[data-pending-image-url]')) updatePendingPostImageThumb(event.target);
+    updatePendingPostPreview(form);
   });
+
+  form.addEventListener('click', event => {
+    const button = event.target?.closest?.('button');
+    if (!button) return;
+
+    if (button.matches('[data-add-image-url]')) {
+      if (pendingPostImageRowValues(form).length >= INSTAGRAM_MAX_IMAGES) {
+        hint.textContent = `Instagram accepts up to ${INSTAGRAM_MAX_IMAGES} images.`;
+        return;
+      }
+      const nextRows = [...pendingPostImageRowValues(form), ''];
+      setPendingPostImageRows(form, nextRows);
+      form.querySelectorAll('[data-pending-image-url]')[nextRows.length - 1]?.focus();
+      return;
+    }
+
+    if (button.matches('[data-upload-image]')) {
+      uploadInput?.click();
+      return;
+    }
+
+    if (button.matches('[data-remove-image]')) {
+      removePendingPostImageRow(form, button);
+      return;
+    }
+
+    if (button.matches('[data-move-image]')) {
+      movePendingPostImageRow(form, button.dataset.moveImage, button);
+    }
+  });
+
+  uploadInput?.addEventListener('change', () => uploadPendingPostImages(form, court, uploadInput, hint));
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
@@ -1615,6 +1781,10 @@ function setupPendingPostForm(form) {
     }
     if (!values.imageUrls.length) {
       hint.textContent = 'Add at least one public JPEG image URL.';
+      return;
+    }
+    if (values.imageUrls.length > INSTAGRAM_MAX_IMAGES) {
+      hint.textContent = `Instagram accepts up to ${INSTAGRAM_MAX_IMAGES} images.`;
       return;
     }
     if (values.imageUrls.some(url => !/^https:\/\//i.test(url) || !/\.(jpe?g)(?:$|\?)/i.test(url))) {

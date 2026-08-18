@@ -15,6 +15,7 @@
   };
   const PHOTO_BUCKET = 'open-play-photos';
   const PHOTO_MAX_FILES = 4;
+  const INSTAGRAM_MAX_IMAGES = 10;
   const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
   const PHOTO_TARGET_BYTES = Math.floor(PHOTO_MAX_BYTES * 0.94);
   const PHOTO_MAX_DIMENSION = 2400;
@@ -114,6 +115,21 @@
     selected.forEach(file => {
       if (!PHOTO_TYPES[file.type]) {
         throw new Error('Photos must be JPG, PNG, or WebP images.');
+      }
+    });
+
+    return selected;
+  }
+
+  function validateInstagramDraftImageFiles(files = []) {
+    const selected = normalizePhotoFiles(files);
+    if (selected.length > INSTAGRAM_MAX_IMAGES) {
+      throw new Error(`Upload up to ${INSTAGRAM_MAX_IMAGES} Instagram images at a time.`);
+    }
+
+    selected.forEach(file => {
+      if (!PHOTO_TYPES[file.type]) {
+        throw new Error('Images must be JPG, PNG, or WebP files.');
       }
     });
 
@@ -565,6 +581,9 @@
       status: record.status || 'pending',
       caption: record.caption || '',
       imageUrl: record.image_url || '',
+      imageUrls: Array.isArray(record.image_urls) ? record.image_urls.filter(Boolean) : [],
+      locationTag: record.location_tag || '',
+      instagramLocationId: record.instagram_location_id || '',
       errorMessage: record.error_message || '',
       requestedBy: record.requested_by || '',
       publishedAt: record.published_at || '',
@@ -960,6 +979,83 @@
     const timestamp = Date.now().toString(36);
     const scope = reviewId ? `reviews/${reviewId}` : `locations/${locationId}`;
     return `${userId}/${scope}/${timestamp}-${index + 1}-${basename}.${extension}`;
+  }
+
+  function instagramDraftStoragePath({ userId, locationId, file, index }) {
+    const basename = safeFilePart(String(file.name || 'instagram-draft').replace(/\.[^.]+$/, ''));
+    const timestamp = Date.now().toString(36);
+    return `${userId}/instagram-drafts/${locationId}/${timestamp}-${index + 1}-${basename}.jpg`;
+  }
+
+  async function prepareInstagramDraftImage(file) {
+    const selected = validatePhotoFiles([file])[0];
+    if (!selected) throw new Error('Choose a JPG, PNG, or WebP image.');
+
+    if (!canCompressPhotos()) {
+      if (selected.type === 'image/jpeg' && selected.size <= PHOTO_MAX_BYTES) return selected;
+      throw new Error('This browser cannot prepare that image. Try uploading a JPEG under 5 MB.');
+    }
+
+    const image = await loadPhotoImage(selected);
+    let maxDimension = Math.min(PHOTO_MAX_DIMENSION, Math.max(image.naturalWidth || image.width || 1, image.naturalHeight || image.height || 1));
+    let bestBlob = null;
+
+    while (maxDimension >= PHOTO_MIN_DIMENSION) {
+      const { width, height } = photoCanvasSize(image, maxDimension);
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Unable to prepare that image. Try a smaller file.');
+
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+
+      for (const quality of PHOTO_COMPRESSION_QUALITIES) {
+        const blob = await canvasToBlob(canvas, 'image/jpeg', quality);
+        if (!bestBlob || blob.size < bestBlob.size) bestBlob = blob;
+        if (blob.size <= PHOTO_TARGET_BYTES) return photoBlobToFile(selected, blob);
+      }
+
+      maxDimension = Math.floor(maxDimension * 0.82);
+    }
+
+    if (bestBlob && bestBlob.size <= PHOTO_MAX_BYTES) return photoBlobToFile(selected, bestBlob);
+    throw new Error('That image is too large to prepare for Instagram. Try a smaller file.');
+  }
+
+  async function uploadInstagramDraftImages(court, user, files = []) {
+    const supabase = client();
+    const selected = validateInstagramDraftImageFiles(files);
+    if (!selected.length) return [];
+    if (!supabase || !court?.remoteId || !user?.id) throw new Error('Supabase is not configured.');
+
+    const uploaded = [];
+    for (const [index, file] of selected.entries()) {
+      const prepared = await prepareInstagramDraftImage(file);
+      const storagePath = instagramDraftStoragePath({
+        userId: user.id,
+        locationId: court.remoteId,
+        file: prepared,
+        index
+      });
+      const { error: uploadError } = await supabase.storage
+        .from(PHOTO_BUCKET)
+        .upload(storagePath, prepared, {
+          cacheControl: '31536000',
+          contentType: 'image/jpeg',
+          upsert: false
+        });
+
+      if (uploadError) {
+        await removeUploadedPhotoFiles(uploaded);
+        throw uploadError;
+      }
+      uploaded.push(storagePath);
+    }
+
+    return uploaded.map(publicStorageUrl);
   }
 
   async function uploadPhotoFiles({ locationId, reviewId = null, user, files = [] }) {
@@ -1764,6 +1860,7 @@
     saveAdminLocation,
     submitLocation,
     submitLocationPhotos,
+    uploadInstagramDraftImages,
     submitReview,
     fetchReviewMap,
     fetchOwnReports,
