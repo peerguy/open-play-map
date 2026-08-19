@@ -1254,6 +1254,17 @@ function pendingPostSearchText(court = {}) {
   ].filter(Boolean).join(' '));
 }
 
+function pendingPostImageUrlsForCourt(court = {}, postsByLocation = instagramPostsByLocation()) {
+  const post = postsByLocation.get(court.remoteId) || {};
+  if (post.imageUrls?.length) return post.imageUrls;
+  if (post.imageUrl) return [post.imageUrl];
+  return approvedInstagramPhotosForLocation(court);
+}
+
+function pendingPostLocationDate(court = {}) {
+  return String(court.approvedAt || court.updatedAt || court.createdAt || '');
+}
+
 function pendingPostLocations({ includeSearch = true } = {}) {
   const postsByLocation = instagramPostsByLocation();
   const query = normalize(pendingPostSearchQuery).trim();
@@ -1261,7 +1272,11 @@ function pendingPostLocations({ includeSearch = true } = {}) {
     .filter(court => court.remoteId && normalizedLocationStatus(court) === 'approved')
     .filter(court => postsByLocation.get(court.remoteId)?.status !== 'published')
     .filter(court => !includeSearch || !query || pendingPostSearchText(court).includes(query))
-    .sort((a, b) => String(b.approvedAt || b.updatedAt || b.createdAt || '').localeCompare(String(a.approvedAt || a.updatedAt || a.createdAt || '')));
+    .sort((a, b) => {
+      const imageSort = Number(pendingPostImageUrlsForCourt(b, postsByLocation).length > 0)
+        - Number(pendingPostImageUrlsForCourt(a, postsByLocation).length > 0);
+      return imageSort || pendingPostLocationDate(b).localeCompare(pendingPostLocationDate(a));
+    });
 }
 
 function defaultInstagramCaption(court = {}) {
@@ -1397,7 +1412,7 @@ function addPendingPostImageUrls(form, urls = []) {
 
 function renderPendingPostCard(court) {
   const post = instagramPostsByLocation().get(court.remoteId) || {};
-  const imageUrls = post.imageUrls?.length ? post.imageUrls : (post.imageUrl ? [post.imageUrl] : approvedInstagramPhotosForLocation(court));
+  const imageUrls = pendingPostImageUrlsForCourt(court);
   const caption = post.caption || defaultInstagramCaption(court);
   const locationTag = post.locationTag || defaultLocationTag(court);
   const collaborators = post.collaboratorUsernames?.length ? post.collaboratorUsernames : DEFAULT_INSTAGRAM_COLLABORATORS;
