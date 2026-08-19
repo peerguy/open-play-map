@@ -5789,6 +5789,35 @@ label:has(input:required:valid) > .field-label .is-required {
   padding: 8px 9px;
 }
 
+.pending-post-card button,
+.pending-post-card .secondary-button,
+.pending-post-card .admin-edit-button {
+  border-color: var(--brand-dark);
+  background: var(--brand-dark);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(23, 69, 40, 0.18);
+}
+
+.pending-post-card button:hover,
+.pending-post-card button:focus-visible,
+.pending-post-card .secondary-button:hover,
+.pending-post-card .secondary-button:focus-visible,
+.pending-post-card .admin-edit-button:hover,
+.pending-post-card .admin-edit-button:focus-visible {
+  background: #102f1b;
+  color: #fff;
+}
+
+.pending-post-card button:disabled,
+.pending-post-card .secondary-button:disabled,
+.pending-post-card .admin-edit-button:disabled {
+  border-color: #8da99a;
+  background: #8da99a;
+  color: rgba(255, 255, 255, 0.9);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
 .pending-post-upload-row {
   justify-content: flex-start;
 }
@@ -5805,6 +5834,12 @@ label:has(input:required:valid) > .field-label .is-required {
   border-color: #bbd8b7;
   color: #216222;
   background: #eef8ec;
+}
+
+.pending-post-card .admin-approve-button {
+  border-color: var(--brand-dark);
+  background: var(--brand-dark);
+  color: #fff;
 }
 
 .admin-card,
