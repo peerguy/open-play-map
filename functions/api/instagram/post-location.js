@@ -1,5 +1,11 @@
 const PHOTO_BUCKET = 'open-play-photos';
 const INSTAGRAM_MAX_IMAGES = 10;
+const INSTAGRAM_MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const INSTAGRAM_IMAGE_PROBE_BYTES = 1024 * 1024;
+const INSTAGRAM_MIN_IMAGE_WIDTH = 320;
+const INSTAGRAM_MAX_IMAGE_WIDTH = 1440;
+const INSTAGRAM_MIN_ASPECT_RATIO = 4 / 5;
+const INSTAGRAM_MAX_ASPECT_RATIO = 1.91;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -125,17 +131,203 @@ function normalizeImageUrls(values = []) {
   return [...new Set((Array.isArray(values) ? values : [values])
     .flatMap(value => String(value || '').split(/\r?\n|,/))
     .map(value => value.trim())
-    .filter(Boolean))]
-    .slice(0, INSTAGRAM_MAX_IMAGES);
+    .filter(Boolean))];
 }
 
-function isPublishableJpegUrl(url) {
-  return /^https:\/\//i.test(url) && /\.(jpe?g)(?:$|\?)/i.test(url);
+function parsePublicHttpsUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('Image URLs must be valid public HTTPS URLs.');
+  }
+
+  if (url.protocol !== 'https:') {
+    throw new Error('Image URLs must use HTTPS.');
+  }
+  if (url.username || url.password) {
+    throw new Error('Image URLs cannot include embedded credentials.');
+  }
+
+  const hostname = url.hostname.toLowerCase();
+  const ipv4 = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
+  const first = ipv4 ? Number(ipv4[1]) : null;
+  const second = ipv4 ? Number(ipv4[2]) : null;
+  const isPrivateIpv4 = ipv4 && (
+    first === 10 ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
+  );
+
+  if (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname.endsWith('.local') ||
+    hostname === '0.0.0.0' ||
+    hostname === '::1' ||
+    isPrivateIpv4
+  ) {
+    throw new Error('Image URLs must be publicly reachable.');
+  }
+
+  return url;
 }
 
 function instagramLocationId(value) {
   const text = String(value || '').trim();
   return /^\d+$/.test(text) ? text : '';
+}
+
+function contentLength(headers) {
+  const range = headers.get('content-range') || '';
+  const rangeTotal = range.match(/\/(\d+)$/)?.[1];
+  const length = rangeTotal || headers.get('content-length');
+  const value = Number(length);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+async function readLimitedBytes(response, byteLimit) {
+  const reader = response.body?.getReader?.();
+  if (!reader) {
+    const buffer = new Uint8Array(await response.arrayBuffer());
+    if (buffer.byteLength > byteLimit) throw new Error('Image is too large.');
+    return buffer;
+  }
+
+  const chunks = [];
+  let total = 0;
+  while (total < byteLimit) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value?.byteLength) continue;
+    const remaining = byteLimit - total;
+    const chunk = value.byteLength > remaining ? value.slice(0, remaining) : value;
+    chunks.push(chunk);
+    total += chunk.byteLength;
+  }
+  reader.cancel?.();
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+function jpegDimensions(bytes) {
+  if (bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+
+  let offset = 2;
+  while (offset + 3 < bytes.length) {
+    while (bytes[offset] === 0xff) offset += 1;
+    const marker = bytes[offset];
+    offset += 1;
+
+    if (marker === 0xd8 || marker === 0xd9 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      continue;
+    }
+    if (offset + 1 >= bytes.length) return null;
+
+    const length = (bytes[offset] << 8) + bytes[offset + 1];
+    if (length < 2 || offset + length > bytes.length) return null;
+
+    const isStartOfFrame = (
+      (marker >= 0xc0 && marker <= 0xc3) ||
+      (marker >= 0xc5 && marker <= 0xc7) ||
+      (marker >= 0xc9 && marker <= 0xcb) ||
+      (marker >= 0xcd && marker <= 0xcf)
+    );
+    if (isStartOfFrame) {
+      if (offset + 6 >= bytes.length) return null;
+      return {
+        height: (bytes[offset + 3] << 8) + bytes[offset + 4],
+        width: (bytes[offset + 5] << 8) + bytes[offset + 6]
+      };
+    }
+
+    offset += length;
+  }
+
+  return null;
+}
+
+function validateInstagramImageShape(dimensions) {
+  if (!dimensions?.width || !dimensions?.height) {
+    throw new Error('Could not read JPEG dimensions.');
+  }
+
+  const ratio = dimensions.width / dimensions.height;
+  if (dimensions.width < INSTAGRAM_MIN_IMAGE_WIDTH) {
+    throw new Error(`Image width must be at least ${INSTAGRAM_MIN_IMAGE_WIDTH}px.`);
+  }
+  if (dimensions.width > INSTAGRAM_MAX_IMAGE_WIDTH) {
+    throw new Error(`Image width must be ${INSTAGRAM_MAX_IMAGE_WIDTH}px or less.`);
+  }
+  if (ratio < INSTAGRAM_MIN_ASPECT_RATIO || ratio > INSTAGRAM_MAX_ASPECT_RATIO) {
+    throw new Error('Image aspect ratio must be between 4:5 and 1.91:1.');
+  }
+}
+
+async function inspectInstagramImageUrl(imageUrl) {
+  const url = parsePublicHttpsUrl(imageUrl);
+  const response = await fetch(url.toString(), {
+    headers: {
+      accept: 'image/jpeg,image/*;q=0.8',
+      range: `bytes=0-${INSTAGRAM_IMAGE_PROBE_BYTES - 1}`,
+      'user-agent': 'OpenPlayMapInstagramImageCheck/1.0'
+    },
+    redirect: 'follow'
+  });
+
+  if (!response.ok && response.status !== 206) {
+    throw new Error(`Image URL returned HTTP ${response.status}.`);
+  }
+
+  const contentType = (response.headers.get('content-type') || '').toLowerCase();
+  if (!contentType.includes('image/jpeg') && !contentType.includes('image/jpg')) {
+    throw new Error('Image URL must return a JPEG content type.');
+  }
+
+  const sizeBytes = contentLength(response.headers);
+  if (sizeBytes === null) {
+    throw new Error('Image URL must return a content length.');
+  }
+  if (sizeBytes > INSTAGRAM_MAX_IMAGE_BYTES) {
+    throw new Error('Image must be 8 MB or smaller.');
+  }
+
+  const bytes = await readLimitedBytes(response, Math.min(INSTAGRAM_IMAGE_PROBE_BYTES, INSTAGRAM_MAX_IMAGE_BYTES));
+  const dimensions = jpegDimensions(bytes);
+  validateInstagramImageShape(dimensions);
+
+  return {
+    url: url.toString(),
+    contentType,
+    sizeBytes,
+    width: dimensions.width,
+    height: dimensions.height,
+    aspectRatio: Number((dimensions.width / dimensions.height).toFixed(4))
+  };
+}
+
+async function inspectInstagramImageUrls(imageUrls) {
+  const urls = normalizeImageUrls(imageUrls);
+  if (!urls.length) throw new Error('Add at least one public JPEG image URL before posting.');
+  if (urls.length > INSTAGRAM_MAX_IMAGES) throw new Error(`Instagram accepts up to ${INSTAGRAM_MAX_IMAGES} images.`);
+
+  const results = [];
+  for (const [index, url] of urls.entries()) {
+    try {
+      results.push(await inspectInstagramImageUrl(url));
+    } catch (error) {
+      throw new Error(`Image ${index + 1}: ${error.message || 'Image is not publishable.'}`);
+    }
+  }
+  return results;
 }
 
 async function findExistingPost(env, locationId) {
@@ -364,8 +556,14 @@ export async function onRequestPost({ request, env }) {
     if (!imageUrls.length) {
       return json({ ok: false, error: 'Add at least one public JPEG image URL before posting.' }, 400);
     }
-    if (imageUrls.some(url => !isPublishableJpegUrl(url))) {
-      return json({ ok: false, error: 'Instagram publishing needs public HTTPS JPEG URLs.' }, 400);
+    if (imageUrls.length > INSTAGRAM_MAX_IMAGES) {
+      return json({ ok: false, error: `Instagram accepts up to ${INSTAGRAM_MAX_IMAGES} images.` }, 400);
+    }
+
+    try {
+      await inspectInstagramImageUrls(imageUrls);
+    } catch (error) {
+      return json({ ok: false, error: error.message || 'Instagram publishing needs public HTTPS JPEG URLs.' }, 400);
     }
 
     const post = await publishLocation(env, location, {
@@ -378,5 +576,18 @@ export async function onRequestPost({ request, env }) {
     return json({ ok: true, post });
   } catch (error) {
     return json({ ok: false, error: error.message || 'Instagram publish failed.' }, 500);
+  }
+}
+
+export async function onRequestPreflightImages({ request, env }) {
+  try {
+    const admin = await requireAdmin(env, request);
+    if (!admin) return json({ ok: false, error: 'Admin authorization required.' }, 401);
+
+    const body = await request.json().catch(() => ({}));
+    const results = await inspectInstagramImageUrls(body.imageUrls || body.imageUrl);
+    return json({ ok: true, results });
+  } catch (error) {
+    return json({ ok: false, error: error.message || 'Image is not ready for Instagram.' }, 400);
   }
 }

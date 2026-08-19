@@ -1,4 +1,7 @@
-import { onRequestPost as postLocationToInstagram } from '../functions/api/instagram/post-location.js';
+import {
+  onRequestPost as postLocationToInstagram,
+  onRequestPreflightImages as preflightInstagramImages
+} from '../functions/api/instagram/post-location.js';
 
 function getForwardedScheme(request) {
   const cfVisitor = request.headers.get('cf-visitor');
@@ -32,6 +35,9 @@ export default {
     if (url.pathname === '/api/instagram/post-location' && request.method === 'POST') {
       return postLocationToInstagram({ request, env, ctx });
     }
+    if (url.pathname === '/api/instagram/preflight-images' && request.method === 'POST') {
+      return preflightInstagramImages({ request, env, ctx });
+    }
 
     if (url.pathname.startsWith('/api/')) {
       return new Response('Not found', { status: 404 });
@@ -40,4 +46,3 @@ export default {
     return env.ASSETS.fetch(request);
   }
 };
-

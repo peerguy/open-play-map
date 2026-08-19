@@ -16,6 +16,8 @@
   const PHOTO_BUCKET = 'open-play-photos';
   const PHOTO_MAX_FILES = 4;
   const INSTAGRAM_MAX_IMAGES = 10;
+  const INSTAGRAM_IMAGE_SIZE = 1080;
+  const INSTAGRAM_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
   const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
   const PHOTO_TARGET_BYTES = Math.floor(PHOTO_MAX_BYTES * 0.94);
   const PHOTO_MAX_DIMENSION = 2400;
@@ -988,40 +990,40 @@
   }
 
   async function prepareInstagramDraftImage(file) {
-    const selected = validatePhotoFiles([file])[0];
+    const selected = validateInstagramDraftImageFiles([file])[0];
     if (!selected) throw new Error('Choose a JPG, PNG, or WebP image.');
 
     if (!canCompressPhotos()) {
-      if (selected.type === 'image/jpeg' && selected.size <= PHOTO_MAX_BYTES) return selected;
-      throw new Error('This browser cannot prepare that image. Try uploading a JPEG under 5 MB.');
+      throw new Error('This browser cannot prepare Instagram images. Try a current browser.');
     }
 
     const image = await loadPhotoImage(selected);
-    let maxDimension = Math.min(PHOTO_MAX_DIMENSION, Math.max(image.naturalWidth || image.width || 1, image.naturalHeight || image.height || 1));
+    const sourceWidth = image.naturalWidth || image.width || 1;
+    const sourceHeight = image.naturalHeight || image.height || 1;
+    const scale = Math.min(INSTAGRAM_IMAGE_SIZE / sourceWidth, INSTAGRAM_IMAGE_SIZE / sourceHeight);
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
+    const x = Math.floor((INSTAGRAM_IMAGE_SIZE - width) / 2);
+    const y = Math.floor((INSTAGRAM_IMAGE_SIZE - height) / 2);
+    const canvas = document.createElement('canvas');
+    canvas.width = INSTAGRAM_IMAGE_SIZE;
+    canvas.height = INSTAGRAM_IMAGE_SIZE;
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('Unable to prepare that image. Try a smaller file.');
+
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, x, y, width, height);
+
     let bestBlob = null;
 
-    while (maxDimension >= PHOTO_MIN_DIMENSION) {
-      const { width, height } = photoCanvasSize(image, maxDimension);
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext('2d');
-      if (!context) throw new Error('Unable to prepare that image. Try a smaller file.');
-
-      context.fillStyle = '#ffffff';
-      context.fillRect(0, 0, width, height);
-      context.drawImage(image, 0, 0, width, height);
-
-      for (const quality of PHOTO_COMPRESSION_QUALITIES) {
-        const blob = await canvasToBlob(canvas, 'image/jpeg', quality);
-        if (!bestBlob || blob.size < bestBlob.size) bestBlob = blob;
-        if (blob.size <= PHOTO_TARGET_BYTES) return photoBlobToFile(selected, blob);
-      }
-
-      maxDimension = Math.floor(maxDimension * 0.82);
+    for (const quality of PHOTO_COMPRESSION_QUALITIES) {
+      const blob = await canvasToBlob(canvas, 'image/jpeg', quality);
+      if (!bestBlob || blob.size < bestBlob.size) bestBlob = blob;
+      if (blob.size <= PHOTO_TARGET_BYTES) return photoBlobToFile(selected, blob);
     }
 
-    if (bestBlob && bestBlob.size <= PHOTO_MAX_BYTES) return photoBlobToFile(selected, bestBlob);
+    if (bestBlob && bestBlob.size <= INSTAGRAM_IMAGE_MAX_BYTES) return photoBlobToFile(selected, bestBlob);
     throw new Error('That image is too large to prepare for Instagram. Try a smaller file.');
   }
 

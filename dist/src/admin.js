@@ -880,6 +880,25 @@ async function publishPendingInstagramPost(court, values) {
   return result;
 }
 
+async function preflightPendingInstagramImages(imageUrls) {
+  const accessToken = await currentAccessToken();
+  if (!accessToken) throw new Error('Sign in again before checking images.');
+
+  const response = await fetch('/api/instagram/preflight-images', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({ imageUrls })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result.ok === false) {
+    throw new Error(result.error || `Image check failed: ${response.status}`);
+  }
+  return result;
+}
+
 function syncUserAttribution(user) {
   const submissions = getSavedSubmissions().map(court => (
     court.submittedBy === user.id ? { ...court, submittedByUsername: user.username } : court
@@ -1380,7 +1399,7 @@ function renderPendingPostCard(court) {
         <div class="pending-post-image-editor">
           <div class="pending-post-image-editor-header">
             <span>Images</span>
-            <small>Order up to ${INSTAGRAM_MAX_IMAGES} carousel images before publishing.</small>
+            <small>Up to ${INSTAGRAM_MAX_IMAGES} carousel images.</small>
           </div>
           <div class="pending-post-image-list" data-pending-image-list>
             ${pendingPostImageRows(imageUrls)}
@@ -1716,7 +1735,7 @@ async function uploadPendingPostImages(form, court, input, hint) {
     const user = await currentUser();
     const urls = await window.OpenPlaySupabase.uploadInstagramDraftImages(court, user, files);
     addPendingPostImageUrls(form, urls);
-    hint.textContent = `${urls.length} image${urls.length === 1 ? '' : 's'} added.`;
+    hint.textContent = `${urls.length} Instagram-ready image${urls.length === 1 ? '' : 's'} added.`;
   } catch (error) {
     hint.textContent = error.message || 'Could not upload that image.';
   } finally {
@@ -1787,16 +1806,18 @@ function setupPendingPostForm(form) {
       hint.textContent = `Instagram accepts up to ${INSTAGRAM_MAX_IMAGES} images.`;
       return;
     }
-    if (values.imageUrls.some(url => !/^https:\/\//i.test(url) || !/\.(jpe?g)(?:$|\?)/i.test(url))) {
-      hint.textContent = 'Instagram publishing needs public HTTPS JPEG URLs.';
+    if (values.imageUrls.some(url => !/^https:\/\//i.test(url))) {
+      hint.textContent = 'Instagram publishing needs public HTTPS image URLs.';
       return;
     }
 
     const button = form.querySelector('[type="submit"]');
     button.disabled = true;
-    hint.textContent = 'Posting...';
+    hint.textContent = 'Checking images...';
 
     try {
+      await preflightPendingInstagramImages(values.imageUrls);
+      hint.textContent = 'Posting...';
       await publishPendingInstagramPost(court, values);
       hint.textContent = 'Posted to Instagram.';
       await loadBackendCollections();
