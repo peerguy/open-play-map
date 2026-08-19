@@ -1683,7 +1683,6 @@
       .maybeSingle();
 
     if (existingError) throw existingError;
-    if (existing?.status === 'published') return mapInstagramPost(existing);
 
     const payload = {
       image_url: nextImageUrls[0] || null,

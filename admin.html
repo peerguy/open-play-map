@@ -40,7 +40,7 @@
           <button class="admin-subnav-button" type="button" data-moderation-view="edits">Recent edits</button>
           <button class="admin-subnav-button" type="button" data-moderation-view="volume">High-volume users today</button>
         </div>
-        <button class="admin-nav-button" type="button" data-admin-view="posts">Pending posts</button>
+        <button class="admin-nav-button" type="button" data-admin-view="posts">Instagram posts</button>
         <button class="admin-nav-button" type="button" data-admin-view="users">Users</button>
         <button class="admin-nav-button" type="button" data-admin-view="locations">Locations</button>
         <div id="locationsSubnav" class="admin-subnav" aria-label="Location status queues" hidden>
@@ -86,14 +86,22 @@
           <div class="admin-view-header">
             <div>
               <p class="eyebrow">Instagram</p>
-              <h2 id="postsAdminTitle">Pending posts</h2>
+              <h2 id="postsAdminTitle">Instagram posts</h2>
             </div>
             <p id="postAdminCount" class="admin-count"></p>
           </div>
-          <label class="admin-post-search">
-            <span class="visually-hidden">Search pending posts</span>
-            <input id="postAdminSearch" type="search" placeholder="Search pending posts by location" autocomplete="off" />
-          </label>
+          <div class="admin-post-toolbar">
+            <div class="admin-post-filter" role="group" aria-label="Instagram post status">
+              <button class="admin-post-filter-button is-active" type="button" data-post-status-filter="pending">Pending</button>
+              <button class="admin-post-filter-button" type="button" data-post-status-filter="posted">Posted</button>
+              <button class="admin-post-filter-button" type="button" data-post-status-filter="failed">Failed</button>
+              <button class="admin-post-filter-button" type="button" data-post-status-filter="all">All</button>
+            </div>
+            <label class="admin-post-search">
+              <span class="visually-hidden">Search Instagram posts</span>
+              <input id="postAdminSearch" type="search" placeholder="Search posts by location" autocomplete="off" />
+            </label>
+          </div>
           <div id="adminPostsList" class="pending-post-list"></div>
         </section>
 

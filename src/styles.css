@@ -5083,13 +5083,54 @@ label:has(input:required:valid) > .field-label .is-required {
   color: var(--muted);
 }
 
-.admin-post-search {
-  display: block;
+.admin-post-toolbar {
+  display: grid;
+  grid-template-columns: minmax(240px, 520px) minmax(240px, 520px);
+  gap: 10px;
+  align-items: stretch;
   margin: -4px 0 14px;
 }
 
+.admin-post-filter {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.admin-post-filter-button {
+  min-height: 42px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--brand-dark);
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.admin-post-filter-button:last-child {
+  border-right: 0;
+}
+
+.admin-post-filter-button.is-active,
+.admin-post-filter-button:hover,
+.admin-post-filter-button:focus-visible {
+  background: var(--brand-dark);
+  color: #fff;
+  outline: none;
+}
+
+.admin-post-search {
+  display: block;
+  min-width: 0;
+}
+
 .admin-post-search input {
-  width: min(100%, 520px);
+  width: 100%;
   min-height: 42px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -6505,6 +6546,14 @@ label:has(input:required:valid) > .field-label .is-required {
   .admin-edit-button,
   .admin-delete-button {
     width: 100%;
+  }
+
+  .admin-post-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-post-filter-button {
+    font-size: 0.78rem;
   }
 
   .admin-drawing-receipt-grid {

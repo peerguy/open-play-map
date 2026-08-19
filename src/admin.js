@@ -49,6 +49,7 @@ const elements = {
   moderationList: document.querySelector('#adminModerationList'),
   postsList: document.querySelector('#adminPostsList'),
   postsSearch: document.querySelector('#postAdminSearch'),
+  postStatusButtons: document.querySelectorAll('[data-post-status-filter]'),
   usersList: document.querySelector('#adminUsersList'),
   locationsList: document.querySelector('#adminLocationsList'),
   drawingsList: document.querySelector('#adminDrawingsList'),
@@ -75,6 +76,7 @@ const elements = {
 let allCourts = [];
 let activeModerationView = 'pending';
 let activeLocationView = 'approved';
+let activePostStatusFilter = 'pending';
 let pendingPostSearchQuery = '';
 let authUsers = null;
 let currentAdminUser = null;
@@ -604,6 +606,10 @@ async function savePendingImageEditor() {
     setPendingImageEditorHint('Image upload is unavailable right now.');
     return;
   }
+  if (!window.OpenPlaySupabase?.savePendingInstagramPostImages) {
+    setPendingImageEditorHint('Post image saving is unavailable right now.');
+    return;
+  }
 
   if (saveButton) saveButton.disabled = true;
   setPendingImageEditorHint('Saving square image...');
@@ -619,7 +625,7 @@ async function savePendingImageEditor() {
     input.value = squareUrl;
     updatePendingPostImageThumb(input);
     updatePendingPostPreview(form);
-    const post = await window.OpenPlaySupabase.savePendingInstagramPostImages?.(
+    const post = await window.OpenPlaySupabase.savePendingInstagramPostImages(
       court.remoteId,
       pendingPostImageUrls(form),
       currentAdminUser?.id || user.id
@@ -1679,14 +1685,41 @@ function pendingPostLocationDate(court = {}) {
   return String(court.approvedAt || court.updatedAt || court.createdAt || '');
 }
 
-function pendingPostLocations({ includeSearch = true } = {}) {
+function instagramPostStatusForCourt(court = {}, postsByLocation = instagramPostsByLocation()) {
+  return postsByLocation.get(court.remoteId)?.status || 'pending';
+}
+
+function instagramPostDateForCourt(court = {}, postsByLocation = instagramPostsByLocation()) {
+  const post = postsByLocation.get(court.remoteId) || {};
+  return String(post.publishedAt || post.updatedAt || post.createdAt || pendingPostLocationDate(court));
+}
+
+function instagramPostStatusMatchesFilter(court = {}, postsByLocation = instagramPostsByLocation(), filter = activePostStatusFilter) {
+  const status = instagramPostStatusForCourt(court, postsByLocation);
+  if (filter === 'all') return true;
+  if (filter === 'posted') return status === 'published';
+  if (filter === 'failed') return status === 'failed';
+  return status !== 'published' && status !== 'failed';
+}
+
+function instagramPostFilterLabel(filter = activePostStatusFilter) {
+  if (filter === 'posted') return 'posted';
+  if (filter === 'failed') return 'failed';
+  if (filter === 'all') return 'all';
+  return 'pending';
+}
+
+function pendingPostLocations({ includeSearch = true, filter = activePostStatusFilter } = {}) {
   const postsByLocation = instagramPostsByLocation();
   const query = normalize(pendingPostSearchQuery).trim();
   return allCourts
     .filter(court => court.remoteId && normalizedLocationStatus(court) === 'approved')
-    .filter(court => postsByLocation.get(court.remoteId)?.status !== 'published')
+    .filter(court => instagramPostStatusMatchesFilter(court, postsByLocation, filter))
     .filter(court => !includeSearch || !query || pendingPostSearchText(court).includes(query))
     .sort((a, b) => {
+      if (filter === 'posted' || filter === 'all') {
+        return instagramPostDateForCourt(b, postsByLocation).localeCompare(instagramPostDateForCourt(a, postsByLocation));
+      }
       const imageSort = Number(pendingPostImageUrlsForCourt(b, postsByLocation).length > 0)
         - Number(pendingPostImageUrlsForCourt(a, postsByLocation).length > 0);
       return imageSort || pendingPostLocationDate(b).localeCompare(pendingPostLocationDate(a));
@@ -1862,6 +1895,11 @@ function renderPendingPostCard(court) {
   const locationTag = post.locationTag || defaultLocationTag(court);
   const collaborators = post.collaboratorUsernames?.length ? post.collaboratorUsernames : DEFAULT_INSTAGRAM_COLLABORATORS;
   const hasFailure = post.status === 'failed';
+  const isPublished = post.status === 'published';
+  const statusBadge = isPublished ? 'Posted' : (hasFailure ? 'Retry' : 'Pending');
+  const statusMeta = isPublished && post.publishedAt
+    ? ` · Posted ${escapeHtml(formatAdminDateTime(post.publishedAt))}`
+    : (hasFailure ? ` · Last failed: ${escapeHtml(post.errorMessage || 'Instagram publish failed')}` : '');
 
   return `
     <article class="pending-post-card" data-pending-post-card="${escapeHtml(court.id)}">
@@ -1888,9 +1926,9 @@ function renderPendingPostCard(court) {
         <div class="pending-post-editor-header">
           <div>
             <h3>${escapeHtml(court.name || 'Open play location')}</h3>
-            <p>${escapeHtml([court.city, court.state].filter(Boolean).join(', ')) || 'Location'}${hasFailure ? ` · Last failed: ${escapeHtml(post.errorMessage || 'Instagram publish failed')}` : ''}</p>
+            <p>${escapeHtml([court.city, court.state].filter(Boolean).join(', ')) || 'Location'}${statusMeta}</p>
           </div>
-          <span class="moderation-badge${hasFailure ? ' moderation-badge-alert' : ''}">${hasFailure ? 'Retry' : 'Pending'}</span>
+          <span class="moderation-badge${hasFailure ? ' moderation-badge-alert' : ''}${isPublished ? ' moderation-badge-neutral' : ''}">${statusBadge}</span>
         </div>
         <label>
           Caption
@@ -1902,7 +1940,8 @@ function renderPendingPostCard(court) {
         </label>
         <label>
           Instagram location ID
-          <input name="instagramLocationId" inputmode="numeric" placeholder="Optional Meta place ID" value="${escapeHtml(post.instagramLocationId || '')}" />
+          <input name="instagramLocationId" inputmode="numeric" pattern="[0-9]*" required placeholder="Required numeric Meta place ID" value="${escapeHtml(post.instagramLocationId || '')}" />
+          <span class="form-hint">Required before publishing. This is what creates the live Instagram location tag.</span>
         </label>
         <label>
           Instagram collaborators
@@ -1924,8 +1963,8 @@ function renderPendingPostCard(court) {
           </div>
         </div>
         <div class="admin-edit-actions pending-post-actions">
-          <button class="secondary-button admin-edit-button admin-approve-button" type="submit">Post to Instagram</button>
-          <p class="form-hint" data-pending-post-hint></p>
+          <button class="secondary-button admin-edit-button admin-approve-button" type="submit"${isPublished ? ' disabled' : ''}>${isPublished ? 'Posted to Instagram' : 'Post to Instagram'}</button>
+          <p class="form-hint" data-pending-post-hint>${isPublished ? 'Images can be squared for the admin record, but Instagram does not replace media on an already-live post.' : ''}</p>
         </div>
       </form>
     </article>
@@ -2330,6 +2369,11 @@ function setupPendingPostForm(form) {
       hint.textContent = 'Instagram publishing needs public HTTPS image URLs.';
       return;
     }
+    if (!/^\d+$/.test(values.instagramLocationId)) {
+      hint.textContent = 'Enter the numeric Instagram location ID before posting so the live post has a location tag.';
+      form.elements.instagramLocationId?.focus();
+      return;
+    }
     if (values.collaborators.length > INSTAGRAM_MAX_COLLABORATORS) {
       hint.textContent = `Instagram accepts up to ${INSTAGRAM_MAX_COLLABORATORS} collaborators.`;
       return;
@@ -2363,22 +2407,32 @@ function setupPendingPostForm(form) {
 }
 
 function renderPendingPosts() {
+  elements.postStatusButtons.forEach(button => {
+    button.classList.toggle('is-active', button.dataset.postStatusFilter === activePostStatusFilter);
+  });
+  const allInstagramPosts = pendingPostLocations({ includeSearch: false, filter: 'all' });
   const allPosts = pendingPostLocations({ includeSearch: false });
   const posts = pendingPostLocations();
   const hasSearch = Boolean(pendingPostSearchQuery.trim());
-  setAdminNavLabel('posts', 'Pending posts', allPosts.length);
-  elements.postsTitle.textContent = titleWithCount('Pending posts', allPosts.length);
+  const label = instagramPostFilterLabel(activePostStatusFilter);
+  const countLabel = activePostStatusFilter === 'all' ? 'Instagram' : label;
+  const emptyLabel = activePostStatusFilter === 'all' ? 'Instagram' : `${label} Instagram`;
+  const titleLabel = activePostStatusFilter === 'all'
+    ? 'All posts'
+    : `${label.charAt(0).toUpperCase()}${label.slice(1)} posts`;
+  setAdminNavLabel('posts', 'Instagram posts', allInstagramPosts.length);
+  elements.postsTitle.textContent = titleWithCount(titleLabel, allPosts.length);
   elements.postsCount.textContent = hasSearch
-    ? `${posts.length} of ${allPosts.length} pending post${allPosts.length === 1 ? '' : 's'}`
-    : `${posts.length} pending post${posts.length === 1 ? '' : 's'}`;
+    ? `${posts.length} of ${allPosts.length} ${countLabel} post${allPosts.length === 1 ? '' : 's'}`
+    : `${posts.length} ${countLabel} post${posts.length === 1 ? '' : 's'}`;
 
   if (!allPosts.length) {
-    elements.postsList.innerHTML = '<p class="empty-profile-list">No pending Instagram posts.</p>';
+    elements.postsList.innerHTML = `<p class="empty-profile-list">No ${escapeHtml(emptyLabel)} posts.</p>`;
     return;
   }
 
   if (!posts.length) {
-    elements.postsList.innerHTML = '<p class="empty-profile-list">No pending Instagram posts match that search.</p>';
+    elements.postsList.innerHTML = `<p class="empty-profile-list">No ${escapeHtml(emptyLabel)} posts match that search.</p>`;
     return;
   }
 
@@ -3920,6 +3974,13 @@ elements.moderationNavButtons.forEach(button => {
 
 elements.locationNavButtons.forEach(button => {
   button.addEventListener('click', () => showLocationView(button.dataset.locationView));
+});
+
+elements.postStatusButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    activePostStatusFilter = button.dataset.postStatusFilter || 'pending';
+    renderPendingPosts();
+  });
 });
 
 elements.postsSearch?.addEventListener('input', event => {
