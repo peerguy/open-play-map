@@ -8,7 +8,7 @@
     <meta name="description" content="Open Play Map admin moderation tools." />
     <meta name="theme-color" content="#266c3f" />
     <link rel="icon" type="image/svg+xml" href="assets/icons/open-play-favicon.svg" />
-    <link rel="stylesheet" href="src/styles.css?v=drawing-actions-20260807" />
+    <link rel="stylesheet" href="src/styles.css?v=pending-post-search-20260819" />
   </head>
   <body class="admin-page">
     <header class="site-header account-header">
@@ -90,6 +90,10 @@
             </div>
             <p id="postAdminCount" class="admin-count"></p>
           </div>
+          <label class="admin-post-search">
+            <span class="visually-hidden">Search pending posts</span>
+            <input id="postAdminSearch" type="search" placeholder="Search pending posts by location" autocomplete="off" />
+          </label>
           <div id="adminPostsList" class="pending-post-list"></div>
         </section>
 
@@ -151,9 +155,9 @@
     <script src="src/supabase-config.js?v=supabase-read-20260614"></script>
     <script src="src/supabase-client.js?v=mobile-map-default-20260616"></script>
     <script src="src/supabase-auth.js?v=account-settings-20260617"></script>
-    <script src="src/supabase-data.js?v=coordinate-guard-20260623"></script>
+    <script src="src/supabase-data.js?v=review-post-drafts-20260819"></script>
     <script src="src/mobile-header.js?v=mobile-map-default-20260616"></script>
-    <script src="src/admin.js?v=leaderboard-reset-20260807"></script>
+    <script src="src/admin.js?v=pending-post-search-20260819"></script>
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"3fc55473a35e4ebab1d1f5d5f77db55d"}'></script>
   </body>
 </html>

@@ -594,6 +594,31 @@
     };
   }
 
+  function uniqueInstagramImageUrls(urls = []) {
+    const seen = new Set();
+    return urls
+      .map(url => String(url || '').trim())
+      .filter(url => /^https:\/\//i.test(url) && /\.(jpe?g)(?:$|\?)/i.test(url))
+      .filter(url => {
+        if (seen.has(url)) return false;
+        seen.add(url);
+        return true;
+      })
+      .slice(0, INSTAGRAM_MAX_IMAGES);
+  }
+
+  async function approvedInstagramPhotoUrls(supabase, locationId) {
+    const { data, error } = await supabase
+      .from('photos')
+      .select('storage_path,status')
+      .eq('location_id', locationId)
+      .eq('status', 'approved')
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return uniqueInstagramImageUrls((data || []).map(photo => publicStorageUrl(photo.storage_path)));
+  }
+
   function contributionCreditValue(action) {
     return CONTRIBUTION_CREDITS[action] || 0;
   }
@@ -1470,6 +1495,58 @@
     return mapPhoto(data);
   }
 
+  async function appendPendingInstagramPostImage(locationId, imageUrl, actorId = null) {
+    const supabase = client();
+    if (!supabase || !locationId) throw new Error('Supabase is not configured.');
+
+    const nextImageUrl = String(imageUrl || '').trim();
+    if (!/^https:\/\//i.test(nextImageUrl) || !/\.(jpe?g)(?:$|\?)/i.test(nextImageUrl)) return null;
+
+    const { data: existing, error: existingError } = await supabase
+      .from('instagram_posts')
+      .select('*')
+      .eq('location_id', locationId)
+      .maybeSingle();
+
+    if (existingError) throw existingError;
+    if (existing?.status === 'published') return mapInstagramPost(existing);
+
+    const currentImageUrls = uniqueInstagramImageUrls([
+      existing?.image_url,
+      ...(Array.isArray(existing?.image_urls) ? existing.image_urls : [])
+    ]);
+    const approvedImageUrls = await approvedInstagramPhotoUrls(supabase, locationId);
+    const imageUrls = uniqueInstagramImageUrls([...currentImageUrls, ...approvedImageUrls, nextImageUrl]);
+    if (!imageUrls.includes(nextImageUrl)) return existing ? mapInstagramPost(existing) : null;
+
+    const payload = {
+      image_url: imageUrls[0] || null,
+      image_urls: imageUrls,
+      requested_by: actorId || existing?.requested_by || null,
+      updated_at: new Date().toISOString()
+    };
+
+    const result = existing?.id
+      ? await supabase
+        .from('instagram_posts')
+        .update(payload)
+        .eq('id', existing.id)
+        .select('*')
+        .single()
+      : await supabase
+        .from('instagram_posts')
+        .insert({
+          location_id: locationId,
+          status: 'pending',
+          ...payload
+        })
+        .select('*')
+        .single();
+
+    if (result.error) throw result.error;
+    return mapInstagramPost(result.data);
+  }
+
   function creditBalancesFromRows(credits = []) {
     return credits
       .filter(credit => credit.status === 'approved' || !credit.status)
@@ -1875,6 +1952,7 @@
     updateAdminReview,
     removeAdminPhoto,
     updatePhotoStatus,
+    appendPendingInstagramPostImage,
     fetchCurrentUserContributions,
     fetchPublicLeaderboard,
     fetchPublicMonthlyDrawings,

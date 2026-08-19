@@ -5083,6 +5083,27 @@ label:has(input:required:valid) > .field-label .is-required {
   color: var(--muted);
 }
 
+.admin-post-search {
+  display: block;
+  margin: -4px 0 14px;
+}
+
+.admin-post-search input {
+  width: min(100%, 520px);
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--ink);
+  background: #fff;
+}
+
+.admin-post-search input:focus {
+  outline: 2px solid rgba(38, 108, 63, 0.22);
+  border-color: var(--accent);
+}
+
 .admin-list {
   display: grid;
   gap: 6px;

@@ -44,6 +44,7 @@ const elements = {
   drawingsView: document.querySelector('#drawingsAdminView'),
   moderationList: document.querySelector('#adminModerationList'),
   postsList: document.querySelector('#adminPostsList'),
+  postsSearch: document.querySelector('#postAdminSearch'),
   usersList: document.querySelector('#adminUsersList'),
   locationsList: document.querySelector('#adminLocationsList'),
   drawingsList: document.querySelector('#adminDrawingsList'),
@@ -70,6 +71,7 @@ const elements = {
 let allCourts = [];
 let activeModerationView = 'pending';
 let activeLocationView = 'approved';
+let pendingPostSearchQuery = '';
 let authUsers = null;
 let currentAdminUser = null;
 let deleteConfirmationRequest = null;
@@ -1235,11 +1237,26 @@ function approvedInstagramPhotosForLocation(court = {}) {
     });
 }
 
-function pendingPostLocations() {
+function pendingPostSearchText(court = {}) {
+  const post = instagramPostsByLocation().get(court.remoteId) || {};
+  return normalize([
+    court.name,
+    court.address,
+    court.city,
+    court.state,
+    court.submittedByUsername,
+    post.caption,
+    post.locationTag
+  ].filter(Boolean).join(' '));
+}
+
+function pendingPostLocations({ includeSearch = true } = {}) {
   const postsByLocation = instagramPostsByLocation();
+  const query = normalize(pendingPostSearchQuery).trim();
   return allCourts
     .filter(court => court.remoteId && normalizedLocationStatus(court) === 'approved')
     .filter(court => postsByLocation.get(court.remoteId)?.status !== 'published')
+    .filter(court => !includeSearch || !query || pendingPostSearchText(court).includes(query))
     .sort((a, b) => String(b.approvedAt || b.updatedAt || b.createdAt || '').localeCompare(String(a.approvedAt || a.updatedAt || a.createdAt || '')));
 }
 
@@ -1832,13 +1849,22 @@ function setupPendingPostForm(form) {
 }
 
 function renderPendingPosts() {
+  const allPosts = pendingPostLocations({ includeSearch: false });
   const posts = pendingPostLocations();
-  setAdminNavLabel('posts', 'Pending posts', posts.length);
-  elements.postsTitle.textContent = titleWithCount('Pending posts', posts.length);
-  elements.postsCount.textContent = `${posts.length} pending post${posts.length === 1 ? '' : 's'}`;
+  const hasSearch = Boolean(pendingPostSearchQuery.trim());
+  setAdminNavLabel('posts', 'Pending posts', allPosts.length);
+  elements.postsTitle.textContent = titleWithCount('Pending posts', allPosts.length);
+  elements.postsCount.textContent = hasSearch
+    ? `${posts.length} of ${allPosts.length} pending post${allPosts.length === 1 ? '' : 's'}`
+    : `${posts.length} pending post${posts.length === 1 ? '' : 's'}`;
+
+  if (!allPosts.length) {
+    elements.postsList.innerHTML = '<p class="empty-profile-list">No pending Instagram posts.</p>';
+    return;
+  }
 
   if (!posts.length) {
-    elements.postsList.innerHTML = '<p class="empty-profile-list">No pending Instagram posts.</p>';
+    elements.postsList.innerHTML = '<p class="empty-profile-list">No pending Instagram posts match that search.</p>';
     return;
   }
 
@@ -2695,16 +2721,32 @@ async function updatePhotoModerationStatus(photoId, status) {
   const photo = (backendCollections.photos || []).find(item => item.id === photoId);
   if (!photo) return;
 
+  let updatedPhoto = null;
   try {
-    await window.OpenPlaySupabase.updatePhotoStatus(photo.remoteId || photo.id, status, currentAdminUser?.id);
-    await loadBackendCollections();
-    renderModeration();
-    renderPendingPosts();
-    renderUsers();
-    renderDrawings();
+    updatedPhoto = await window.OpenPlaySupabase.updatePhotoStatus(photo.remoteId || photo.id, status, currentAdminUser?.id);
   } catch (error) {
     window.alert(error.message || `Could not ${status} that photo.`);
+    return;
   }
+
+  if (status === 'approved' && (updatedPhoto?.reviewId || photo.reviewId)) {
+    try {
+      await window.OpenPlaySupabase.appendPendingInstagramPostImage?.(
+        updatedPhoto.remoteLocationId || photo.remoteLocationId,
+        updatedPhoto.url || photo.url,
+        currentAdminUser?.id
+      );
+    } catch (error) {
+      console.error(error);
+      window.alert('Photo approved, but the pending Instagram post could not be updated.');
+    }
+  }
+
+  await loadBackendCollections();
+  renderModeration();
+  renderPendingPosts();
+  renderUsers();
+  renderDrawings();
 }
 
 async function approvePhoto(photoId) {
@@ -3364,6 +3406,11 @@ elements.moderationNavButtons.forEach(button => {
 
 elements.locationNavButtons.forEach(button => {
   button.addEventListener('click', () => showLocationView(button.dataset.locationView));
+});
+
+elements.postsSearch?.addEventListener('input', event => {
+  pendingPostSearchQuery = event.target.value;
+  renderPendingPosts();
 });
 
 elements.deleteForm.addEventListener('submit', event => {
