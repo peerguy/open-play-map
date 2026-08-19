@@ -10,6 +10,8 @@ const DAILY_LOCATION_LIMIT = 10;
 const DAILY_REVIEW_LIMIT = 10;
 const SUGGESTED_EDIT_CREDITS = 3;
 const INSTAGRAM_MAX_IMAGES = 10;
+const DEFAULT_INSTAGRAM_COLLABORATORS = ['scooppickleball'];
+const INSTAGRAM_MAX_COLLABORATORS = 5;
 const LOCAL_PROTOTYPE_HOSTS = new Set(['', 'localhost', '127.0.0.1']);
 const PRODUCTION_DATABASE_UNAVAILABLE = 'The production database is unavailable, so this was not saved. Please try again in a few minutes.';
 
@@ -872,7 +874,8 @@ async function publishPendingInstagramPost(court, values) {
       caption: values.caption,
       imageUrls: values.imageUrls,
       locationTag: values.locationTag,
-      instagramLocationId: values.instagramLocationId
+      instagramLocationId: values.instagramLocationId,
+      collaborators: values.collaborators
     })
   });
   const result = await response.json().catch(() => ({}));
@@ -1246,7 +1249,8 @@ function pendingPostSearchText(court = {}) {
     court.state,
     court.submittedByUsername,
     post.caption,
-    post.locationTag
+    post.locationTag,
+    ...(post.collaboratorUsernames || [])
   ].filter(Boolean).join(' '));
 }
 
@@ -1265,14 +1269,38 @@ function defaultInstagramCaption(court = {}) {
   const url = new URL(window.location.origin);
   url.searchParams.set('location', court.id || court.remoteId);
   return [
-    `New open play spot added: ${court.name || 'Open play location'}`,
-    area,
+    area
+      ? `Calling all pickleball players near ${area}.`
+      : 'Calling all local pickleball players.',
     '',
-    'Find details, hours, and player updates on the Scoop Open Play Map:',
+    `Have you played at ${court.name || 'this open play location'}? Check it out on the Scoop Open Play Map and help local players by adding a quick review, uploading pictures, or confirming the open play info is accurate.`,
+    '',
+    "When you sign up or contribute helpful information, you'll get a chance to win a Scoop paddle or $100 worth of gear from the Scoop Pickleball store.",
+    '',
+    'View this spot:',
     url.toString(),
     '',
     '#pickleball #openplay #scooppickleball'
   ].filter(line => line !== undefined && line !== null).join('\n').trim();
+}
+
+function instagramCollaboratorUsernames(values = DEFAULT_INSTAGRAM_COLLABORATORS) {
+  const source = values === undefined || values === null ? DEFAULT_INSTAGRAM_COLLABORATORS : values;
+  return [...new Set((Array.isArray(source) ? source : [source])
+    .flatMap(value => String(value || '').split(/\r?\n|,/))
+    .map(value => value.trim().replace(/^@+/, '').toLowerCase())
+    .filter(Boolean))];
+}
+
+function instagramCollaboratorInputValue(usernames = DEFAULT_INSTAGRAM_COLLABORATORS) {
+  return instagramCollaboratorUsernames(usernames)
+    .map(username => `@${username}`)
+    .join(', ');
+}
+
+function instagramCollaboratorPreview(usernames = DEFAULT_INSTAGRAM_COLLABORATORS) {
+  const display = instagramCollaboratorInputValue(usernames);
+  return display ? `with ${display}` : '';
 }
 
 function defaultLocationTag(court = {}) {
@@ -1297,6 +1325,7 @@ function pendingPostValues(form) {
     caption: form.elements.caption.value.trim(),
     locationTag: form.elements.locationTag.value.trim(),
     instagramLocationId: form.elements.instagramLocationId.value.trim(),
+    collaborators: instagramCollaboratorUsernames(form.elements.collaborators?.value),
     imageUrls: pendingPostImageUrls(form)
   };
 }
@@ -1371,6 +1400,7 @@ function renderPendingPostCard(court) {
   const imageUrls = post.imageUrls?.length ? post.imageUrls : (post.imageUrl ? [post.imageUrl] : approvedInstagramPhotosForLocation(court));
   const caption = post.caption || defaultInstagramCaption(court);
   const locationTag = post.locationTag || defaultLocationTag(court);
+  const collaborators = post.collaboratorUsernames?.length ? post.collaboratorUsernames : DEFAULT_INSTAGRAM_COLLABORATORS;
   const hasFailure = post.status === 'failed';
 
   return `
@@ -1382,6 +1412,7 @@ function renderPendingPostCard(court) {
             <div>
               <strong>openplaymap</strong>
               <span data-preview-location-tag>${escapeHtml(locationTag)}</span>
+              <span data-preview-collaborators>${escapeHtml(instagramCollaboratorPreview(collaborators))}</span>
             </div>
           </div>
           <div class="pending-post-image-stage" data-preview-images>
@@ -1412,6 +1443,11 @@ function renderPendingPostCard(court) {
         <label>
           Instagram location ID
           <input name="instagramLocationId" inputmode="numeric" placeholder="Optional Meta place ID" value="${escapeHtml(post.instagramLocationId || '')}" />
+        </label>
+        <label>
+          Instagram collaborators
+          <input name="collaborators" placeholder="@scooppickleball" value="${escapeHtml(instagramCollaboratorInputValue(collaborators))}" />
+          <span class="form-hint">Up to ${INSTAGRAM_MAX_COLLABORATORS} accounts. Invites are sent when the post is published.</span>
         </label>
         <div class="pending-post-image-editor">
           <div class="pending-post-image-editor-header">
@@ -1690,9 +1726,11 @@ function updatePendingPostPreview(form) {
   const card = form.closest('[data-pending-post-card]');
   const values = pendingPostValues(form);
   const locationTag = card?.querySelector('[data-preview-location-tag]');
+  const collaborators = card?.querySelector('[data-preview-collaborators]');
   const caption = card?.querySelector('[data-preview-caption]');
   const images = card?.querySelector('[data-preview-images]');
   if (locationTag) locationTag.textContent = values.locationTag || 'Location';
+  if (collaborators) collaborators.textContent = instagramCollaboratorPreview(values.collaborators);
   if (caption) caption.textContent = values.caption || '';
   if (images) images.innerHTML = renderPendingPostImages(values.imageUrls);
 }
@@ -1825,6 +1863,15 @@ function setupPendingPostForm(form) {
     }
     if (values.imageUrls.some(url => !/^https:\/\//i.test(url))) {
       hint.textContent = 'Instagram publishing needs public HTTPS image URLs.';
+      return;
+    }
+    if (values.collaborators.length > INSTAGRAM_MAX_COLLABORATORS) {
+      hint.textContent = `Instagram accepts up to ${INSTAGRAM_MAX_COLLABORATORS} collaborators.`;
+      return;
+    }
+    const invalidCollaborator = values.collaborators.find(username => !/^[a-z0-9._]{1,30}$/.test(username));
+    if (invalidCollaborator) {
+      hint.textContent = `Instagram collaborator "${invalidCollaborator}" is not a valid username.`;
       return;
     }
 

@@ -16,6 +16,7 @@
   const PHOTO_BUCKET = 'open-play-photos';
   const PHOTO_MAX_FILES = 4;
   const INSTAGRAM_MAX_IMAGES = 10;
+  const DEFAULT_INSTAGRAM_COLLABORATORS = ['scooppickleball'];
   const INSTAGRAM_IMAGE_SIZE = 1080;
   const INSTAGRAM_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
   const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
@@ -586,6 +587,9 @@
       imageUrls: Array.isArray(record.image_urls) ? record.image_urls.filter(Boolean) : [],
       locationTag: record.location_tag || '',
       instagramLocationId: record.instagram_location_id || '',
+      collaboratorUsernames: Array.isArray(record.collaborator_usernames)
+        ? record.collaborator_usernames.filter(Boolean)
+        : [],
       errorMessage: record.error_message || '',
       requestedBy: record.requested_by || '',
       publishedAt: record.published_at || '',
@@ -1522,6 +1526,9 @@
     const payload = {
       image_url: imageUrls[0] || null,
       image_urls: imageUrls,
+      collaborator_usernames: Array.isArray(existing?.collaborator_usernames) && existing.collaborator_usernames.length
+        ? existing.collaborator_usernames
+        : DEFAULT_INSTAGRAM_COLLABORATORS,
       requested_by: actorId || existing?.requested_by || null,
       updated_at: new Date().toISOString()
     };

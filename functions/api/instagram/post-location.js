@@ -6,6 +6,8 @@ const INSTAGRAM_MIN_IMAGE_WIDTH = 320;
 const INSTAGRAM_MAX_IMAGE_WIDTH = 1440;
 const INSTAGRAM_MIN_ASPECT_RATIO = 4 / 5;
 const INSTAGRAM_MAX_ASPECT_RATIO = 1.91;
+const DEFAULT_INSTAGRAM_COLLABORATORS = ['scooppickleball'];
+const INSTAGRAM_MAX_COLLABORATORS = 5;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -117,10 +119,15 @@ function locationUrl(env, location) {
 function captionForLocation(env, location) {
   const place = [location.city, location.state].filter(Boolean).join(', ');
   return [
-    `New open play spot added: ${location.name}`,
-    place,
+    place
+      ? `Calling all pickleball players near ${place}.`
+      : 'Calling all local pickleball players.',
     '',
-    'Find details, hours, and player updates on the Scoop Open Play Map:',
+    `Have you played at ${location.name || 'this open play location'}? Check it out on the Scoop Open Play Map and help local players by adding a quick review, uploading pictures, or confirming the open play info is accurate.`,
+    '',
+    "When you sign up or contribute helpful information, you'll get a chance to win a Scoop paddle or $100 worth of gear from the Scoop Pickleball store.",
+    '',
+    'View this spot:',
     locationUrl(env, location),
     '',
     '#pickleball #openplay #scooppickleball'
@@ -178,6 +185,23 @@ function parsePublicHttpsUrl(value) {
 function instagramLocationId(value) {
   const text = String(value || '').trim();
   return /^\d+$/.test(text) ? text : '';
+}
+
+function normalizeCollaboratorUsernames(values = DEFAULT_INSTAGRAM_COLLABORATORS) {
+  const source = values === undefined || values === null ? DEFAULT_INSTAGRAM_COLLABORATORS : values;
+  const usernames = (Array.isArray(source) ? source : [source])
+    .flatMap(value => String(value || '').split(/\r?\n|,/))
+    .map(value => value.trim().replace(/^@+/, '').toLowerCase())
+    .filter(Boolean);
+  const unique = [...new Set(usernames)];
+  if (unique.length > INSTAGRAM_MAX_COLLABORATORS) {
+    throw new Error(`Instagram accepts up to ${INSTAGRAM_MAX_COLLABORATORS} collaborators.`);
+  }
+  const invalid = unique.find(username => !/^[a-z0-9._]{1,30}$/.test(username));
+  if (invalid) {
+    throw new Error(`Instagram collaborator "${invalid}" is not a valid username.`);
+  }
+  return unique;
 }
 
 function contentLength(headers) {
@@ -349,7 +373,7 @@ async function createPostRecord(env, payload) {
 
 function isMissingDraftColumnError(error) {
   return ['42703', 'PGRST204'].includes(error?.code)
-    && /(image_urls|location_tag|instagram_location_id)|column .* does not exist/i.test(error.message || '');
+    && /(image_urls|location_tag|instagram_location_id|collaborator_usernames)|column .* does not exist/i.test(error.message || '');
 }
 
 function legacyPostPayload(payload) {
@@ -357,6 +381,7 @@ function legacyPostPayload(payload) {
     image_urls: _imageUrls,
     location_tag: _locationTag,
     instagram_location_id: _instagramLocationId,
+    collaborator_usernames: _collaboratorUsernames,
     ...legacyPayload
   } = payload;
   return legacyPayload;
@@ -459,13 +484,19 @@ async function waitForContainer(env, containerId) {
   throw new Error('Instagram media container did not finish processing in time.');
 }
 
-async function createSingleImageContainer(env, imageUrl, caption, locationId = '') {
+function applyCollaborators(params, collaborators = []) {
+  if (collaborators.length) params.collaborators = collaborators.join(',');
+  return params;
+}
+
+async function createSingleImageContainer(env, imageUrl, caption, locationId = '', collaborators = []) {
   const params = { image_url: imageUrl, caption };
   if (locationId) params.location_id = locationId;
+  applyCollaborators(params, collaborators);
   return await instagramRequest(env, `${requiredEnv(env, 'INSTAGRAM_IG_USER_ID')}/media`, params);
 }
 
-async function createCarouselContainer(env, imageUrls, caption, locationId = '') {
+async function createCarouselContainer(env, imageUrls, caption, locationId = '', collaborators = []) {
   const children = [];
 
   for (const imageUrl of imageUrls) {
@@ -482,6 +513,7 @@ async function createCarouselContainer(env, imageUrls, caption, locationId = '')
     caption
   };
   if (locationId) params.location_id = locationId;
+  applyCollaborators(params, collaborators);
 
   return await instagramRequest(env, `${requiredEnv(env, 'INSTAGRAM_IG_USER_ID')}/media`, params);
 }
@@ -491,6 +523,7 @@ async function publishLocation(env, location, options, actorId, existingPost = n
   const imageUrl = imageUrls[0];
   const caption = options.caption || captionForLocation(env, location);
   const locationId = instagramLocationId(options.instagramLocationId);
+  const collaborators = normalizeCollaboratorUsernames(options.collaborators);
   const payload = {
     photo_id: options.photoId || null,
     status: 'pending',
@@ -499,6 +532,7 @@ async function publishLocation(env, location, options, actorId, existingPost = n
     image_urls: imageUrls,
     location_tag: String(options.locationTag || '').trim() || null,
     instagram_location_id: locationId || null,
+    collaborator_usernames: collaborators,
     error_message: null,
     requested_by: actorId
   };
@@ -506,8 +540,8 @@ async function publishLocation(env, location, options, actorId, existingPost = n
 
   try {
     const container = imageUrls.length > 1
-      ? await createCarouselContainer(env, imageUrls, caption, locationId)
-      : await createSingleImageContainer(env, imageUrl, caption, locationId);
+      ? await createCarouselContainer(env, imageUrls, caption, locationId, collaborators)
+      : await createSingleImageContainer(env, imageUrl, caption, locationId, collaborators);
     await updatePostRecord(env, postRecord.id, { instagram_container_id: container.id });
     await waitForContainer(env, container.id);
     const published = await instagramRequest(env, `${requiredEnv(env, 'INSTAGRAM_IG_USER_ID')}/media_publish`, {
@@ -571,6 +605,7 @@ export async function onRequestPost({ request, env }) {
       imageUrls,
       locationTag: body.locationTag,
       instagramLocationId: body.instagramLocationId,
+      collaborators: body.collaborators ?? body.collaboratorUsernames,
       photoId: fallbackPhoto?.id || null
     }, admin.id, existing);
     return json({ ok: true, post });
