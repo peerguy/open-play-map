@@ -5819,11 +5819,25 @@ label:has(input:required:valid) > .field-label .is-required {
 }
 
 .pending-post-upload-row {
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .pending-post-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+
+.pending-post-upload-row .admin-edit-button,
+.pending-post-actions .admin-approve-button {
+  display: inline-flex;
+  width: 100%;
+  min-height: 42px;
   align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  line-height: 1.15;
 }
 
 .pending-post-actions .form-hint {
