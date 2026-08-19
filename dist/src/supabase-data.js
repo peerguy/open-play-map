@@ -1018,6 +1018,73 @@
     return `${userId}/instagram-drafts/${locationId}/${timestamp}-${index + 1}-${basename}.jpg`;
   }
 
+  function isInstagramDraftImageUrl(imageUrl) {
+    const value = String(imageUrl || '').trim();
+    if (!value) return false;
+    try {
+      const path = decodeURIComponent(new URL(value).pathname);
+      return path.includes(`/${PHOTO_BUCKET}/`) && path.includes('/instagram-drafts/');
+    } catch {
+      return value.includes('/instagram-drafts/');
+    }
+  }
+
+  function instagramSourceImageType(imageUrl, contentType = '') {
+    const mime = String(contentType || '').split(';')[0].trim().toLowerCase();
+    if (PHOTO_TYPES[mime]) return mime;
+
+    const value = String(imageUrl || '').toLowerCase();
+    try {
+      const path = new URL(value).pathname;
+      if (/\.jpe?g$/i.test(path)) return 'image/jpeg';
+      if (/\.png$/i.test(path)) return 'image/png';
+      if (/\.webp$/i.test(path)) return 'image/webp';
+    } catch {
+      if (/\.(jpe?g)(?:$|\?)/i.test(value)) return 'image/jpeg';
+      if (/\.png(?:$|\?)/i.test(value)) return 'image/png';
+      if (/\.webp(?:$|\?)/i.test(value)) return 'image/webp';
+    }
+
+    return '';
+  }
+
+  function instagramSourceImageName(imageUrl, index, type) {
+    let basename = `instagram-source-${index + 1}`;
+    try {
+      const path = decodeURIComponent(new URL(imageUrl).pathname);
+      basename = path.split('/').filter(Boolean).pop() || basename;
+    } catch {
+      basename = String(imageUrl || basename).split('/').filter(Boolean).pop() || basename;
+    }
+
+    const extension = PHOTO_TYPES[type] || 'jpg';
+    return `${safeFilePart(basename.replace(/\.[^.]+$/, ''))}.${extension}`;
+  }
+
+  async function instagramImageUrlToFile(imageUrl, index) {
+    let response;
+    try {
+      response = await fetch(imageUrl);
+    } catch {
+      throw new Error('Could not read one of the image URLs. Upload the image as an Instagram draft image and try again.');
+    }
+
+    if (!response.ok) {
+      throw new Error(`Could not read image ${index + 1}: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const type = instagramSourceImageType(imageUrl, blob.type || response.headers.get('content-type'));
+    if (!type) {
+      throw new Error('Instagram images must be JPG, PNG, or WebP before they can be prepared.');
+    }
+
+    return new File([blob], instagramSourceImageName(imageUrl, index, type), {
+      type,
+      lastModified: Date.now()
+    });
+  }
+
   async function prepareInstagramDraftImage(file) {
     const selected = validateInstagramDraftImageFiles([file])[0];
     if (!selected) throw new Error('Choose a JPG, PNG, or WebP image.');
@@ -1087,6 +1154,54 @@
     }
 
     return uploaded.map(publicStorageUrl);
+  }
+
+  async function prepareInstagramDraftImageUrls(court, user, imageUrls = [], options = {}) {
+    const urls = [...new Set((Array.isArray(imageUrls) ? imageUrls : [imageUrls])
+      .map(url => String(url || '').trim())
+      .filter(Boolean))]
+      .slice(0, INSTAGRAM_MAX_IMAGES);
+    const shouldPrepare = urls.some(url => options.force || !isInstagramDraftImageUrl(url));
+    if (!shouldPrepare) return urls;
+
+    const supabase = client();
+    if (!supabase || !court?.remoteId || !user?.id) throw new Error('Supabase is not configured.');
+
+    const uploaded = [];
+    const preparedUrls = [];
+    try {
+      for (const [index, imageUrl] of urls.entries()) {
+        if (!options.force && isInstagramDraftImageUrl(imageUrl)) {
+          preparedUrls.push(imageUrl);
+          continue;
+        }
+
+        const sourceFile = await instagramImageUrlToFile(imageUrl, index);
+        const prepared = await prepareInstagramDraftImage(sourceFile);
+        const storagePath = instagramDraftStoragePath({
+          userId: user.id,
+          locationId: court.remoteId,
+          file: prepared,
+          index
+        });
+        const { error: uploadError } = await supabase.storage
+          .from(PHOTO_BUCKET)
+          .upload(storagePath, prepared, {
+            cacheControl: '31536000',
+            contentType: 'image/jpeg',
+            upsert: false
+          });
+
+        if (uploadError) throw uploadError;
+        uploaded.push(storagePath);
+        preparedUrls.push(publicStorageUrl(storagePath));
+      }
+    } catch (error) {
+      await removeUploadedPhotoFiles(uploaded);
+      throw error;
+    }
+
+    return preparedUrls;
   }
 
   async function uploadPhotoFiles({ locationId, reviewId = null, user, files = [] }) {
@@ -1947,6 +2062,7 @@
     submitLocation,
     submitLocationPhotos,
     uploadInstagramDraftImages,
+    prepareInstagramDraftImageUrls,
     submitReview,
     fetchReviewMap,
     fetchOwnReports,

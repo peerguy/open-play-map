@@ -1412,6 +1412,31 @@ function addPendingPostImageUrls(form, urls = []) {
   setPendingPostImageRows(form, nextUrls);
 }
 
+function imageUrlArraysEqual(first = [], second = []) {
+  return first.length === second.length && first.every((url, index) => url === second[index]);
+}
+
+async function preparePendingPostImages(form, court, values, hint) {
+  if (!window.OpenPlaySupabase?.prepareInstagramDraftImageUrls) {
+    throw new Error('Image preparation is unavailable right now. Refresh and try again.');
+  }
+
+  const user = await currentUser();
+  if (!user?.id) throw new Error('Sign in again before preparing images.');
+
+  hint.textContent = values.imageUrls.length === 1
+    ? 'Preparing Instagram image...'
+    : 'Preparing Instagram images...';
+
+  const preparedImageUrls = await window.OpenPlaySupabase.prepareInstagramDraftImageUrls(court, user, values.imageUrls);
+  if (!preparedImageUrls.length) throw new Error('Add at least one public JPEG image URL.');
+
+  if (!imageUrlArraysEqual(preparedImageUrls, values.imageUrls)) {
+    setPendingPostImageRows(form, preparedImageUrls);
+  }
+  values.imageUrls = preparedImageUrls;
+}
+
 function renderPendingPostCard(court) {
   const post = instagramPostsByLocation().get(court.remoteId) || {};
   const imageUrls = pendingPostImageUrlsForCourt(court);
@@ -1897,6 +1922,8 @@ function setupPendingPostForm(form) {
     hint.textContent = 'Checking images...';
 
     try {
+      await preparePendingPostImages(form, court, values, hint);
+      hint.textContent = 'Checking prepared images...';
       await preflightPendingInstagramImages(values.imageUrls);
       hint.textContent = 'Posting...';
       await publishPendingInstagramPost(court, values);
