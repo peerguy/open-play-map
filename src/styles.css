@@ -5833,11 +5833,25 @@ label:has(input:required:valid) > .field-label .is-required {
 .pending-post-actions .admin-approve-button {
   display: inline-flex;
   width: 100%;
-  min-height: 42px;
+  min-height: 34px;
   align-items: center;
   justify-content: center;
-  padding: 10px 14px;
+  padding: 7px 12px;
   line-height: 1.15;
+}
+
+.pending-post-upload-row .admin-edit-button:not(:disabled) {
+  border-color: #374151;
+  background: #374151;
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(31, 41, 55, 0.18);
+}
+
+.pending-post-upload-row .admin-edit-button:not(:disabled):hover,
+.pending-post-upload-row .admin-edit-button:not(:disabled):focus-visible {
+  border-color: #1f2937;
+  background: #1f2937;
+  color: #fff;
 }
 
 .pending-post-actions .form-hint {
