@@ -608,7 +608,7 @@ function renderInstagramLocationCandidate(candidate = {}) {
   ].filter(Boolean).join(' · ');
   return `
     <button class="pending-post-location-candidate" type="button" data-use-instagram-location-id="${escapeHtml(candidate.id)}" data-instagram-location-name="${escapeHtml(candidate.name || '')}">
-      <strong>${escapeHtml(candidate.name || 'Meta place')}</strong>
+      <strong>${escapeHtml(candidate.name || 'Meta Page')}</strong>
       <span>${escapeHtml(detail || `Page ID ${candidate.id}`)}</span>
     </button>
   `;
@@ -618,7 +618,7 @@ function renderInstagramLocationCandidates(form, candidates = []) {
   const results = pendingInstagramLocationResults(form);
   if (!results) return;
   if (!candidates.length) {
-    results.innerHTML = '<p class="form-hint">No Meta place matches found.</p>';
+    results.innerHTML = '<p class="form-hint">No Meta Page matches found.</p>';
     return;
   }
   results.innerHTML = `
@@ -655,7 +655,7 @@ async function findInstagramLocationId(form, court, button, hint) {
   const previousText = button.textContent;
   button.disabled = true;
   button.textContent = 'Finding...';
-  hint.textContent = 'Searching Meta places...';
+  hint.textContent = 'Searching Meta Pages...';
 
   try {
     const result = await searchInstagramLocationCandidates(court);
@@ -665,10 +665,10 @@ async function findInstagramLocationId(form, court, button, hint) {
       return;
     }
     hint.textContent = result.candidates?.length
-      ? 'Choose the matching Meta place below.'
-      : 'No Meta places found. You can enter the numeric ID manually.';
+      ? 'Choose the matching Meta Page below.'
+      : 'No Meta Pages found. You can enter the numeric Facebook Page ID manually.';
   } catch (error) {
-    hint.textContent = error.message || 'Could not search Meta places.';
+    hint.textContent = error.message || 'Could not search Meta Pages.';
   } finally {
     button.disabled = false;
     button.textContent = previousText;
@@ -2060,7 +2060,7 @@ function renderPendingPostCard(court) {
         <label>
           Instagram location ID
           <div class="pending-post-location-id-row">
-            <input name="instagramLocationId" inputmode="numeric" pattern="[0-9]*" required placeholder="Required numeric Meta place ID" value="${escapeHtml(post.instagramLocationId || '')}" />
+            <input name="instagramLocationId" inputmode="numeric" pattern="[0-9]*" required placeholder="Required numeric Meta Page ID" value="${escapeHtml(post.instagramLocationId || '')}" />
             <button class="secondary-button admin-edit-button" type="button" data-find-instagram-location-id>Find ID</button>
           </div>
           <span class="form-hint">Required before publishing. This is what creates the live Instagram location tag.</span>
