@@ -205,6 +205,7 @@ const elements = {
   reviewBody: document.querySelector('#reviewBody'),
   reviewPhotos: document.querySelector('#reviewPhotos'),
   reviewHint: document.querySelector('#reviewHint'),
+  reviewSubmitButton: document.querySelector('#reviewForm .form-actions .primary-button'),
   reportDialog: document.querySelector('#reportDialog'),
   reportForm: document.querySelector('#reportForm'),
   reportReason: document.querySelector('#reportReason'),
@@ -1623,25 +1624,32 @@ function renderReviewList(court, limit = 2) {
   const reviews = getCourtReviews(court.id);
   if (!reviews.length) return '<p class="review-empty">No player reviews yet.</p>';
 
-  return reviews.slice(0, limit).map(review => `
-    <article class="review-item" data-review-id="${escapeHtml(review.id || '')}">
-      <div class="review-meta">
-        <span class="review-author">
-          <strong>${escapeHtml(review.username || 'Player')}</strong>
-          ${review.skillLevel ? `<small>${escapeHtml(compactSkillLevelLabel(review.skillLevel))}</small>` : ''}
-        </span>
-        <span>${escapeHtml(review.visited || review.createdAt)}</span>
-      </div>
-      <div class="community-update-label">
-        <span>Community review</span>
-        ${review.updatedAt ? `<span>Review edited ${escapeHtml(review.updatedAt)}</span>` : ''}
-      </div>
-      ${review.body ? `<p>${escapeHtml(review.body)}</p>` : ''}
-      ${reviewDetailItems(review)}
-      ${renderReviewPhotoStrip(court, review)}
-      <button class="report-button" type="button" data-report-review="${escapeHtml(review.id || '')}" data-court-id="${escapeHtml(court.id)}">Report review</button>
-    </article>
-  `).join('');
+  return reviews.slice(0, limit).map(review => {
+    const isOwnReview = Boolean(state.currentUser?.id && review.userId === state.currentUser.id);
+    const actionHtml = isOwnReview
+      ? `<button class="report-button" type="button" data-review-location="${escapeHtml(court.id)}">Edit review</button>`
+      : `<button class="report-button" type="button" data-report-review="${escapeHtml(review.id || '')}" data-court-id="${escapeHtml(court.id)}">Report review</button>`;
+
+    return `
+      <article class="review-item" data-review-id="${escapeHtml(review.id || '')}">
+        <div class="review-meta">
+          <span class="review-author">
+            <strong>${escapeHtml(review.username || 'Player')}</strong>
+            ${review.skillLevel ? `<small>${escapeHtml(compactSkillLevelLabel(review.skillLevel))}</small>` : ''}
+          </span>
+          <span>${escapeHtml(review.visited || review.createdAt)}</span>
+        </div>
+        <div class="community-update-label">
+          <span>Community review</span>
+          ${review.updatedAt ? `<span>Review edited ${escapeHtml(review.updatedAt)}</span>` : ''}
+        </div>
+        ${review.body ? `<p>${escapeHtml(review.body)}</p>` : ''}
+        ${reviewDetailItems(review)}
+        ${renderReviewPhotoStrip(court, review)}
+        ${actionHtml}
+      </article>
+    `;
+  }).join('');
 }
 
 function renderPhotoButton(court, photo, index) {
@@ -1686,6 +1694,7 @@ function locationMenuItems(court, { includeEdit = false, includeShare = false } 
 
 function locationActionButtons(court, className = 'popup-edit', { includeEdit = true, includeShare = false, variant = 'popup' } = {}) {
   const isMapInfo = variant === 'map-info';
+  const reviewLabel = getCurrentUserReview(court.id) ? 'Edit review' : 'Review';
   return `
     <div class="location-action-row location-menu-action-row${isMapInfo ? ' map-info-action-row' : ''}">
       <div class="card-menu location-overflow-menu${isMapInfo ? ' map-info-menu' : ''}" data-location-menu-wrapper>
@@ -1694,7 +1703,7 @@ function locationActionButtons(court, className = 'popup-edit', { includeEdit = 
           ${locationMenuItems(court, { includeEdit, includeShare })}
         </div>
       </div>
-      <button class="${className}" type="button" data-review-location="${court.id}">Review</button>
+      <button class="${className}" type="button" data-review-location="${court.id}">${reviewLabel}</button>
     </div>
   `;
 }
@@ -1786,9 +1795,11 @@ function showMapInfoBox(court, options = {}) {
     openEditDialog(court.id);
   });
 
-  elements.mapInfoBox.querySelector('[data-review-location]').addEventListener('click', () => {
-    closeLocationMenus();
-    openReviewDialog(court.id);
+  elements.mapInfoBox.querySelectorAll('[data-review-location]').forEach(button => {
+    button.addEventListener('click', () => {
+      closeLocationMenus();
+      openReviewDialog(court.id);
+    });
   });
 
   elements.mapInfoBox.querySelector('[data-suggest-edit]')?.addEventListener('click', () => {
@@ -1854,6 +1865,7 @@ function createCourtCard(court) {
   const card = document.createElement('article');
   card.className = `court-card${court.userSubmitted ? ' user-submitted' : ''}`;
   const reviews = getCourtReviews(court.id);
+  const reviewLabel = getCurrentUserReview(court.id) ? 'Edit review' : 'Review';
   const courtCount = courtCountLabel(court);
   card.tabIndex = 0;
   card.innerHTML = `
@@ -1878,7 +1890,7 @@ function createCourtCard(court) {
     </div>
     ${renderLocationContactLinks(court, 'card')}
     ${renderOpenPlaySummary(court, {
-      actionsHtml: `<button class="card-edit card-action-button card-review-inline" type="button" data-review-location="${court.id}" aria-label="Review ${escapeHtml(court.name)}">Review</button>`
+      actionsHtml: `<button class="card-edit card-action-button card-review-inline" type="button" data-review-location="${court.id}" aria-label="${reviewLabel} ${escapeHtml(court.name)}">${reviewLabel}</button>`
     })}
   `;
 
@@ -2611,7 +2623,8 @@ function openReviewDialog(id) {
   elements.reviewSchedulingApp.value = existingReview?.schedulingApp || '';
   elements.reviewBody.value = existingReview?.body || '';
   elements.reviewTitle.textContent = existingReview ? `Edit your review for ${court.name}` : `Review ${court.name}`;
-  setReviewHint(existingReview ? 'Saving will replace your previous review for this location.' : '');
+  elements.reviewSubmitButton.textContent = existingReview ? 'Save changes' : 'Post review';
+  setReviewHint(existingReview ? 'Update your review details, or add more photos for admin approval.' : '');
   updateReviewRequirement();
   openDialog(elements.reviewDialog);
   resetDialogScroll(elements.reviewDialog, elements.reviewForm, { focusCloseButton: true });
@@ -2652,6 +2665,16 @@ function showReviewSavedConfirmation(hasPhotos) {
     message: hasPhotos
       ? `Your review is live. ${approvalReviewMessage('Your pictures')}`
       : 'Thanks for sharing current open-play information with other players.',
+    showReviewNote: hasPhotos
+  });
+}
+
+function showReviewUpdatedConfirmation(hasPhotos) {
+  showSubmissionConfirmation({
+    title: hasPhotos ? 'Review updated. New pictures pending approval.' : 'Review updated.',
+    message: hasPhotos
+      ? `Your review changes are live. ${approvalReviewMessage('Your new pictures')}`
+      : 'Your latest open-play information is live for other players.',
     showReviewNote: hasPhotos
   });
 }
@@ -2809,7 +2832,11 @@ async function submitReview(event) {
       closeReviewDialog();
       render();
       focusCourt(court.id, 'review_saved');
-      showReviewSavedConfirmation(reviewPhotoFiles.length > 0);
+      if (existingReview) {
+        showReviewUpdatedConfirmation(reviewPhotoFiles.length > 0);
+      } else {
+        showReviewSavedConfirmation(reviewPhotoFiles.length > 0);
+      }
     } catch (error) {
       console.error(error);
       setReviewHint(error.message || 'Could not save that review.', true);
@@ -2840,7 +2867,11 @@ async function submitReview(event) {
   closeReviewDialog();
   render();
   focusCourt(court.id, 'review_saved');
-  showReviewSavedConfirmation(reviewPhotoFiles.length > 0);
+  if (existingReview) {
+    showReviewUpdatedConfirmation(reviewPhotoFiles.length > 0);
+  } else {
+    showReviewSavedConfirmation(reviewPhotoFiles.length > 0);
+  }
 }
 
 function setDraftLocation(lat, lng) {
