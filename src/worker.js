@@ -1,6 +1,7 @@
 import {
   onRequestPost as postLocationToInstagram,
-  onRequestPreflightImages as preflightInstagramImages
+  onRequestPreflightImages as preflightInstagramImages,
+  onRequestSearchLocations as searchInstagramLocations
 } from '../functions/api/instagram/post-location.js';
 
 function getForwardedScheme(request) {
@@ -37,6 +38,9 @@ export default {
     }
     if (url.pathname === '/api/instagram/preflight-images' && request.method === 'POST') {
       return preflightInstagramImages({ request, env, ctx });
+    }
+    if (url.pathname === '/api/instagram/search-locations' && request.method === 'POST') {
+      return searchInstagramLocations({ request, env, ctx });
     }
 
     if (url.pathname.startsWith('/api/')) {

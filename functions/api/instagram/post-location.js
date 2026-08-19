@@ -8,6 +8,8 @@ const INSTAGRAM_MIN_ASPECT_RATIO = 4 / 5;
 const INSTAGRAM_MAX_ASPECT_RATIO = 1.91;
 const DEFAULT_INSTAGRAM_COLLABORATORS = ['scooppickleball'];
 const INSTAGRAM_MAX_COLLABORATORS = 5;
+const META_PLACE_SEARCH_LIMIT = 8;
+const META_PLACE_SEARCH_DISTANCE_METERS = 25000;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -187,6 +189,168 @@ function parsePublicHttpsUrl(value) {
 function instagramLocationId(value) {
   const text = String(value || '').trim();
   return /^\d+$/.test(text) ? text : '';
+}
+
+function metaAccessToken(env) {
+  return env.META_PLACES_ACCESS_TOKEN || env.FACEBOOK_ACCESS_TOKEN || env.INSTAGRAM_ACCESS_TOKEN || '';
+}
+
+function graphApiVersion(env) {
+  return env.INSTAGRAM_GRAPH_VERSION || 'v26.0';
+}
+
+function normalizeSearchText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function searchTokens(value) {
+  return normalizeSearchText(value)
+    .split(/\s+/)
+    .filter(token => token.length > 1 && !['park', 'parks', 'the', 'and'].includes(token));
+}
+
+function placeSearchQueries(location = {}) {
+  const name = String(location.name || '').trim();
+  const city = String(location.city || '').trim();
+  const state = String(location.state || '').trim();
+  const address = String(location.address || '').trim();
+  return [...new Set([
+    [name, city, state].filter(Boolean).join(' '),
+    [name, address].filter(Boolean).join(' '),
+    name
+  ].filter(Boolean))].slice(0, 3);
+}
+
+function numericCoordinate(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function milesBetween(fromLat, fromLng, toLat, toLng) {
+  if ([fromLat, fromLng, toLat, toLng].some(value => value === null || value === undefined)) return null;
+  const toRadians = degrees => degrees * Math.PI / 180;
+  const radiusMiles = 3958.8;
+  const deltaLat = toRadians(toLat - fromLat);
+  const deltaLng = toRadians(toLng - fromLng);
+  const a = Math.sin(deltaLat / 2) ** 2
+    + Math.cos(toRadians(fromLat)) * Math.cos(toRadians(toLat)) * Math.sin(deltaLng / 2) ** 2;
+  return radiusMiles * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function pageLocationAddress(location = {}) {
+  return [
+    location.street,
+    location.city,
+    location.state,
+    location.zip,
+    location.country
+  ].filter(Boolean).join(', ');
+}
+
+function scorePlaceCandidate(page = {}, location = {}) {
+  const targetName = normalizeSearchText(location.name);
+  const pageName = normalizeSearchText(page.name);
+  const targetTokens = searchTokens(location.name);
+  const pageTokens = new Set(searchTokens(page.name));
+  const tokenMatches = targetTokens.filter(token => pageTokens.has(token)).length;
+  const tokenScore = targetTokens.length ? (tokenMatches / targetTokens.length) * 48 : 0;
+  const nameScore = targetName && pageName.includes(targetName) ? 22 : 0;
+  const pageLocation = page.location || {};
+  const cityScore = location.city && pageLocation.city
+    && normalizeSearchText(location.city) === normalizeSearchText(pageLocation.city) ? 12 : 0;
+  const stateScore = location.state && pageLocation.state
+    && normalizeSearchText(location.state) === normalizeSearchText(pageLocation.state) ? 10 : 0;
+  const addressScore = location.address && pageLocation.street
+    && normalizeSearchText(pageLocation.street).includes(normalizeSearchText(location.address).split(' ').slice(0, 3).join(' ')) ? 8 : 0;
+  const targetLat = numericCoordinate(location.latitude);
+  const targetLng = numericCoordinate(location.longitude);
+  const pageLat = numericCoordinate(pageLocation.latitude);
+  const pageLng = numericCoordinate(pageLocation.longitude);
+  const distanceMiles = milesBetween(targetLat, targetLng, pageLat, pageLng);
+  let distanceScore = 0;
+  if (distanceMiles !== null) {
+    if (distanceMiles <= 0.25) distanceScore = 18;
+    else if (distanceMiles <= 1) distanceScore = 14;
+    else if (distanceMiles <= 5) distanceScore = 8;
+  }
+  const score = Math.round(Math.min(100, tokenScore + nameScore + cityScore + stateScore + addressScore + distanceScore));
+
+  return {
+    score,
+    confidence: score >= 78 || (score >= 68 && distanceMiles !== null && distanceMiles <= 1) ? 'high' : (score >= 48 ? 'medium' : 'low'),
+    distanceMiles: distanceMiles === null ? null : Number(distanceMiles.toFixed(2))
+  };
+}
+
+function normalizeMetaPlace(page = {}, location = {}) {
+  const scored = scorePlaceCandidate(page, location);
+  const pageLocation = page.location || {};
+  return {
+    id: String(page.id || ''),
+    name: page.name || '',
+    category: page.category || '',
+    address: pageLocationAddress(pageLocation),
+    city: pageLocation.city || '',
+    state: pageLocation.state || '',
+    latitude: pageLocation.latitude || null,
+    longitude: pageLocation.longitude || null,
+    link: page.link || '',
+    score: scored.score,
+    confidence: scored.confidence,
+    distanceMiles: scored.distanceMiles
+  };
+}
+
+async function facebookGet(env, path, params) {
+  const token = metaAccessToken(env);
+  if (!token) throw new Error('Missing META_PLACES_ACCESS_TOKEN, FACEBOOK_ACCESS_TOKEN, or INSTAGRAM_ACCESS_TOKEN.');
+  const url = new URL(`https://graph.facebook.com/${graphApiVersion(env)}${path}`);
+  Object.entries({
+    ...params,
+    access_token: token
+  }).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
+  });
+
+  const response = await fetch(url);
+  const data = await readJson(response);
+  if (!response.ok) {
+    const message = data?.error?.message || data?.message || `Meta location search failed: ${response.status}`;
+    throw new Error(message);
+  }
+  return data;
+}
+
+async function searchMetaPlaces(env, location = {}) {
+  const queries = placeSearchQueries(location);
+  if (!queries.length) throw new Error('Location name is required before searching Meta places.');
+
+  const latitude = numericCoordinate(location.latitude);
+  const longitude = numericCoordinate(location.longitude);
+  const seen = new Map();
+  for (const query of queries) {
+    const data = await facebookGet(env, '/search', {
+      type: 'place',
+      q: query,
+      fields: 'id,name,category,location,link',
+      limit: META_PLACE_SEARCH_LIMIT,
+      center: latitude !== null && longitude !== null ? `${latitude},${longitude}` : '',
+      distance: latitude !== null && longitude !== null ? META_PLACE_SEARCH_DISTANCE_METERS : ''
+    });
+
+    (data?.data || []).forEach(page => {
+      if (!page?.id || seen.has(page.id)) return;
+      seen.set(page.id, normalizeMetaPlace(page, location));
+    });
+  }
+
+  return [...seen.values()]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, META_PLACE_SEARCH_LIMIT);
 }
 
 function normalizeCollaboratorUsernames(values = DEFAULT_INSTAGRAM_COLLABORATORS) {
@@ -632,5 +796,26 @@ export async function onRequestPreflightImages({ request, env }) {
     return json({ ok: true, results });
   } catch (error) {
     return json({ ok: false, error: error.message || 'Image is not ready for Instagram.' }, 400);
+  }
+}
+
+export async function onRequestSearchLocations({ request, env }) {
+  try {
+    const admin = await requireAdmin(env, request);
+    if (!admin) return json({ ok: false, error: 'Admin authorization required.' }, 401);
+
+    const body = await request.json().catch(() => ({}));
+    const candidates = await searchMetaPlaces(env, {
+      name: body.name,
+      address: body.address,
+      city: body.city,
+      state: body.state,
+      latitude: body.latitude,
+      longitude: body.longitude
+    });
+    const bestCandidate = candidates.find(candidate => candidate.confidence === 'high') || null;
+    return json({ ok: true, candidates, bestCandidate });
+  } catch (error) {
+    return json({ ok: false, error: error.message || 'Meta location search failed.' }, 500);
   }
 }

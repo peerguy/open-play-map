@@ -5764,6 +5764,70 @@ label:has(input:required:valid) > .field-label .is-required {
   resize: vertical;
 }
 
+.pending-post-location-id-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.pending-post-location-id-row .admin-edit-button {
+  min-width: 86px;
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.pending-post-location-results {
+  display: grid;
+  gap: 7px;
+}
+
+.pending-post-location-candidates {
+  display: grid;
+  gap: 7px;
+}
+
+.pending-post-location-candidate {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.pending-post-card .pending-post-location-candidate {
+  border-color: var(--line);
+  background: #fff;
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.pending-post-card .pending-post-location-candidate:hover,
+.pending-post-card .pending-post-location-candidate:focus-visible {
+  border-color: var(--brand-dark);
+  background: #f3f7f2;
+  color: var(--ink);
+}
+
+.pending-post-location-candidate strong {
+  font-size: 0.84rem;
+  line-height: 1.2;
+}
+
+.pending-post-location-candidate span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
 .pending-post-image-editor {
   display: grid;
   gap: 9px;
@@ -6656,6 +6720,10 @@ label:has(input:required:valid) > .field-label .is-required {
 
   .pending-post-image-editor-header small {
     text-align: left;
+  }
+
+  .pending-post-location-id-row {
+    grid-template-columns: 1fr;
   }
 
   .pending-post-image-row {

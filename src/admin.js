@@ -595,6 +595,98 @@ function upsertBackendInstagramPost(post) {
   }
 }
 
+function pendingInstagramLocationResults(form) {
+  return form.querySelector('[data-instagram-location-results]');
+}
+
+function renderInstagramLocationCandidate(candidate = {}) {
+  const detail = [
+    candidate.address,
+    candidate.distanceMiles !== null && candidate.distanceMiles !== undefined ? `${candidate.distanceMiles} mi` : '',
+    candidate.category,
+    `${candidate.confidence || 'match'} · ${candidate.score || 0}`
+  ].filter(Boolean).join(' · ');
+  return `
+    <button class="pending-post-location-candidate" type="button" data-use-instagram-location-id="${escapeHtml(candidate.id)}" data-instagram-location-name="${escapeHtml(candidate.name || '')}">
+      <strong>${escapeHtml(candidate.name || 'Meta place')}</strong>
+      <span>${escapeHtml(detail || `Page ID ${candidate.id}`)}</span>
+    </button>
+  `;
+}
+
+function renderInstagramLocationCandidates(form, candidates = []) {
+  const results = pendingInstagramLocationResults(form);
+  if (!results) return;
+  if (!candidates.length) {
+    results.innerHTML = '<p class="form-hint">No Meta place matches found.</p>';
+    return;
+  }
+  results.innerHTML = `
+    <div class="pending-post-location-candidates">
+      ${candidates.map(renderInstagramLocationCandidate).join('')}
+    </div>
+  `;
+}
+
+async function saveInstagramLocationSelection(form, court, candidate, hint) {
+  if (!candidate?.id) return;
+  const tagInput = form.elements.locationTag;
+  const locationInput = form.elements.instagramLocationId;
+  const locationTag = candidate.name || tagInput?.value || defaultLocationTag(court);
+  if (tagInput) tagInput.value = locationTag;
+  if (locationInput) locationInput.value = candidate.id;
+  updatePendingPostPreview(form);
+
+  if (!window.OpenPlaySupabase?.savePendingInstagramPostLocation) {
+    hint.textContent = `Filled Meta location ID ${candidate.id}.`;
+    return;
+  }
+
+  hint.textContent = 'Saving Meta location ID...';
+  const post = await window.OpenPlaySupabase.savePendingInstagramPostLocation(court.remoteId, {
+    locationTag,
+    instagramLocationId: candidate.id
+  }, currentAdminUser?.id);
+  upsertBackendInstagramPost(post);
+  hint.textContent = `Saved Meta location ID for ${candidate.name || 'this place'}.`;
+}
+
+async function findInstagramLocationId(form, court, button, hint) {
+  const previousText = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Finding...';
+  hint.textContent = 'Searching Meta places...';
+
+  try {
+    const result = await searchInstagramLocationCandidates(court);
+    renderInstagramLocationCandidates(form, result.candidates || []);
+    if (result.bestCandidate) {
+      await saveInstagramLocationSelection(form, court, result.bestCandidate, hint);
+      return;
+    }
+    hint.textContent = result.candidates?.length
+      ? 'Choose the matching Meta place below.'
+      : 'No Meta places found. You can enter the numeric ID manually.';
+  } catch (error) {
+    hint.textContent = error.message || 'Could not search Meta places.';
+  } finally {
+    button.disabled = false;
+    button.textContent = previousText;
+  }
+}
+
+async function useInstagramLocationCandidate(form, court, button, hint) {
+  const candidate = {
+    id: button.dataset.useInstagramLocationId,
+    name: button.dataset.instagramLocationName
+  };
+  try {
+    await saveInstagramLocationSelection(form, court, candidate, hint);
+  } catch (error) {
+    hint.textContent = error.message || 'Could not save that Meta location ID.';
+  }
+}
+
 async function savePendingImageEditor() {
   const { form, input, court, formHint, saveButton } = pendingImageEditor;
   if (!form || !input || !court) return;
@@ -1325,6 +1417,32 @@ async function preflightPendingInstagramImages(imageUrls) {
   return result;
 }
 
+async function searchInstagramLocationCandidates(court) {
+  const accessToken = await currentAccessToken();
+  if (!accessToken) throw new Error('Sign in again before searching Meta locations.');
+
+  const response = await fetch('/api/instagram/search-locations', {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      name: court.name,
+      address: court.address,
+      city: court.city,
+      state: court.state,
+      latitude: court.latitude,
+      longitude: court.longitude
+    })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || result.ok === false) {
+    throw new Error(result.error || `Meta location search failed: ${response.status}`);
+  }
+  return result;
+}
+
 function syncUserAttribution(user) {
   const submissions = getSavedSubmissions().map(court => (
     court.submittedBy === user.id ? { ...court, submittedByUsername: user.username } : court
@@ -1941,8 +2059,12 @@ function renderPendingPostCard(court) {
         </label>
         <label>
           Instagram location ID
-          <input name="instagramLocationId" inputmode="numeric" pattern="[0-9]*" required placeholder="Required numeric Meta place ID" value="${escapeHtml(post.instagramLocationId || '')}" />
+          <div class="pending-post-location-id-row">
+            <input name="instagramLocationId" inputmode="numeric" pattern="[0-9]*" required placeholder="Required numeric Meta place ID" value="${escapeHtml(post.instagramLocationId || '')}" />
+            <button class="secondary-button admin-edit-button" type="button" data-find-instagram-location-id>Find ID</button>
+          </div>
           <span class="form-hint">Required before publishing. This is what creates the live Instagram location tag.</span>
+          <div class="pending-post-location-results" data-instagram-location-results></div>
         </label>
         <label>
           Instagram collaborators
@@ -2339,6 +2461,16 @@ function setupPendingPostForm(form) {
       return;
     }
 
+    if (button.matches('[data-find-instagram-location-id]')) {
+      findInstagramLocationId(form, court, button, hint);
+      return;
+    }
+
+    if (button.matches('[data-use-instagram-location-id]')) {
+      useInstagramLocationCandidate(form, court, button, hint);
+      return;
+    }
+
     if (button.matches('[data-remove-image]')) {
       removePendingPostImageRow(form, button);
       return;
@@ -2350,6 +2482,19 @@ function setupPendingPostForm(form) {
   });
 
   uploadInput?.addEventListener('change', () => uploadPendingPostImages(form, court, uploadInput, hint));
+  form.elements.instagramLocationId?.addEventListener('blur', async () => {
+    const instagramLocationId = form.elements.instagramLocationId.value.trim();
+    if (!/^\d+$/.test(instagramLocationId) || !window.OpenPlaySupabase?.savePendingInstagramPostLocation) return;
+    try {
+      const post = await window.OpenPlaySupabase.savePendingInstagramPostLocation(court.remoteId, {
+        locationTag: form.elements.locationTag.value.trim(),
+        instagramLocationId
+      }, currentAdminUser?.id);
+      upsertBackendInstagramPost(post);
+    } catch (error) {
+      hint.textContent = error.message || 'Could not save that Meta location ID.';
+    }
+  });
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
