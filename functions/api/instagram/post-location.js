@@ -192,7 +192,7 @@ function instagramLocationId(value) {
 }
 
 function metaAccessToken(env) {
-  return env.META_PLACES_ACCESS_TOKEN || env.FACEBOOK_ACCESS_TOKEN || env.INSTAGRAM_ACCESS_TOKEN || '';
+  return env.META_PLACES_ACCESS_TOKEN || env.FACEBOOK_ACCESS_TOKEN || '';
 }
 
 function graphApiVersion(env) {
@@ -307,7 +307,9 @@ function normalizeMetaPlace(page = {}, location = {}) {
 
 async function facebookGet(env, path, params) {
   const token = metaAccessToken(env);
-  if (!token) throw new Error('Missing META_PLACES_ACCESS_TOKEN, FACEBOOK_ACCESS_TOKEN, or INSTAGRAM_ACCESS_TOKEN.');
+  if (!token) {
+    throw new Error('Meta location lookup needs a Facebook Graph API token. Add META_PLACES_ACCESS_TOKEN as a Cloudflare secret.');
+  }
   const url = new URL(`https://graph.facebook.com/${graphApiVersion(env)}${path}`);
   Object.entries({
     ...params,
@@ -320,6 +322,9 @@ async function facebookGet(env, path, params) {
   const data = await readJson(response);
   if (!response.ok) {
     const message = data?.error?.message || data?.message || `Meta location search failed: ${response.status}`;
+    if (/cannot parse access token|invalid oauth access token/i.test(message)) {
+      throw new Error('Meta location lookup needs a Facebook Graph API token in META_PLACES_ACCESS_TOKEN. The Instagram publishing token cannot be used for place search.');
+    }
     throw new Error(message);
   }
   return data;
