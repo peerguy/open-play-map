@@ -575,8 +575,9 @@ export async function onRequestPost({ request, env }) {
     const locationId = body.locationId;
     if (!locationId) return json({ ok: false, error: 'locationId is required.' }, 400);
 
+    const isRepost = body.repost === true || body.forceRepost === true;
     const existing = await findExistingPost(env, locationId);
-    if (existing?.status === 'published') {
+    if (existing?.status === 'published' && !isRepost) {
       return json({ ok: true, skipped: true, reason: 'Location was already posted to Instagram.', post: existing });
     }
 

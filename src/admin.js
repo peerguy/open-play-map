@@ -1278,7 +1278,7 @@ function isAdmin(user) {
   return user?.role === 'admin';
 }
 
-async function publishPendingInstagramPost(court, values) {
+async function publishPendingInstagramPost(court, values, options = {}) {
   if (!court?.remoteId) throw new Error('A saved location is required before posting.');
   const accessToken = await currentAccessToken();
   if (!accessToken) throw new Error('Sign in again before posting to Instagram.');
@@ -1295,7 +1295,8 @@ async function publishPendingInstagramPost(court, values) {
       imageUrls: values.imageUrls,
       locationTag: values.locationTag,
       instagramLocationId: values.instagramLocationId,
-      collaborators: values.collaborators
+      collaborators: values.collaborators,
+      repost: Boolean(options.repost)
     })
   });
   const result = await response.json().catch(() => ({}));
@@ -1922,7 +1923,7 @@ function renderPendingPostCard(court) {
           </div>
         </div>
       </div>
-      <form class="pending-post-editor" data-pending-post-location="${escapeHtml(court.id)}">
+      <form class="pending-post-editor" data-pending-post-location="${escapeHtml(court.id)}" data-pending-post-status="${escapeHtml(post.status || 'pending')}">
         <div class="pending-post-editor-header">
           <div>
             <h3>${escapeHtml(court.name || 'Open play location')}</h3>
@@ -1963,8 +1964,8 @@ function renderPendingPostCard(court) {
           </div>
         </div>
         <div class="admin-edit-actions pending-post-actions">
-          <button class="secondary-button admin-edit-button admin-approve-button" type="submit"${isPublished ? ' disabled' : ''}>${isPublished ? 'Posted to Instagram' : 'Post to Instagram'}</button>
-          <p class="form-hint" data-pending-post-hint>${isPublished ? 'Images can be squared for the admin record, but Instagram does not replace media on an already-live post.' : ''}</p>
+          <button class="secondary-button admin-edit-button admin-approve-button" type="submit">${isPublished ? 'Repost to Instagram' : 'Post to Instagram'}</button>
+          <p class="form-hint" data-pending-post-hint>${isPublished ? 'Use this after editing images or deleting the original Instagram post. Reposting creates a new live Instagram post.' : ''}</p>
         </div>
       </form>
     </article>
@@ -2352,6 +2353,10 @@ function setupPendingPostForm(form) {
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
+    const isRepost = form.dataset.pendingPostStatus === 'published';
+    if (isRepost && !window.confirm('Repost this location to Instagram? This will create a new live post.')) {
+      return;
+    }
     const values = pendingPostValues(form);
     if (!values.caption) {
       hint.textContent = 'Caption is required.';
@@ -2392,9 +2397,9 @@ function setupPendingPostForm(form) {
       await preparePendingPostImages(form, court, values, hint);
       hint.textContent = 'Checking prepared images...';
       await preflightPendingInstagramImages(values.imageUrls);
-      hint.textContent = 'Posting...';
-      await publishPendingInstagramPost(court, values);
-      hint.textContent = 'Posted to Instagram.';
+      hint.textContent = isRepost ? 'Reposting...' : 'Posting...';
+      await publishPendingInstagramPost(court, values, { repost: isRepost });
+      hint.textContent = isRepost ? 'Reposted to Instagram.' : 'Posted to Instagram.';
       await loadBackendCollections();
       renderPendingPosts();
       renderModeration();
