@@ -1669,6 +1669,53 @@
     return mapInstagramPost(result.data);
   }
 
+  async function savePendingInstagramPostImages(locationId, imageUrls = [], actorId = null) {
+    const supabase = client();
+    if (!supabase || !locationId) throw new Error('Supabase is not configured.');
+
+    const nextImageUrls = uniqueInstagramImageUrls(imageUrls);
+    if (!nextImageUrls.length) throw new Error('Add at least one public JPEG image URL.');
+
+    const { data: existing, error: existingError } = await supabase
+      .from('instagram_posts')
+      .select('*')
+      .eq('location_id', locationId)
+      .maybeSingle();
+
+    if (existingError) throw existingError;
+    if (existing?.status === 'published') return mapInstagramPost(existing);
+
+    const payload = {
+      image_url: nextImageUrls[0] || null,
+      image_urls: nextImageUrls,
+      requested_by: actorId || existing?.requested_by || null,
+      error_message: null,
+      updated_at: new Date().toISOString()
+    };
+    if (existing?.status === 'failed') payload.status = 'pending';
+
+    const result = existing?.id
+      ? await supabase
+        .from('instagram_posts')
+        .update(payload)
+        .eq('id', existing.id)
+        .select('*')
+        .single()
+      : await supabase
+        .from('instagram_posts')
+        .insert({
+          location_id: locationId,
+          status: 'pending',
+          collaborator_usernames: DEFAULT_INSTAGRAM_COLLABORATORS,
+          ...payload
+        })
+        .select('*')
+        .single();
+
+    if (result.error) throw result.error;
+    return mapInstagramPost(result.data);
+  }
+
   function creditBalancesFromRows(credits = []) {
     return credits
       .filter(credit => credit.status === 'approved' || !credit.status)
@@ -2076,6 +2123,7 @@
     removeAdminPhoto,
     updatePhotoStatus,
     appendPendingInstagramPostImage,
+    savePendingInstagramPostImages,
     fetchCurrentUserContributions,
     fetchPublicLeaderboard,
     fetchPublicMonthlyDrawings,

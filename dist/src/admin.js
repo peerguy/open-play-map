@@ -10,6 +10,8 @@ const DAILY_LOCATION_LIMIT = 10;
 const DAILY_REVIEW_LIMIT = 10;
 const SUGGESTED_EDIT_CREDITS = 3;
 const INSTAGRAM_MAX_IMAGES = 10;
+const INSTAGRAM_SQUARE_IMAGE_SIZE = 1080;
+const PENDING_IMAGE_EDITOR_JPEG_QUALITY = 0.86;
 const DEFAULT_INSTAGRAM_COLLABORATORS = ['scooppickleball'];
 const INSTAGRAM_MAX_COLLABORATORS = 5;
 const LOCAL_PROTOTYPE_HOSTS = new Set(['', 'localhost', '127.0.0.1']);
@@ -96,6 +98,29 @@ const adminPhotoLightbox = {
   photos: [],
   index: 0,
   trigger: null
+};
+const pendingImageEditor = {
+  element: null,
+  canvas: null,
+  context: null,
+  saveButton: null,
+  hint: null,
+  form: null,
+  row: null,
+  input: null,
+  court: null,
+  formHint: null,
+  trigger: null,
+  image: null,
+  objectUrl: '',
+  loadId: 0,
+  mode: 'fill',
+  zoom: 100,
+  positionX: 0,
+  positionY: 0,
+  background: '#ffffff',
+  activePointerId: null,
+  dragStart: null
 };
 
 function normalize(value) {
@@ -265,6 +290,395 @@ function stepAdminPhotoLightbox(delta) {
   if (photos.length <= 1) return;
   adminPhotoLightbox.index = (adminPhotoLightbox.index + delta + photos.length) % photos.length;
   updateAdminPhotoLightbox();
+}
+
+function safePendingImageFilePart(value) {
+  return String(value || 'instagram-square')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 40) || 'instagram-square';
+}
+
+function setPendingImageEditorHint(message = '') {
+  if (pendingImageEditor.hint) pendingImageEditor.hint.textContent = message;
+}
+
+function clearPendingImageEditorImage() {
+  if (pendingImageEditor.objectUrl) URL.revokeObjectURL(pendingImageEditor.objectUrl);
+  pendingImageEditor.image = null;
+  pendingImageEditor.objectUrl = '';
+}
+
+function resetPendingImageEditorState() {
+  const trigger = pendingImageEditor.trigger;
+  clearPendingImageEditorImage();
+  pendingImageEditor.form = null;
+  pendingImageEditor.row = null;
+  pendingImageEditor.input = null;
+  pendingImageEditor.court = null;
+  pendingImageEditor.formHint = null;
+  pendingImageEditor.trigger = null;
+  pendingImageEditor.loadId += 1;
+  pendingImageEditor.activePointerId = null;
+  pendingImageEditor.dragStart = null;
+  pendingImageEditor.mode = 'fill';
+  pendingImageEditor.zoom = 100;
+  pendingImageEditor.positionX = 0;
+  pendingImageEditor.positionY = 0;
+  pendingImageEditor.background = '#ffffff';
+  trigger?.focus?.();
+}
+
+function closePendingImageEditor() {
+  if (!pendingImageEditor.element) return;
+  closeAdminDialog(pendingImageEditor.element);
+}
+
+function ensurePendingImageEditor() {
+  if (pendingImageEditor.element) return pendingImageEditor.element;
+
+  const dialog = document.createElement('dialog');
+  dialog.className = 'pending-image-dialog';
+  dialog.innerHTML = `
+    <div class="pending-image-dialog-panel">
+      <div class="pending-image-dialog-header">
+        <div>
+          <p class="eyebrow">Instagram image</p>
+          <h2>Square editor</h2>
+        </div>
+        <button class="pending-image-dialog-close" type="button" data-pending-square-close aria-label="Close square editor">&times;</button>
+      </div>
+      <div class="pending-image-dialog-body">
+        <div class="pending-image-canvas-shell">
+          <canvas class="pending-image-canvas" width="${INSTAGRAM_SQUARE_IMAGE_SIZE}" height="${INSTAGRAM_SQUARE_IMAGE_SIZE}" data-pending-square-canvas aria-label="Square image preview"></canvas>
+        </div>
+        <div class="pending-image-controls">
+          <div class="pending-image-segmented" role="group" aria-label="Square image mode">
+            <button type="button" data-pending-square-mode="fill">Fill</button>
+            <button type="button" data-pending-square-mode="fit">Fit</button>
+          </div>
+          <label>
+            Zoom
+            <input type="range" min="100" max="300" step="1" value="100" data-pending-square-zoom />
+          </label>
+          <label>
+            Horizontal
+            <input type="range" min="-100" max="100" step="1" value="0" data-pending-square-x />
+          </label>
+          <label>
+            Vertical
+            <input type="range" min="-100" max="100" step="1" value="0" data-pending-square-y />
+          </label>
+          <label class="pending-image-background-field">
+            Background
+            <input type="color" value="#ffffff" data-pending-square-background />
+          </label>
+          <div class="pending-image-dialog-actions">
+            <button class="secondary-button" type="button" data-pending-square-reset>Reset</button>
+            <button class="secondary-button admin-approve-button" type="button" data-pending-square-save>Save square image</button>
+          </div>
+          <p class="form-hint" data-pending-square-hint></p>
+        </div>
+      </div>
+    </div>
+  `;
+
+  pendingImageEditor.element = dialog;
+  pendingImageEditor.canvas = dialog.querySelector('[data-pending-square-canvas]');
+  pendingImageEditor.context = pendingImageEditor.canvas?.getContext('2d') || null;
+  pendingImageEditor.saveButton = dialog.querySelector('[data-pending-square-save]');
+  pendingImageEditor.hint = dialog.querySelector('[data-pending-square-hint]');
+
+  dialog.querySelector('[data-pending-square-close]')?.addEventListener('click', closePendingImageEditor);
+  dialog.addEventListener('click', event => {
+    if (event.target === dialog) closePendingImageEditor();
+  });
+  dialog.addEventListener('close', resetPendingImageEditorState);
+  dialog.querySelectorAll('[data-pending-square-mode]').forEach(button => {
+    button.addEventListener('click', () => {
+      pendingImageEditor.mode = button.dataset.pendingSquareMode || 'fill';
+      pendingImageEditor.zoom = 100;
+      pendingImageEditor.positionX = 0;
+      pendingImageEditor.positionY = 0;
+      updatePendingImageEditorControls();
+      drawPendingImageEditorPreview();
+    });
+  });
+  dialog.querySelector('[data-pending-square-zoom]')?.addEventListener('input', event => {
+    pendingImageEditor.zoom = Number(event.target.value) || 100;
+    drawPendingImageEditorPreview();
+  });
+  dialog.querySelector('[data-pending-square-x]')?.addEventListener('input', event => {
+    pendingImageEditor.positionX = Number(event.target.value) || 0;
+    drawPendingImageEditorPreview();
+  });
+  dialog.querySelector('[data-pending-square-y]')?.addEventListener('input', event => {
+    pendingImageEditor.positionY = Number(event.target.value) || 0;
+    drawPendingImageEditorPreview();
+  });
+  dialog.querySelector('[data-pending-square-background]')?.addEventListener('input', event => {
+    pendingImageEditor.background = event.target.value || '#ffffff';
+    drawPendingImageEditorPreview();
+  });
+  dialog.querySelector('[data-pending-square-reset]')?.addEventListener('click', () => {
+    pendingImageEditor.mode = 'fill';
+    pendingImageEditor.zoom = 100;
+    pendingImageEditor.positionX = 0;
+    pendingImageEditor.positionY = 0;
+    pendingImageEditor.background = '#ffffff';
+    updatePendingImageEditorControls();
+    drawPendingImageEditorPreview();
+  });
+  pendingImageEditor.saveButton?.addEventListener('click', savePendingImageEditor);
+  pendingImageEditor.canvas?.addEventListener('pointerdown', startPendingImageEditorDrag);
+  pendingImageEditor.canvas?.addEventListener('pointermove', movePendingImageEditorDrag);
+  pendingImageEditor.canvas?.addEventListener('pointerup', endPendingImageEditorDrag);
+  pendingImageEditor.canvas?.addEventListener('pointercancel', endPendingImageEditorDrag);
+
+  document.body.append(dialog);
+  return dialog;
+}
+
+function updatePendingImageEditorControls() {
+  const dialog = pendingImageEditor.element;
+  if (!dialog) return;
+  dialog.querySelectorAll('[data-pending-square-mode]').forEach(button => {
+    const active = button.dataset.pendingSquareMode === pendingImageEditor.mode;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+  const zoom = dialog.querySelector('[data-pending-square-zoom]');
+  const x = dialog.querySelector('[data-pending-square-x]');
+  const y = dialog.querySelector('[data-pending-square-y]');
+  const background = dialog.querySelector('[data-pending-square-background]');
+  if (zoom) zoom.value = String(pendingImageEditor.zoom);
+  if (x) x.value = String(pendingImageEditor.positionX);
+  if (y) y.value = String(pendingImageEditor.positionY);
+  if (background) background.value = pendingImageEditor.background;
+}
+
+function pendingImageEditorGeometry() {
+  const image = pendingImageEditor.image;
+  if (!image) return null;
+  const size = INSTAGRAM_SQUARE_IMAGE_SIZE;
+  const sourceWidth = image.naturalWidth || image.width || 1;
+  const sourceHeight = image.naturalHeight || image.height || 1;
+  const baseScale = pendingImageEditor.mode === 'fit'
+    ? Math.min(size / sourceWidth, size / sourceHeight)
+    : Math.max(size / sourceWidth, size / sourceHeight);
+  const scale = baseScale * ((Number(pendingImageEditor.zoom) || 100) / 100);
+  const drawWidth = sourceWidth * scale;
+  const drawHeight = sourceHeight * scale;
+  const maxOffsetX = Math.abs((size - drawWidth) / 2);
+  const maxOffsetY = Math.abs((size - drawHeight) / 2);
+  const offsetX = maxOffsetX * ((Number(pendingImageEditor.positionX) || 0) / 100);
+  const offsetY = maxOffsetY * ((Number(pendingImageEditor.positionY) || 0) / 100);
+
+  return {
+    drawWidth,
+    drawHeight,
+    maxOffsetX,
+    maxOffsetY,
+    x: (size - drawWidth) / 2 + offsetX,
+    y: (size - drawHeight) / 2 + offsetY
+  };
+}
+
+function drawPendingImageEditorPreview() {
+  const { context, canvas, image } = pendingImageEditor;
+  if (!context || !canvas) return;
+
+  context.fillStyle = pendingImageEditor.background || '#ffffff';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  if (!image) return;
+
+  const geometry = pendingImageEditorGeometry();
+  if (!geometry) return;
+  context.drawImage(image, geometry.x, geometry.y, geometry.drawWidth, geometry.drawHeight);
+}
+
+function startPendingImageEditorDrag(event) {
+  if (!pendingImageEditor.image) return;
+  pendingImageEditor.activePointerId = event.pointerId;
+  pendingImageEditor.dragStart = {
+    clientX: event.clientX,
+    clientY: event.clientY,
+    positionX: pendingImageEditor.positionX,
+    positionY: pendingImageEditor.positionY
+  };
+  pendingImageEditor.canvas?.setPointerCapture?.(event.pointerId);
+}
+
+function movePendingImageEditorDrag(event) {
+  if (pendingImageEditor.activePointerId !== event.pointerId || !pendingImageEditor.dragStart) return;
+  const geometry = pendingImageEditorGeometry();
+  const rect = pendingImageEditor.canvas?.getBoundingClientRect?.();
+  if (!geometry || !rect?.width || !rect?.height) return;
+
+  const canvasScale = INSTAGRAM_SQUARE_IMAGE_SIZE / rect.width;
+  const dx = (event.clientX - pendingImageEditor.dragStart.clientX) * canvasScale;
+  const dy = (event.clientY - pendingImageEditor.dragStart.clientY) * canvasScale;
+  pendingImageEditor.positionX = geometry.maxOffsetX
+    ? Math.max(-100, Math.min(100, pendingImageEditor.dragStart.positionX + (dx / geometry.maxOffsetX) * 100))
+    : 0;
+  pendingImageEditor.positionY = geometry.maxOffsetY
+    ? Math.max(-100, Math.min(100, pendingImageEditor.dragStart.positionY + (dy / geometry.maxOffsetY) * 100))
+    : 0;
+  updatePendingImageEditorControls();
+  drawPendingImageEditorPreview();
+}
+
+function endPendingImageEditorDrag(event) {
+  if (pendingImageEditor.activePointerId !== event.pointerId) return;
+  pendingImageEditor.canvas?.releasePointerCapture?.(event.pointerId);
+  pendingImageEditor.activePointerId = null;
+  pendingImageEditor.dragStart = null;
+}
+
+function loadPendingImageForEditor(imageUrl) {
+  return fetch(imageUrl)
+    .then(response => {
+      if (!response.ok) throw new Error(`Could not read image: ${response.status}`);
+      return response.blob();
+    })
+    .then(blob => new Promise((resolve, reject) => {
+      if (!String(blob.type || '').startsWith('image/')) {
+        reject(new Error('Choose a JPG, PNG, or WebP image URL.'));
+        return;
+      }
+      const objectUrl = URL.createObjectURL(blob);
+      const image = new Image();
+      image.onload = () => resolve({ image, objectUrl });
+      image.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Unable to load that image.'));
+      };
+      image.src = objectUrl;
+    }));
+}
+
+function pendingImageCanvasToBlob() {
+  return new Promise((resolve, reject) => {
+    const canvas = pendingImageEditor.canvas;
+    if (!canvas) {
+      reject(new Error('Could not save that square image.'));
+      return;
+    }
+    canvas.toBlob(blob => {
+      if (blob) {
+        resolve(blob);
+        return;
+      }
+      reject(new Error('Could not save that square image.'));
+    }, 'image/jpeg', PENDING_IMAGE_EDITOR_JPEG_QUALITY);
+  });
+}
+
+function pendingImageCanvasToFile(court = {}) {
+  return pendingImageCanvasToBlob().then(blob => new File([blob], `${safePendingImageFilePart(court.name)}-square.jpg`, {
+    type: 'image/jpeg',
+    lastModified: Date.now()
+  }));
+}
+
+function upsertBackendInstagramPost(post) {
+  if (!post || !backendCollections.instagramPosts) return;
+  const posts = backendCollections.instagramPosts;
+  const index = posts.findIndex(item => item.id === post.id || item.locationId === post.locationId);
+  if (index >= 0) {
+    posts[index] = post;
+  } else {
+    posts.push(post);
+  }
+}
+
+async function savePendingImageEditor() {
+  const { form, input, court, formHint, saveButton } = pendingImageEditor;
+  if (!form || !input || !court) return;
+  if (!pendingImageEditor.image) {
+    setPendingImageEditorHint('Load an image before saving.');
+    return;
+  }
+  if (!window.OpenPlaySupabase?.uploadInstagramDraftImages) {
+    setPendingImageEditorHint('Image upload is unavailable right now.');
+    return;
+  }
+
+  if (saveButton) saveButton.disabled = true;
+  setPendingImageEditorHint('Saving square image...');
+
+  try {
+    const user = await currentUser();
+    if (!user?.id) throw new Error('Sign in again before saving images.');
+    const file = await pendingImageCanvasToFile(court);
+    const urls = await window.OpenPlaySupabase.uploadInstagramDraftImages(court, user, [file]);
+    const squareUrl = urls[0];
+    if (!squareUrl) throw new Error('Could not save that square image.');
+
+    input.value = squareUrl;
+    updatePendingPostImageThumb(input);
+    updatePendingPostPreview(form);
+    const post = await window.OpenPlaySupabase.savePendingInstagramPostImages?.(
+      court.remoteId,
+      pendingPostImageUrls(form),
+      currentAdminUser?.id || user.id
+    );
+    upsertBackendInstagramPost(post);
+    if (formHint) formHint.textContent = 'Square image saved.';
+    closePendingImageEditor();
+  } catch (error) {
+    setPendingImageEditorHint(error.message || 'Could not save that square image.');
+  } finally {
+    if (saveButton) saveButton.disabled = false;
+  }
+}
+
+async function openPendingImageEditor(form, court, button, formHint) {
+  const row = button.closest('[data-pending-image-row]');
+  const input = row?.querySelector('[data-pending-image-url]');
+  const imageUrl = input?.value.trim();
+  if (!imageUrl) {
+    if (formHint) formHint.textContent = 'Add an image URL before editing.';
+    return;
+  }
+
+  const dialog = ensurePendingImageEditor();
+  clearPendingImageEditorImage();
+  pendingImageEditor.form = form;
+  pendingImageEditor.row = row;
+  pendingImageEditor.input = input;
+  pendingImageEditor.court = court;
+  pendingImageEditor.formHint = formHint;
+  pendingImageEditor.trigger = button;
+  pendingImageEditor.mode = 'fill';
+  pendingImageEditor.zoom = 100;
+  pendingImageEditor.positionX = 0;
+  pendingImageEditor.positionY = 0;
+  pendingImageEditor.background = '#ffffff';
+  pendingImageEditor.loadId += 1;
+  const loadId = pendingImageEditor.loadId;
+  updatePendingImageEditorControls();
+  drawPendingImageEditorPreview();
+  if (pendingImageEditor.saveButton) pendingImageEditor.saveButton.disabled = true;
+  setPendingImageEditorHint('Loading image...');
+  openAdminDialog(dialog);
+
+  try {
+    const { image, objectUrl } = await loadPendingImageForEditor(imageUrl);
+    if (pendingImageEditor.loadId !== loadId) {
+      URL.revokeObjectURL(objectUrl);
+      return;
+    }
+    pendingImageEditor.image = image;
+    pendingImageEditor.objectUrl = objectUrl;
+    if (pendingImageEditor.saveButton) pendingImageEditor.saveButton.disabled = false;
+    setPendingImageEditorHint('');
+    drawPendingImageEditorPreview();
+  } catch (error) {
+    if (pendingImageEditor.loadId !== loadId) return;
+    setPendingImageEditorHint(error.message || 'Could not load that image.');
+  }
 }
 
 function adminReviewPhotosFromButton(button) {
@@ -1375,6 +1789,7 @@ function pendingPostImageRow(url = '', index = 0, count = 1) {
       </div>
       <input data-pending-image-url value="${escapeHtml(url)}" placeholder="Public JPEG image URL" />
       <div class="pending-post-image-controls">
+        <button class="secondary-button pending-post-square-button" type="button" data-edit-square-image aria-label="Edit square image"${url ? '' : ' disabled'}>Square</button>
         <button class="secondary-button" type="button" data-move-image="up" aria-label="Move image up"${index === 0 ? ' disabled' : ''}>^</button>
         <button class="secondary-button" type="button" data-move-image="down" aria-label="Move image down"${index >= count - 1 ? ' disabled' : ''}>v</button>
         <button class="secondary-button admin-delete-button" type="button" data-remove-image aria-label="Remove image"${removeDisabled ? ' disabled' : ''}>x</button>
@@ -1397,10 +1812,13 @@ function setPendingPostImageRows(form, urls = []) {
 }
 
 function updatePendingPostImageThumb(input) {
-  const thumb = input.closest('[data-pending-image-row]')?.querySelector('.pending-post-image-thumb');
+  const row = input.closest('[data-pending-image-row]');
+  const thumb = row?.querySelector('.pending-post-image-thumb');
   if (!thumb) return;
   const url = input.value.trim();
   thumb.innerHTML = url ? `<img src="${escapeHtml(url)}" alt="" loading="lazy" />` : '<span>Image</span>';
+  const squareButton = row?.querySelector('[data-edit-square-image]');
+  if (squareButton) squareButton.disabled = !url;
 }
 
 function addPendingPostImageUrls(form, urls = []) {
@@ -1873,6 +2291,11 @@ function setupPendingPostForm(form) {
 
     if (button.matches('[data-upload-image]')) {
       uploadInput?.click();
+      return;
+    }
+
+    if (button.matches('[data-edit-square-image]')) {
+      openPendingImageEditor(form, court, button, hint);
       return;
     }
 
