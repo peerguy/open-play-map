@@ -119,11 +119,13 @@ function locationUrl(env, location) {
 function captionForLocation(env, location) {
   const place = [location.city, location.state].filter(Boolean).join(', ');
   return [
-    place
-      ? `Calling all pickleball players near ${place}.`
-      : 'Calling all local pickleball players.',
+    `${location.name || 'This court'} was recommended as an active pickleball open play hot spot.`,
     '',
-    `Have you played at ${location.name || 'this open play location'}? Check it out on the Scoop Open Play Map and help local players by adding a quick review, uploading pictures, or confirming the open play info is accurate.`,
+    place
+      ? `Calling all players near ${place}: have you played here?`
+      : 'Calling all local players: have you played here?',
+    '',
+    'Check it out on the Scoop Open Play Map and help local players by adding a quick review, uploading pictures, or confirming the open play info is accurate.',
     '',
     "When you sign up or contribute helpful information, you'll get a chance to win a Scoop paddle or $100 worth of gear from the Scoop Pickleball store.",
     '',
