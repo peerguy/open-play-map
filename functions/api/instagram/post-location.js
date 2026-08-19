@@ -8,8 +8,7 @@ const INSTAGRAM_MIN_ASPECT_RATIO = 4 / 5;
 const INSTAGRAM_MAX_ASPECT_RATIO = 1.91;
 const DEFAULT_INSTAGRAM_COLLABORATORS = ['scooppickleball'];
 const INSTAGRAM_MAX_COLLABORATORS = 5;
-const META_PLACE_SEARCH_LIMIT = 8;
-const META_PLACE_SEARCH_DISTANCE_METERS = 25000;
+const META_PAGE_SEARCH_LIMIT = 8;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -323,7 +322,13 @@ async function facebookGet(env, path, params) {
   if (!response.ok) {
     const message = data?.error?.message || data?.message || `Meta location search failed: ${response.status}`;
     if (/cannot parse access token|invalid oauth access token/i.test(message)) {
-      throw new Error('Meta location lookup needs a Facebook Graph API token in META_PLACES_ACCESS_TOKEN. The Instagram publishing token cannot be used for place search.');
+      throw new Error('Meta location lookup needs a Facebook Graph API token in META_PLACES_ACCESS_TOKEN. The Instagram publishing token cannot be used for location lookup.');
+    }
+    if (/place search api is deprecated/i.test(message)) {
+      throw new Error('Meta deprecated Place Search. Use Pages Search with a Facebook Graph API token that has public Page search access.');
+    }
+    if (/pages_read_engagement|page public content access|page public metadata access/i.test(message)) {
+      throw new Error('Meta blocked public Page search for this app. The token has to be a Facebook Graph API token with pages_read_engagement, and the Meta app needs Page Public Metadata Access or Page Public Content Access. You can still paste the numeric Facebook Page ID manually.');
     }
     throw new Error(message);
   }
@@ -332,19 +337,14 @@ async function facebookGet(env, path, params) {
 
 async function searchMetaPlaces(env, location = {}) {
   const queries = placeSearchQueries(location);
-  if (!queries.length) throw new Error('Location name is required before searching Meta places.');
+  if (!queries.length) throw new Error('Location name is required before searching Meta Pages.');
 
-  const latitude = numericCoordinate(location.latitude);
-  const longitude = numericCoordinate(location.longitude);
   const seen = new Map();
   for (const query of queries) {
-    const data = await facebookGet(env, '/search', {
-      type: 'place',
+    const data = await facebookGet(env, '/pages/search', {
       q: query,
       fields: 'id,name,category,location,link',
-      limit: META_PLACE_SEARCH_LIMIT,
-      center: latitude !== null && longitude !== null ? `${latitude},${longitude}` : '',
-      distance: latitude !== null && longitude !== null ? META_PLACE_SEARCH_DISTANCE_METERS : ''
+      limit: META_PAGE_SEARCH_LIMIT
     });
 
     (data?.data || []).forEach(page => {
@@ -355,7 +355,7 @@ async function searchMetaPlaces(env, location = {}) {
 
   return [...seen.values()]
     .sort((a, b) => b.score - a.score)
-    .slice(0, META_PLACE_SEARCH_LIMIT);
+    .slice(0, META_PAGE_SEARCH_LIMIT);
 }
 
 function normalizeCollaboratorUsernames(values = DEFAULT_INSTAGRAM_COLLABORATORS) {
