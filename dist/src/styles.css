@@ -968,6 +968,18 @@ select {
   grid-column: 1 / -1;
 }
 
+.location-fields .field-photo-upload {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.location-fields .field-photo-upload .form-hint {
+  margin: 0;
+}
+
 .review-fields {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

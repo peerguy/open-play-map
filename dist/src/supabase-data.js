@@ -1246,7 +1246,7 @@
     }
   }
 
-  async function insertPhotoRows({ locationId, reviewId = null, user, storagePaths = [] }) {
+  async function insertPhotoRows({ locationId, reviewId = null, user, storagePaths = [], status = 'pending' }) {
     const supabase = client();
     if (!storagePaths.length) return [];
     if (!supabase || !locationId || !user?.id) throw new Error('Supabase is not configured.');
@@ -1256,7 +1256,7 @@
       review_id: reviewId,
       uploaded_by: user.id,
       storage_path: storagePath,
-      status: 'pending'
+      status
     }));
 
     const { data, error } = await supabase
@@ -1268,9 +1268,9 @@
     return data || [];
   }
 
-  async function insertPhotoRowsOrCleanup({ locationId, reviewId = null, user, storagePaths = [] }) {
+  async function insertPhotoRowsOrCleanup({ locationId, reviewId = null, user, storagePaths = [], status = 'pending' }) {
     try {
-      return await insertPhotoRows({ locationId, reviewId, user, storagePaths });
+      return await insertPhotoRows({ locationId, reviewId, user, storagePaths, status });
     } catch (error) {
       await removeUploadedPhotoFiles(storagePaths);
       throw error;
@@ -1293,6 +1293,27 @@
       user,
       storagePaths
     });
+  }
+
+  async function uploadAdminLocationPhotos(court, user, photoFiles = []) {
+    const supabase = client();
+    if (!supabase || !court?.remoteId || !user?.id) throw new Error('Supabase is not configured.');
+    const preparedPhotoFiles = await preparePhotoFiles(photoFiles);
+
+    const storagePaths = await uploadPhotoFiles({
+      locationId: court.remoteId,
+      user,
+      files: preparedPhotoFiles
+    });
+
+    const rows = await insertPhotoRowsOrCleanup({
+      locationId: court.remoteId,
+      user,
+      storagePaths,
+      status: 'approved'
+    });
+    const locations = new Map([[court.remoteId, { slug: court.id || court.remoteId, name: court.name || 'Location' }]]);
+    return rows.map(row => mapPhoto(row, { locations }));
   }
 
   async function submitLocation(court, user, photoFiles = []) {
@@ -2152,6 +2173,7 @@
     saveAdminLocation,
     submitLocation,
     submitLocationPhotos,
+    uploadAdminLocationPhotos,
     uploadInstagramDraftImages,
     prepareInstagramDraftImageUrls,
     submitReview,

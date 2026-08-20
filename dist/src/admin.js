@@ -595,6 +595,22 @@ function upsertBackendInstagramPost(post) {
   }
 }
 
+function upsertBackendPhotos(photos = []) {
+  if (!backendCollections.photos || !photos.length) return;
+  photos.forEach(photo => {
+    const index = backendCollections.photos.findIndex(item => (
+      item.id === photo.id
+      || item.remoteId === photo.remoteId
+      || (item.url && item.url === photo.url)
+    ));
+    if (index >= 0) {
+      backendCollections.photos[index] = photo;
+    } else {
+      backendCollections.photos.push(photo);
+    }
+  });
+}
+
 function pendingInstagramLocationResults(form) {
   return form.querySelector('[data-instagram-location-results]');
 }
@@ -1122,6 +1138,90 @@ function setupAdminLocationForm(form, court, { disabled = false } = {}) {
   form.querySelectorAll('input[name="openDay"]').forEach(input => {
     input.addEventListener('change', () => updateAdminDaysSummary(form));
   });
+  if (!disabled) setupAdminLocationPhotoUpload(form, court);
+}
+
+function mergePhotoLists(existing = [], next = []) {
+  return [...existing, ...next].reduce((photos, photo) => {
+    const key = photo?.id || photo?.remoteId || photoUrl(photo);
+    if (!key || photos.some(item => (item.id || item.remoteId || photoUrl(item)) === key)) return photos;
+    photos.push(photo);
+    return photos;
+  }, []);
+}
+
+function appendLocationPhotoUrls(form, photos = []) {
+  const input = form.elements.photos;
+  if (!input) return;
+  const urls = [
+    ...input.value.split(',').map(url => url.trim()).filter(Boolean),
+    ...photos.map(photoUrl).filter(Boolean)
+  ];
+  input.value = [...new Set(urls)].join(', ');
+}
+
+function applyUploadedLocationPhotos(court, photos = []) {
+  const uploadedPhotos = photos.filter(photo => photo?.url);
+  if (!uploadedPhotos.length) return null;
+
+  let updatedCourt = null;
+  allCourts = allCourts.map(item => {
+    const isTarget = item.id === court.id || item.remoteId === court.remoteId;
+    if (!isTarget) return item;
+    updatedCourt = {
+      ...item,
+      photos: mergePhotoLists(item.photos || [], uploadedPhotos),
+      updatedAt: todayIso()
+    };
+    return updatedCourt;
+  });
+  upsertBackendPhotos(uploadedPhotos);
+  return updatedCourt;
+}
+
+async function uploadAdminLocationPhotos(form, court, input, button, hint) {
+  const files = Array.from(input.files || []);
+  input.value = '';
+  if (!files.length) return;
+
+  if (!court.remoteId) {
+    hint.textContent = 'Save this location before uploading photos.';
+    return;
+  }
+  if (!window.OpenPlaySupabase?.uploadAdminLocationPhotos) {
+    hint.textContent = 'Photo upload is unavailable right now.';
+    return;
+  }
+
+  const previousText = button.textContent;
+  button.disabled = true;
+  button.textContent = files.length === 1 ? 'Uploading...' : 'Uploading photos...';
+  hint.textContent = files.length === 1 ? 'Preparing photo...' : 'Preparing photos...';
+
+  try {
+    const user = currentAdminUser || await currentUser();
+    const photos = await window.OpenPlaySupabase.uploadAdminLocationPhotos(court, user, files);
+    appendLocationPhotoUrls(form, photos);
+    const updatedCourt = applyUploadedLocationPhotos(court, photos);
+    const count = form.closest('.admin-card')?.querySelector('[data-location-photo-count]');
+    if (count && updatedCourt) count.textContent = String(updatedCourt.photos?.length || 0);
+    hint.textContent = `${photos.length} photo${photos.length === 1 ? '' : 's'} added and approved.`;
+  } catch (error) {
+    hint.textContent = error.message || 'Could not upload that photo.';
+  } finally {
+    button.disabled = false;
+    button.textContent = previousText;
+  }
+}
+
+function setupAdminLocationPhotoUpload(form, court) {
+  const button = form.querySelector('[data-upload-location-photo]');
+  const input = form.querySelector('[data-location-photo-input]');
+  const hint = form.querySelector('[data-location-photo-hint]');
+  if (!button || !input || !hint) return;
+
+  button.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => uploadAdminLocationPhotos(form, court, input, button, hint));
 }
 
 function reviewSortValue(review) {
@@ -1339,6 +1439,13 @@ function renderLocationFields(court, { disabled = false } = {}) {
       <label class="field-photos">Photo URLs, comma separated
         <input name="photos" value="${escapeHtml(photoUrlList(court.photos).join(', '))}"${disabledAttr} />
       </label>
+      ${disabled ? '' : `
+        <div class="field-photo-upload admin-location-photo-upload">
+          <button class="secondary-button compact-button" type="button" data-upload-location-photo>Upload location photo</button>
+          <input type="file" accept="image/jpeg,image/png,image/webp" multiple data-location-photo-input hidden />
+          <span class="form-hint" data-location-photo-hint>Uploads are approved immediately and appear on the public map.</span>
+        </div>
+      `}
     </div>
   `;
 }
@@ -2956,7 +3063,7 @@ function locationCard(court) {
       <span>${escapeHtml(statusLabel)}</span>
       <span>${escapeHtml(skillLabel)}</span>
       <span>${escapeHtml(court.openPlay?.[0]?.days || 'Days TBD')}</span>
-      <span>${escapeHtml(photoCount)}</span>
+      <span data-location-photo-count>${escapeHtml(photoCount)}</span>
       <div class="admin-row-actions">
         ${locationActionHtml(court)}
       </div>
