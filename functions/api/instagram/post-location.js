@@ -755,9 +755,6 @@ export async function onRequestPost({ request, env }) {
     if (location.status !== 'approved') return json({ ok: false, error: 'Location must be approved before posting to Instagram.' }, 409);
 
     const requestedInstagramLocationId = instagramLocationId(body.instagramLocationId);
-    if (!requestedInstagramLocationId) {
-      return json({ ok: false, error: 'Enter a numeric Instagram location ID before posting so Instagram can tag the location.' }, 400);
-    }
 
     const fallbackPhoto = await fetchLocationPhoto(env, location.id);
     const requestedImageUrls = normalizeImageUrls(body.imageUrls || body.imageUrl);

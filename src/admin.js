@@ -2060,10 +2060,10 @@ function renderPendingPostCard(court) {
         <label>
           Instagram location ID
           <div class="pending-post-location-id-row">
-            <input name="instagramLocationId" inputmode="numeric" pattern="[0-9]*" required placeholder="Required numeric Meta Page ID" value="${escapeHtml(post.instagramLocationId || '')}" />
+            <input name="instagramLocationId" inputmode="numeric" pattern="[0-9]*" placeholder="Optional numeric Meta Page ID" value="${escapeHtml(post.instagramLocationId || '')}" />
             <button class="secondary-button admin-edit-button" type="button" data-find-instagram-location-id>Find ID</button>
           </div>
-          <span class="form-hint">Required before publishing. This is what creates the live Instagram location tag.</span>
+          <span class="form-hint">Optional. Add a Meta Page ID if you want the post to publish with a live Instagram location tag.</span>
           <div class="pending-post-location-results" data-instagram-location-results></div>
         </label>
         <label>
@@ -2517,11 +2517,6 @@ function setupPendingPostForm(form) {
     }
     if (values.imageUrls.some(url => !/^https:\/\//i.test(url))) {
       hint.textContent = 'Instagram publishing needs public HTTPS image URLs.';
-      return;
-    }
-    if (!/^\d+$/.test(values.instagramLocationId)) {
-      hint.textContent = 'Enter the numeric Instagram location ID before posting so the live post has a location tag.';
-      form.elements.instagramLocationId?.focus();
       return;
     }
     if (values.collaborators.length > INSTAGRAM_MAX_COLLABORATORS) {
